@@ -1,0 +1,11 @@
+{
+  "appId": "com.ricehub.app",
+  "appName": "RiceHub",
+  "webDir": "dist",
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "launchAutoHide": true
+    }
+  }
+}

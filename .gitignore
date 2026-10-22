@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+venv_old/
+
+# Django local data and settings
+*.sqlite3
+staticfiles/
+media/
+.env
+.env.*
+!.env.example
+
+# Frontend dependencies and build output
+node_modules/
+dist/
+
+# Android / Play Store project files
+/frontend/android/
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store

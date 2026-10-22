@@ -1,0 +1,51 @@
+import api from "./api";
+
+
+const authService = {
+  async login(credentials) {
+    const response = await api.post(
+      "/token/",
+      credentials
+    );
+
+    if (response.data.access && response.data.refresh) {
+      localStorage.setItem("access_token", response.data.access);
+      localStorage.setItem("refresh_token", response.data.refresh);
+    }
+
+    return response.data;
+  },
+
+  async verifyTwoFactor(data) {
+    const response = await api.post("/users/verify-two-factor/", data);
+    localStorage.setItem("access_token", response.data.access);
+    localStorage.setItem("refresh_token", response.data.refresh);
+    return response.data;
+  },
+
+  async register(data) {
+    return api.post("/users/register/", data);
+  },
+
+  async verifyEmail(data) {
+    const response = await api.post("/users/verify-email/", data);
+    return response.data;
+  },
+
+  async resendVerificationCode(email) {
+    const response = await api.post("/users/resend-verification/", { email });
+    return response.data;
+  },
+
+  async getMe() {
+    const response = await api.get("/users/me/");
+    return response.data;
+  },
+
+  logout() {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+  },
+};
+
+export default authService;
