@@ -10,6 +10,7 @@ from .views import HealthView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/", include("api.urls")),
     path("api/users/", include("users.urls")),
     path("api/posts/", include("posts.urls")),
     path("api/", include("comments.urls")),
