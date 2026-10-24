@@ -31,6 +31,8 @@ DEFAULT_FROM_EMAIL = os.getenv(
     "",
 ) or EMAIL_HOST_USER or "noreply@localhost"
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+
 EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND",
     (
@@ -190,6 +192,9 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": (
         "config.pagination.StandardPagination"
     ),
+    # Apni existing settings yahan preserve karo
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+
 
     "PAGE_SIZE": 10,
 
