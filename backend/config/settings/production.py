@@ -87,6 +87,14 @@ DATABASES = {
     )
 }
 
+print("DB DIAGNOSTIC:", {
+    "engine": DATABASES["default"]["ENGINE"],
+    "name": DATABASES["default"]["NAME"],
+    "host": DATABASES["default"].get("HOST"),
+    "options": DATABASES["default"].get("OPTIONS"),
+})
+
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
