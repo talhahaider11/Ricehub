@@ -1,7 +1,13 @@
 import os
 from pathlib import Path
 from datetime import timedelta
-from dotenv import load_dotenv
+try:
+    from importlib import import_module
+
+    load_dotenv = import_module("dotenv").load_dotenv
+except ImportError:
+    def load_dotenv(*args, **kwargs):
+        return False
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -36,11 +42,21 @@ EMAIL_BACKEND = os.getenv(
     ),
 )
 
+import os
+
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]").split(",")
+    for host in os.getenv(
+        "DJANGO_ALLOWED_HOSTS",
+        "localhost,127.0.0.1,[::1]"
+    ).split(",")
     if host.strip()
 ]
+
+render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+
+if render_hostname and render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_hostname)
 
 REDIS_URL = os.getenv(
     "REDIS_URL",
