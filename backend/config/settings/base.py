@@ -42,7 +42,8 @@ EMAIL_BACKEND = os.getenv(
     ),
 )
 
-import os
+
+
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -58,10 +59,16 @@ render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
 if render_hostname and render_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(render_hostname)
 
+# Fallback: apna Render domain explicitly allow karo
+if "ricehub-umfd.onrender.com" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("ricehub-umfd.onrender.com")
+
 REDIS_URL = os.getenv(
     "REDIS_URL",
     "redis://localhost:6379/0",
 )
+
+
 
 CHANNEL_LAYERS = {
     "default": {
