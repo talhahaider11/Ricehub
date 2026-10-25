@@ -266,11 +266,17 @@ STORAGES = {
 }
 
 CORS_ALLOWED_ORIGINS = [
-    "https://ricehub-frontend.onrender.com",
-    "https://ricehub-umfd.onrender.com",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "https://ricehub-frontend.onrender.com",  # Aapka frontend URL
     "http://localhost:3000",
+    "http://localhost:5173",
     "https://localhost",
     "http://localhost",
 ]
+
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://ricehub-frontend.onrender.com",
+    "https://ricehub-umfd.onrender.com",
+]
+
+CORS_ALLOW_CREDENTIALS = True
