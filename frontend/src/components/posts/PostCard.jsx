@@ -13,6 +13,7 @@ import postService from "../../services/postService";
 import PostMenu from "./PostMenu";
 import ImageLightbox from "../common/ImageLightbox";
 import PostContent from "./PostContent";
+import { getMediaUrl } from "../../utils/constants";
 
 const reactions = [
   { type: "like", label: "Like", emoji: "👍" },
@@ -120,13 +121,13 @@ export default function PostCard({
         <>
           <img
             className="post-image clickable-image"
-            src={post.image}
+            src={getMediaUrl(post.image)}
             alt="Post attachment"
             onClick={() => setImageOpen(true)}
           />
 
           <ImageLightbox
-            src={post.image}
+            src={getMediaUrl(post.image)}
             open={imageOpen}
             onClose={() => setImageOpen(false)}
           />
@@ -135,7 +136,7 @@ export default function PostCard({
       {post.video && (
         <video
           className="post-video"
-          src={post.video}
+          src={getMediaUrl(post.video)}
           controls
           playsInline
           preload="metadata"

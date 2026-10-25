@@ -264,3 +264,13 @@ STORAGES = {
         "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
     },
 }
+
+CORS_ALLOWED_ORIGINS = [
+    "https://ricehub-frontend.onrender.com",
+    "https://ricehub-umfd.onrender.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "https://localhost",
+    "http://localhost",
+]

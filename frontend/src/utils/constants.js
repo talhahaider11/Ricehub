@@ -1,5 +1,22 @@
-export const API_URL = import.meta.env.VITE_API_URL;
-export const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000/ws";
+// Environment variables se URLs load honge, na hone par Render Live URLs fallback me chalenge
+export const API_URL =
+  import.meta.env.VITE_API_URL || "https://ricehub-umfd.onrender.com/api";
+
+// Live WebSocket URL (HTTPS ke liye wss:// use hota hai)
+export const WS_URL =
+  import.meta.env.VITE_WS_URL || "wss://ricehub-umfd.onrender.com/ws";
+
+const MEDIA_BASE_URL = API_URL.replace("/api", "");
+
+export function getMediaUrl(path) {
+  if (!path) return path;
+  if (/^(?:[a-z][a-z\d+.-]*:)?\/\//i.test(path) || path.startsWith("blob:")) {
+    return path;
+  }
+
+  return `${MEDIA_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
 export const APP_NAME = "RiceHub";
 
 export const NAV_ITEMS = [

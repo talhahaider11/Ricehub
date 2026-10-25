@@ -1,7 +1,5 @@
 import api from "./api";
-import { ACCESS_TOKEN_KEY } from "../utils/constants";
-
-const WS_URL = import.meta.env.VITE_WS_URL;
+import { ACCESS_TOKEN_KEY, WS_URL } from "../utils/constants";
 
 const messageService = {
   async conversations() {

@@ -4,6 +4,7 @@ import {
 
 import Avatar from "../common/Avatar";
 import Button from "../common/Button";
+import { getMediaUrl } from "../../utils/constants";
 
 export default function ProfileHeader({
   profile,
@@ -16,7 +17,7 @@ export default function ProfileHeader({
         {profile.cover_picture && (
           <img
             src={
-              profile.cover_picture
+              getMediaUrl(profile.cover_picture)
             }
             alt=""
           />

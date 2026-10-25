@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
+import { API_URL } from "../../utils/constants";
 import FriendCard from "./FriendCard";
 
 describe("FriendCard", () => {
@@ -27,7 +28,7 @@ describe("FriendCard", () => {
     expect(screen.getByText("@friend47")).toBeInTheDocument();
     expect(profileLink.querySelector("img")).toHaveAttribute(
       "src",
-      "/media/friend47.png"
+      `${API_URL.replace("/api", "")}/media/friend47.png`
     );
   });
 });

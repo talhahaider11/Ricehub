@@ -9,6 +9,7 @@ import ErrorState from "../components/common/ErrorState";
 import friendService from "../services/friendService";
 import messageService from "../services/messageService";
 import useAuth from "../hooks/useAuth";
+import { getMediaUrl } from "../utils/constants";
 
 export default function Profile() {
   const { id } = useParams();
@@ -111,7 +112,7 @@ export default function Profile() {
         <div className="cover-image">
           {user.cover_picture && (
             <img
-              src={user.cover_picture}
+              src={getMediaUrl(user.cover_picture)}
               alt=""
             />
           )}

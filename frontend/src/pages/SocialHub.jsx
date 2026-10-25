@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import communityService from "../services/communityService";
 import useAuth from "../hooks/useAuth";
 import friendService from "../services/friendService";
+import { getMediaUrl } from "../utils/constants";
 
 const tabs = ["Stories", "Groups & Pages", "Events", "Marketplace"];
 
@@ -213,8 +214,8 @@ export default function SocialHub() {
                 <strong>@{story.author.username}</strong>
                 {(story.author.id === user?.id || viewedStories[story.id]) && story.text && <p>{story.text}</p>}
                 {(story.author.id === user?.id || viewedStories[story.id]) && story.media && (/\.(mp4|webm)$/i.test(story.media)
-                  ? <video src={story.media} controls playsInline />
-                  : <img src={story.media} alt="Story" />)}
+                  ? <video src={getMediaUrl(story.media)} controls playsInline />
+                  : <img src={getMediaUrl(story.media)} alt="Story" />)}
                 <small>Expires {new Date(story.expires_at).toLocaleString()} · {story.view_count} views</small>
                 {story.author.id !== user?.id && (
                   <button className="btn btn-secondary" disabled={saving || viewedStories[story.id]} onClick={() => perform(async () => {
@@ -290,7 +291,7 @@ export default function SocialHub() {
               {communityPosts.map((post) => (
                 <article className="social-card" key={post.id}>
                   <strong>@{post.author.username}</strong><p>{post.content}</p>
-                  {post.image && <img src={post.image} alt="" />}
+                  {post.image && <img src={getMediaUrl(post.image)} alt="" />}
                   {(post.author.id === user?.id || communities.find((item) => item.id === expandedCommunityId)?.membership_role === "admin") && (
                     <button className="btn btn-secondary" disabled={saving} onClick={() => perform(() => communityService.removeCommunityPost(post.id), "Community post removed.")}>Remove post</button>
                   )}
@@ -392,7 +393,7 @@ export default function SocialHub() {
           <div className="social-grid">
             {listings.map((listing) => (
               <article className="card social-card" key={listing.id}>
-                {listing.image && <img src={listing.image} alt={listing.title} />}
+                {listing.image && <img src={getMediaUrl(listing.image)} alt={listing.title} />}
                 <h2>{listing.title}</h2><p>{listing.description}</p>
                 <strong>{Number(listing.price).toLocaleString()} PKR</strong>
                 <small>{listing.location || "Location not specified"} · @{listing.seller.username}</small>

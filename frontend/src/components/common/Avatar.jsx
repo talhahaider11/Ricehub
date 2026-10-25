@@ -1,3 +1,5 @@
+import { getMediaUrl } from "../../utils/constants";
+
 export default function Avatar({
   src,
   name,
@@ -33,7 +35,7 @@ export default function Avatar({
     >
       {imageSrc ? (
         <img
-          src={imageSrc}
+          src={getMediaUrl(imageSrc)}
           alt=""
         />
       ) : (
