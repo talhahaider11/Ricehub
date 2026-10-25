@@ -265,14 +265,15 @@ STORAGES = {
     },
 }
 
+# settings.py
+
 CORS_ALLOWED_ORIGINS = [
-    "https://ricehub-frontend.onrender.com",  # Aapka frontend URL
+    "https://ricehub-frontend.onrender.com",  # Aapka exact frontend URL (Render dashboard se copy karein)
     "http://localhost:3000",
     "http://localhost:5173",
     "https://localhost",
     "http://localhost",
 ]
-
 
 CSRF_TRUSTED_ORIGINS = [
     "https://ricehub-frontend.onrender.com",
