@@ -1,10 +1,15 @@
 import os
-import dj_database_url
 from pathlib import Path
 from datetime import timedelta
-try:
-    from importlib import import_module
+from importlib import import_module
+import dj_database_url
 
+try:
+    dj_database_url = import_module("dj_database_url")
+except ImportError:
+    dj_database_url = None
+
+try:
     load_dotenv = import_module("dotenv").load_dotenv
 except ImportError:
     def load_dotenv(*args, **kwargs):
@@ -154,10 +159,17 @@ ROOT_URLCONF = "config.urls"
 ASGI_APPLICATION = "config.asgi.application"
 WSGI_APPLICATION = "config.wsgi.application"
 
+if dj_database_url is None and os.environ.get("DATABASE_URL"):
+    raise RuntimeError("Install dj-database-url to use DATABASE_URL.")
+
+
+
 DATABASES = {
-    "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL"),
+    'default': dj_database_url.config(
+        default=os.environ.get('DATABASE_URL'),
         conn_max_age=600,
+        conn_health_checks=True,
+        ssl_require=True
     )
 }
 

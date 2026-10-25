@@ -1,3 +1,4 @@
+
 from .base import *
 import os
 import dj_database_url
@@ -5,6 +6,7 @@ import dj_database_url
 DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() == "true"
 
 MIDDLEWARE.insert(2, "whitenoise.middleware.WhiteNoiseMiddleware")
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -80,9 +82,17 @@ LOGGING = {
     },
 }
 
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is missing. Production must use PostgreSQL."
+    )
+
 DATABASES = {
     "default": dj_database_url.parse(
-        os.environ.get("DATABASE_URL", "sqlite:///prod.sqlite3"),
+        DATABASE_URL,
         conn_max_age=600,
     )
 }
@@ -91,9 +101,14 @@ print("DB DIAGNOSTIC:", {
     "engine": DATABASES["default"]["ENGINE"],
     "name": DATABASES["default"]["NAME"],
     "host": DATABASES["default"].get("HOST"),
-    "options": DATABASES["default"].get("OPTIONS"),
 })
 
+
+print("DB DIAGNOSTIC:", {
+    "engine": DATABASES["default"]["ENGINE"],
+    "name": DATABASES["default"]["NAME"],
+    "host": DATABASES["default"].get("HOST"),
+})
 
 CHANNEL_LAYERS = {
     "default": {
