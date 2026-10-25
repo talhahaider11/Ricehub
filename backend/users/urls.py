@@ -30,6 +30,7 @@ from .password_views import (
 
 urlpatterns = [
     # Registration and email verification
+
     path("register/", RegisterView.as_view(), name="register"),
     path("verify-email/", VerifyEmailView.as_view(), name="verify-email"),
     path(
