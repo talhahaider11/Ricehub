@@ -20,5 +20,4 @@ COPY . .
 EXPOSE 8000
 
 
-
-CMD ["sh", "-c", "python manage.py shell -c \"from django.db import connection; c=connection.cursor(); c.execute('SELECT current_database(), current_schema(), current_user'); print('DB CHECK:', c.fetchone()); c.execute(\\\"SELECT table_schema, table_name FROM information_schema.tables WHERE table_name IN ('users_user', 'django_migrations')\\\"); print('TABLE CHECK:', c.fetchall())\" && python manage.py migrate --noinput && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p ${PORT:-10000} config.asgi:application"]
+CMD ["sh", "-c", "python manage.py showmigrations users && python manage.py migrate --noinput && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p ${PORT:-10000} config.asgi:application"]
