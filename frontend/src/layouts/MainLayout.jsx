@@ -1,24 +1,24 @@
 import { Outlet } from "react-router-dom";
 
-import Navbar from "../components/navbar/Navbar";
-import Sidebar from "../components/sidebar/Sidebar";
-import MobileLayout from "./MobileLayout";
+import Navbar from "../components/navbar/Navbar.jsx";
+import Sidebar from "../components/sidebar/Sidebar.jsx";
+import MobileLayout from "./MobileLayout.jsx";
 
 export default function MainLayout() {
   return (
     <div className="app-shell">
 
-      <Navbar/>
+      <Navbar />
 
       <div className="app-body">
-        <Sidebar/>
+        <Sidebar />
 
         <main className="main-content">
-          <Outlet/>
+          <Outlet />
         </main>
       </div>
 
-      <MobileLayout/>
+      <MobileLayout />
 
     </div>
   );
