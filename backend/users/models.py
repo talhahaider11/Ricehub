@@ -1,15 +1,12 @@
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import F, Q
 from django.utils import timezone
+
 from .validators import validate_profile_image
 
 
-class Meta:
-    indexes = [
-        models.Index(fields=["username"]),
-        models.Index(fields=["email"]),
-    ]
-    
 class ProfileVisibility(models.TextChoices):
     PUBLIC = "public", "Public"
     FRIENDS = "friends", "Friends"
@@ -18,75 +15,46 @@ class ProfileVisibility(models.TextChoices):
 
 class User(AbstractUser):
     email = models.EmailField(unique=True)
-    is_email_verified = models.BooleanField(default=True)
+    is_email_verified = models.BooleanField(default=False)
 
     profile_visibility = models.CharField(
-    max_length=20,
-    choices=ProfileVisibility.choices,
-    default=ProfileVisibility.PUBLIC,
+        max_length=20,
+        choices=ProfileVisibility.choices,
+        default=ProfileVisibility.PUBLIC,
     )
 
-    username = models.CharField(
-        max_length=150,
-        unique=True
-    )
-
-    first_name = models.CharField(
-        max_length=100,
-        blank=True
-    )
-
-    last_name = models.CharField(
-        max_length=100,
-        blank=True
-    )
-
-    bio = models.TextField(
-        blank=True
-    )
+    username = models.CharField(max_length=150, unique=True)
+    first_name = models.CharField(max_length=100, blank=True)
+    last_name = models.CharField(max_length=100, blank=True)
+    bio = models.TextField(blank=True)
 
     profile_picture = models.ImageField(
         upload_to="profiles/",
         blank=True,
-        null=True
+        null=True,
+        validators=[validate_profile_image],
     )
-
     cover_picture = models.ImageField(
         upload_to="covers/",
         blank=True,
-        null=True
+        null=True,
+        validators=[validate_profile_image],
     )
 
-    location = models.CharField(
-        max_length=255,
-        blank=True
-    )
+    location = models.CharField(max_length=255, blank=True)
+    website = models.URLField(blank=True)
+    date_of_birth = models.DateField(blank=True, null=True)
 
-    website = models.URLField(
-        blank=True
-    )
+    is_online = models.BooleanField(default=False)
+    last_seen = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    date_of_birth = models.DateField(
-        blank=True,
-        null=True
-    )
-
-    is_online = models.BooleanField(
-        default=False
-    )
-
-    last_seen = models.DateTimeField(
-        blank=True,
-        null=True
-    )
-
-    created_at = models.DateTimeField(
-        auto_now_add=True
-    )
-
-    updated_at = models.DateTimeField(
-        auto_now=True
-    )
+    class Meta:
+        indexes = [
+            models.Index(fields=["username"]),
+            models.Index(fields=["email"]),
+        ]
 
     def __str__(self):
         return self.username
@@ -95,7 +63,10 @@ class User(AbstractUser):
 class UserPrivacySettings(models.Model):
     class Audience(models.TextChoices):
         EVERYONE = "everyone", "Everyone"
-        FRIENDS_OF_FRIENDS = "friends_of_friends", "Friends of friends"
+        FRIENDS_OF_FRIENDS = (
+            "friends_of_friends",
+            "Friends of friends",
+        )
         NOBODY = "nobody", "Nobody"
 
     class MessageAudience(models.TextChoices):
@@ -114,7 +85,7 @@ class UserPrivacySettings(models.Model):
         default=Audience.EVERYONE,
     )
     messages_from = models.CharField(
-        max_length=12,
+        max_length=20,
         choices=MessageAudience.choices,
         default=MessageAudience.EVERYONE,
     )
@@ -144,7 +115,7 @@ class BlockedUser(models.Model):
                 name="unique_user_block",
             ),
             models.CheckConstraint(
-                condition=~models.Q(blocker=models.F("blocked")),
+                condition=~Q(blocker=F("blocked")),
                 name="cannot_block_self",
             ),
         ]
@@ -168,7 +139,7 @@ class TwoFactorChallenge(models.Model):
     )
     expires_at = models.DateTimeField()
     attempts = models.PositiveSmallIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class UserSecuritySettings(models.Model):
@@ -186,28 +157,13 @@ class EmailVerification(models.Model):
         on_delete=models.CASCADE,
         related_name="email_verification",
     )
-    code_hash = models.CharField(max_length=128, blank=True)
+    code_hash = models.CharField(max_length=128, blank=True, default="")
     expires_at = models.DateTimeField(null=True, blank=True)
     last_sent_at = models.DateTimeField(null=True, blank=True)
     attempts = models.PositiveSmallIntegerField(default=0)
 
     def is_expired(self):
-        return not self.expires_at or timezone.now() >= self.expires_at
-
-profile_picture = models.ImageField(
-    upload_to="profiles/",
-    blank=True,
-    null=True,
-    validators=[
-        validate_profile_image
-    ],
-)
-
-cover_picture = models.ImageField(
-    upload_to="covers/",
-    blank=True,
-    null=True,
-    validators=[
-        validate_profile_image
-    ],
-)
+        return (
+            not self.expires_at
+            or timezone.now() >= self.expires_at
+        )

@@ -1,71 +1,78 @@
-import random
-import logging
-from django.conf import settings
-from django.core.mail import send_mail
-from django.contrib.auth import get_user_model, authenticate
 
-from rest_framework.views import APIView
+import logging
+from datetime import timedelta
+
+from django.contrib.auth import authenticate, get_user_model
+from django.db import IntegrityError, transaction
+from django.utils import timezone
+
+from rest_framework import permissions, status
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import EmailVerification  # Ensure model name matches your project
+from .models import (
+    EmailVerification,
+    UserPrivacySettings,
+)
+from .serializers import (
+    EmailVerificationSerializer,
+    PasswordResetRequestSerializer,
+    RegisterSerializer,
+)
+from .verification import (
+    OTP_RESEND_COOLDOWN_SECONDS,
+    send_verification_code,
+)
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-# --- AUTH & REGISTRATION ---
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        username = request.data.get("username")
-        email = request.data.get("email")
-        password = request.data.get("password")
-
-        if not email or not password or not username:
-            return Response(
-                {"error": "All fields (username, email, password) are required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if User.objects.filter(email=email).exists():
-            return Response(
-                {"error": "User with this email already exists."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            is_active=False,
-            is_email_verified=False
-        )
-
-        otp_code = str(random.randint(100000, 999999))
-        EmailVerification.objects.create(user=user, code=otp_code)
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
         try:
-            send_mail(
-                subject="RiceHub - Your Email Verification Code",
-                message=f"Hello {username},\n\nYour verification OTP code is: {otp_code}\n\nThank you!",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-                fail_silently=False,
-            )
-        except Exception as e:
-            logger.error(f"Email delivery error: {str(e)}")
-            user.delete()
+            with transaction.atomic():
+                user = serializer.save()
+                verification = EmailVerification.objects.create(
+                    user=user
+                )
+        except IntegrityError:
             return Response(
-                {"error": f"Failed to send email: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Username or email is already registered."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            send_verification_code(user, verification)
+        except Exception:
+            logger.exception(
+                "Verification email failed for user_id=%s", user.pk
+            )
+            # Keep the account inactive and unverified.
+            return Response(
+                {
+                    "error": (
+                        "Could not send verification email. "
+                        "Please try resending the code shortly."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         return Response(
-            {"message": "Verification code sent to your email."},
-            status=status.HTTP_201_CREATED
+            {
+                "message": (
+                    "Verification code sent. "
+                    "Check your email, including the spam folder."
+                )
+            },
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -73,36 +80,17 @@ class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        code = request.data.get("code")
-        email = request.data.get("email")
-
-        if not code or not email:
-            return Response(
-                {"error": "Email and verification code are required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        verification = EmailVerification.objects.filter(
-            user__email=email,
-            code=str(code).strip()
-        ).first()
-
-        if not verification:
-            return Response(
-                {"error": "Invalid verification code!"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        user = verification.user
-        user.is_active = True
-        user.is_email_verified = True
-        user.save()
-
-        verification.delete()
+        serializer = EmailVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
 
         return Response(
-            {"message": "Email verified successfully! You can now log in."},
-            status=status.HTTP_200_OK
+            {
+                "message": (
+                    "Email verified successfully. You can now log in."
+                )
+            },
+            status=status.HTTP_200_OK,
         )
 
 
@@ -110,34 +98,75 @@ class ResendVerificationCodeView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = request.data.get("email")
-        user = User.objects.filter(email=email).first()
+        email = request.data.get("email", "")
 
-        if not user:
-            return Response({"error": "User with this email does not exist."}, status=status.HTTP_404_NOT_FOUND)
-
-        if user.is_email_verified:
-            return Response({"message": "Email is already verified."}, status=status.HTTP_400_BAD_REQUEST)
-
-        EmailVerification.objects.filter(user=user).delete()
-        otp_code = str(random.randint(100000, 999999))
-        EmailVerification.objects.create(user=user, code=otp_code)
-
-        try:
-            send_mail(
-                subject="RiceHub - Resend Verification Code",
-                message=f"Hello {user.username},\n\nYour new verification code is: {otp_code}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-                fail_silently=False,
+        if not isinstance(email, str) or not email.strip():
+            return Response(
+                {"error": "A valid email is required."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        except Exception as e:
-            return Response({"error": f"Failed to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({"message": "New verification code sent to your email."}, status=status.HTTP_200_OK)
+        user = User.objects.filter(
+            email__iexact=email.strip(),
+            is_email_verified=False,
+            is_active=False,
+        ).first()
+
+        # Avoid revealing whether an email is registered.
+        if not user:
+            return Response(
+                {
+                    "message": (
+                        "If an unverified account exists, "
+                        "a verification email can be requested."
+                    )
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        with transaction.atomic():
+            verification, _ = EmailVerification.objects.get_or_create(
+                user=user
+            )
+            verification = EmailVerification.objects.select_for_update().get(
+                pk=verification.pk
+            )
+
+            now = timezone.now()
+            if verification.last_sent_at:
+                elapsed = (now - verification.last_sent_at).total_seconds()
+                remaining = OTP_RESEND_COOLDOWN_SECONDS - elapsed
+
+                if remaining > 0:
+                    return Response(
+                        {
+                            "error": (
+                                "Please wait before requesting another code."
+                            ),
+                            "retry_after": int(remaining) + 1,
+                        },
+                        status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    )
+
+            # send_verification_code invalidates the previous hash first.
+            try:
+                send_verification_code(user, verification)
+            except Exception:
+                logger.exception(
+                    "Resend verification email failed for user_id=%s",
+                    user.pk,
+                )
+                return Response(
+                    {"error": "Email could not be sent. Try again later."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+        return Response(
+            {"message": "A new verification code has been sent."},
+            status=status.HTTP_200_OK,
+        )
 
 
-# --- LOGIN & TOKENS ---
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -145,102 +174,174 @@ class LoginView(APIView):
         username = request.data.get("username")
         password = request.data.get("password")
 
+        if not username or not password:
+            return Response(
+                {"error": "Username and password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         user = authenticate(username=username, password=password)
+
         if not user:
-            return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {"error": "Invalid credentials."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
         if not user.is_active or not user.is_email_verified:
-            return Response({"error": "Please verify your email before logging in."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": "Please verify your email before logging in."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         refresh = RefreshToken.for_user(user)
-        return Response({
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email
-            }
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class VerifyTwoFactorLoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        return Response({"message": "Two factor login verified."}, status=status.HTTP_200_OK)
+        # This endpoint still needs a real TwoFactorChallenge flow.
+        return Response(
+            {"error": "Two-factor verification is not implemented."},
+            status=status.HTTP_501_NOT_IMPLEMENTED,
+        )
 
 
-# --- PROFILE & SECURITY ---
 class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        return Response({"id": user.id, "username": user.username, "email": user.email}, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ProfileUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def put(self, request):
-        return Response({"message": "Profile updated successfully."}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Profile update endpoint needs implementation."},
+            status=status.HTTP_501_NOT_IMPLEMENTED,
+        )
 
 
 class TwoFactorSettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        return Response({"message": "2FA settings updated."}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Two-factor settings need implementation."},
+            status=status.HTTP_501_NOT_IMPLEMENTED,
+        )
 
 
 class SecuritySessionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        return Response({"message": "Logged out of all sessions."}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Session revocation needs implementation."},
+            status=status.HTTP_501_NOT_IMPLEMENTED,
+        )
 
 
 class UserPrivacySettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        return Response({"privacy": "default"}, status=status.HTTP_200_OK)
+        settings_obj, _ = UserPrivacySettings.objects.get_or_create(
+            user=request.user
+        )
+        from .serializers import UserPrivacySettingsSerializer
+
+        serializer = UserPrivacySettingsSerializer(settings_obj)
+        return Response(
+            {"privacy": serializer.data},
+            status=status.HTTP_200_OK,
+        )
 
 
 class BlockedUsersView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        return Response([], status=status.HTTP_200_OK)
+    def get(self, request, user_id=None):
+        return Response(
+            {"error": "Blocked-user listing needs implementation."},
+            status=status.HTTP_501_NOT_IMPLEMENTED,
+        )
 
 
 class UserSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        return Response([], status=status.HTTP_200_OK)
+        return Response(
+            {"error": "User search needs implementation."},
+            status=status.HTTP_501_NOT_IMPLEMENTED,
+        )
 
 
 class UserDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, id):
-        return Response({"id": id}, status=status.HTTP_200_OK)
+        return Response(
+            {"error": "User detail endpoint needs implementation."},
+            status=status.HTTP_501_NOT_IMPLEMENTED,
+        )
 
 
 class UserByUsernameView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, username):
-        return Response({"username": username}, status=status.HTTP_200_OK)
+        return Response(
+            {"error": "User lookup needs implementation."},
+            status=status.HTTP_501_NOT_IMPLEMENTED,
+        )
 
 
 class PasswordResetRequestView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        return Response({"message": "Password reset email sent."}, status=status.HTTP_200_OK)
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            serializer.save()
+        except Exception:
+            logger.exception("Password reset email sending failed")
+            # Do not reveal whether an account exists.
+        return Response(
+            {
+                "message": (
+                    "If an account exists for this email, "
+                    "password reset instructions will be sent."
+                )
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class AccountExportView(APIView):
@@ -248,17 +349,19 @@ class AccountExportView(APIView):
 
     def get(self, request):
         user = request.user
-        return Response({
-            "username": user.username,
-            "email": user.email,
-            "date_joined": user.date_joined
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "username": user.username,
+                "email": user.email,
+                "date_joined": user.date_joined,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class AccountDeleteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request):
-        user = request.user
-        user.delete()
-        return Response({"message": "Account deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        request.user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
