@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: whitefiber
       POSTGRES_PASSWORD: change-this-password
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -15,7 +15,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
 
   web:
     build:
@@ -42,7 +42,7 @@ services:
       - db
       - redis
     ports:
-      - "8000:8000"
+      - "8001:8000"
     command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
 
 volumes:
