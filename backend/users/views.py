@@ -1,4 +1,3 @@
-
 import logging
 from datetime import timedelta
 
@@ -11,18 +10,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import (
-    EmailVerification,
-    UserPrivacySettings,
-)
+from .models import UserPrivacySettings
 from .serializers import (
-    EmailVerificationSerializer,
     PasswordResetRequestSerializer,
     RegisterSerializer,
-)
-from .verification import (
-    OTP_RESEND_COOLDOWN_SECONDS,
-    send_verification_code,
 )
 
 User = get_user_model()
@@ -38,9 +29,10 @@ class RegisterView(APIView):
 
         try:
             with transaction.atomic():
-                user = serializer.save()
-                verification = EmailVerification.objects.create(
-                    user=user
+                # User account create karke auto-activate kar dein
+                user = serializer.save(
+                    is_active=True,
+                    is_email_verified=True
                 )
         except IntegrityError:
             return Response(
@@ -48,28 +40,10 @@ class RegisterView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            send_verification_code(user, verification)
-        except Exception:
-            logger.exception(
-                "Verification email failed for user_id=%s", user.pk
-            )
-            # Keep the account inactive and unverified.
-            return Response(
-                {
-                    "error": (
-                        "Could not send verification email. "
-                        "Please try resending the code shortly."
-                    )
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
         return Response(
             {
                 "message": (
-                    "Verification code sent. "
-                    "Check your email, including the spam folder."
+                    "Registration successful! You can now log in directly."
                 )
             },
             status=status.HTTP_201_CREATED,
@@ -80,14 +54,11 @@ class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = EmailVerificationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-
+        # Verification temporary bypass - frontend error na throw kare
         return Response(
             {
                 "message": (
-                    "Email verified successfully. You can now log in."
+                    "Email verification is currently disabled. Account is active."
                 )
             },
             status=status.HTTP_200_OK,
@@ -98,71 +69,8 @@ class ResendVerificationCodeView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = request.data.get("email", "")
-
-        if not isinstance(email, str) or not email.strip():
-            return Response(
-                {"error": "A valid email is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        user = User.objects.filter(
-            email__iexact=email.strip(),
-            is_email_verified=False,
-            is_active=False,
-        ).first()
-
-        # Avoid revealing whether an email is registered.
-        if not user:
-            return Response(
-                {
-                    "message": (
-                        "If an unverified account exists, "
-                        "a verification email can be requested."
-                    )
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        with transaction.atomic():
-            verification, _ = EmailVerification.objects.get_or_create(
-                user=user
-            )
-            verification = EmailVerification.objects.select_for_update().get(
-                pk=verification.pk
-            )
-
-            now = timezone.now()
-            if verification.last_sent_at:
-                elapsed = (now - verification.last_sent_at).total_seconds()
-                remaining = OTP_RESEND_COOLDOWN_SECONDS - elapsed
-
-                if remaining > 0:
-                    return Response(
-                        {
-                            "error": (
-                                "Please wait before requesting another code."
-                            ),
-                            "retry_after": int(remaining) + 1,
-                        },
-                        status=status.HTTP_429_TOO_MANY_REQUESTS,
-                    )
-
-            # send_verification_code invalidates the previous hash first.
-            try:
-                send_verification_code(user, verification)
-            except Exception:
-                logger.exception(
-                    "Resend verification email failed for user_id=%s",
-                    user.pk,
-                )
-                return Response(
-                    {"error": "Email could not be sent. Try again later."},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
-
         return Response(
-            {"message": "A new verification code has been sent."},
+            {"message": "Email verification is currently disabled."},
             status=status.HTTP_200_OK,
         )
 
@@ -188,9 +96,9 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        if not user.is_active or not user.is_email_verified:
+        if not user.is_active:
             return Response(
-                {"error": "Please verify your email before logging in."},
+                {"error": "Account is disabled."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -213,7 +121,6 @@ class VerifyTwoFactorLoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        # This endpoint still needs a real TwoFactorChallenge flow.
         return Response(
             {"error": "Two-factor verification is not implemented."},
             status=status.HTTP_501_NOT_IMPLEMENTED,
@@ -332,7 +239,7 @@ class PasswordResetRequestView(APIView):
             serializer.save()
         except Exception:
             logger.exception("Password reset email sending failed")
-            # Do not reveal whether an account exists.
+
         return Response(
             {
                 "message": (
