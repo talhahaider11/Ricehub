@@ -19,6 +19,7 @@ from .views import (
     TwoFactorSettingsView,
     UserByUsernameView,
     UserDetailView,
+    UsernameAvailabilityView,
     UserPrivacySettingsView,
     UserSearchView,
     VerifyEmailView,
@@ -32,6 +33,11 @@ urlpatterns = [
     # Registration and email verification
 
     path("register/", RegisterView.as_view(), name="register"),
+    path(
+        "username-availability/",
+        UsernameAvailabilityView.as_view(),
+        name="username_availability",
+    ),
     path("verify-email/", VerifyEmailView.as_view(), name="verify-email"),
     path(
         "resend-verification/",

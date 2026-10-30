@@ -2,27 +2,35 @@ import { useEffect, useState } from "react";
 import postService from "../../services/postService";
 import Avatar from "../common/Avatar";
 import Loader from "../common/Loader";
+import ErrorState from "../common/ErrorState";
+import { getArrayResults } from "../../utils/arrayResults";
 
 export default function CommentList({
   postId,
+  refreshKey = 0,
 }) {
   const [comments, setComments] =
     useState([]);
 
   const [loading, setLoading] =
     useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
+    setError("");
 
     postService
       .comments(postId)
       .then((data) => {
         if (!mounted) return;
 
-        setComments(
-          data.results || data
-        );
+        setComments(getArrayResults(data, "Comments"));
+      })
+      .catch((loadError) => {
+        console.error("Comments could not be loaded:", loadError);
+        if (mounted) setError("Comments could not be loaded.");
       })
       .finally(() => {
         if (mounted) {
@@ -33,10 +41,14 @@ export default function CommentList({
     return () => {
       mounted = false;
     };
-  }, [postId]);
+  }, [postId, refreshKey]);
 
   if (loading) {
     return <Loader />;
+  }
+
+  if (error) {
+    return <ErrorState message={error} />;
   }
 
   return (
@@ -47,13 +59,13 @@ export default function CommentList({
           key={comment.id}
         >
           <Avatar
-            user={comment.user}
+            user={comment.author}
             size="small"
           />
 
           <div className="comment-body">
             <strong>
-              {comment.user?.username}
+              {comment.author?.username || "User"}
             </strong>
 
             <p>

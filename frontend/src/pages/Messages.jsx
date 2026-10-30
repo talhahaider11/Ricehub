@@ -8,6 +8,7 @@ import MessageList from "../components/messages/MessageList";
 import MessageInput from "../components/messages/MessageInput";
 import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
+import { getArrayResults } from "../utils/arrayResults";
 
 export default function Messages() {
   const { user } = useAuth();
@@ -23,7 +24,7 @@ export default function Messages() {
       .conversations()
       .then((data) => {
         if (!active) return;
-        const items = data.results || data;
+        const items = getArrayResults(data, "Conversations");
         setConversations(items);
 
         const requestedId = location.state?.conversationId;
@@ -45,7 +46,8 @@ export default function Messages() {
         }
         setError("");
       })
-      .catch(() => {
+      .catch((loadError) => {
+        console.error("Conversations could not be loaded:", loadError);
         if (active) setError("Conversations could not be loaded.");
       })
       .finally(() => {

@@ -60,3 +60,39 @@ class RegistrationTests(APITestCase):
             response.status_code,
             status.HTTP_400_BAD_REQUEST,
         )
+
+    def test_username_availability_suggests_alternatives_case_insensitively(self):
+        User.objects.create_user(
+            username="john",
+            email="existing@example.com",
+            password="StrongPassword123",
+        )
+
+        response = self.client.get(
+            "/api/users/username-availability/",
+            {"username": "John"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["available"])
+        self.assertEqual(response.data["suggestions"], ["John1", "John2", "John3"])
+
+    def test_registration_rejects_case_insensitive_duplicate_username(self):
+        User.objects.create_user(
+            username="john",
+            email="existing@example.com",
+            password="StrongPassword123",
+        )
+
+        response = self.client.post(
+            "/api/users/register/",
+            {
+                "username": "John",
+                "email": "john.new@example.com",
+                "password": "StrongPassword123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(User.objects.filter(email="john.new@example.com").exists())

@@ -2,6 +2,7 @@ import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import searchService from "../../services/searchService";
+import { getArrayResults } from "../../utils/arrayResults";
 
 export default function SearchBar() {
   const [query, setQuery] = useState("");
@@ -17,8 +18,12 @@ export default function SearchBar() {
     const timeout = setTimeout(async () => {
       try {
         const data = await searchService.global(query.trim());
-        setResults(data);
-      } catch {
+        setResults({
+          users: getArrayResults(data.users, "People search"),
+          hashtags: getArrayResults(data.hashtags, "Hashtag search"),
+        });
+      } catch (error) {
+        console.error("Search suggestions could not be loaded:", error);
         setResults(null);
       }
     }, 300);

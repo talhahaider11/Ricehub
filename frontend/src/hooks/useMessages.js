@@ -7,6 +7,7 @@ import {
 
 import messageService from "../services/messageService";
 import useAuth from "./useAuth";
+import { getArrayResults } from "../utils/arrayResults";
 
 export default function useMessages(conversationId) {
   const { user } = useAuth();
@@ -29,14 +30,15 @@ export default function useMessages(conversationId) {
       const data = await messageService.messages(conversationId);
       
       if (isMountedRef.current) {
-        setMessages(data.results || data);
+        setMessages(getArrayResults(data, "Messages"));
         
         // Mark Messages as Read over WS if socket is active
         if (socketRef.current?.readyState === WebSocket.OPEN) {
           socketRef.current.send(JSON.stringify({ type: "read" }));
         }
       }
-    } catch {
+    } catch (loadError) {
+      console.error("Messages could not be loaded:", loadError);
       if (isMountedRef.current) {
         setError("Messages could not be loaded.");
       }

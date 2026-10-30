@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import userService from "../../services/userService";
 import friendService from "../../services/friendService";
 import Avatar from "../common/Avatar";
+import { getArrayResults } from "../../utils/arrayResults";
 
 export default function FriendSuggestions() {
   const [users, setUsers] =
@@ -13,9 +14,11 @@ export default function FriendSuggestions() {
       .search("")
       .then((data) =>
         setUsers(
-          (data.results || data)
-            .slice(0, 5)
+          getArrayResults(data, "Friend suggestions").slice(0, 5)
         )
+      )
+      .catch((error) =>
+        console.error("Friend suggestions could not be loaded:", error)
       );
   }, []);
 

@@ -1404,6 +1404,82 @@ textarea:focus-visible {
   color: var(--text);
 }
 
+.auth-field-hint {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auth-field-hint-available {
+  color: var(--success);
+}
+
+.auth-field-hint-taken,
+.auth-field-hint-error {
+  color: var(--danger);
+}
+
+.username-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.auth-card .username-suggestion,
+.auth-card .auth-password-suggest {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  box-shadow: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.auth-card .username-suggestion:hover:not(:disabled),
+.auth-card .auth-password-suggest:hover:not(:disabled) {
+  transform: none;
+  background: var(--border);
+}
+
+.auth-card .auth-password-suggest {
+  margin-top: -8px;
+  color: var(--primary);
+}
+
+.app-render-error {
+  display: grid;
+  min-height: 100vh;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px;
+  background: var(--background);
+  color: var(--text);
+  text-align: center;
+}
+
+.app-render-error h1,
+.app-render-error p {
+  margin: 0;
+}
+
+.app-render-error button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.app-render-error a {
+  color: var(--primary);
+}
+
 .verification-code-input {
   text-align: center;
   font-size: 24px !important;

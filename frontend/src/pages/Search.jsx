@@ -7,6 +7,7 @@ import PostCard from "../components/posts/PostCard";
 import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
 import useAuth from "../hooks/useAuth";
+import { getArrayResults } from "../utils/arrayResults";
 
 export default function Search() {
   const [params] = useSearchParams();
@@ -37,15 +38,16 @@ export default function Search() {
       try {
         if (activeTab === "people") {
           const data = await userService.search(query);
-          setUsers(data.results || data);
+          setUsers(getArrayResults(data, "People search"));
         } else if (activeTab === "posts") {
           const data = await searchService.global(query);
-          setPosts(data.posts || []);
+          setPosts(getArrayResults(data.posts, "Post search"));
         } else if (activeTab === "hashtags") {
           const data = await searchService.global(query);
-          setHashtags(data.hashtags || []);
+          setHashtags(getArrayResults(data.hashtags, "Hashtag search"));
         }
-      } catch {
+      } catch (searchError) {
+        console.error("Search results could not be loaded:", searchError);
         setError("Search results could not be loaded.");
       } finally {
         setLoading(false);

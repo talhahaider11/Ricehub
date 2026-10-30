@@ -4,6 +4,7 @@ import friendService from "../services/friendService";
 import FriendRequest from "../components/friends/FriendRequest";
 import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
+import { getArrayResults } from "../utils/arrayResults";
 
 export default function FriendRequests() {
   const [requests, setRequests] =
@@ -19,11 +20,12 @@ export default function FriendRequests() {
     friendService
       .requests()
       .then((data) =>
-        setRequests(
-          data.results || data
-        )
+        setRequests(getArrayResults(data, "Friend requests"))
       )
-      .catch(() => setError("Friend requests could not be loaded."))
+      .catch((loadError) => {
+        console.error("Friend requests could not be loaded:", loadError);
+        setError("Friend requests could not be loaded.");
+      })
       .finally(() =>
         setLoading(false)
       );

@@ -5,6 +5,7 @@ import {
   useState,
 } from "react";
 import postService from "../services/postService";
+import { getArrayResults } from "../utils/arrayResults";
 
 export default function usePosts(sort = "recent") {
   const [posts, setPosts] = useState([]);
@@ -26,7 +27,7 @@ export default function usePosts(sort = "recent") {
       try {
         const data = await postService.list(pageNumber, sort);
         if (requestId !== requestRef.current) return;
-        const results = data.results || [];
+        const results = getArrayResults(data, "Posts");
 
         setPosts((current) =>
           pageNumber === 1? results : [...current,...results]

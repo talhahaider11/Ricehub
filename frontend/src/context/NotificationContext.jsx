@@ -6,6 +6,7 @@ import {
 } from "react";
 import notificationService from "../services/notificationService";
 import useAuth from "../hooks/useAuth";
+import { getArrayResults } from "../utils/arrayResults";
 
 export const NotificationContext = createContext(null);
 
@@ -26,15 +27,7 @@ export function NotificationProvider({ children }) {
     try {
       setError("");
       const data = await notificationService.list();
-      const notificationItems = Array.isArray(data)
-        ? data
-        : data?.results;
-
-      if (!Array.isArray(notificationItems)) {
-        throw new TypeError("Notifications API returned an invalid response.");
-      }
-
-      setNotifications(notificationItems);
+      setNotifications(getArrayResults(data, "Notifications"));
     } catch (loadError) {
       console.error("Notifications could not be loaded:", loadError);
       setError("Notifications could not be loaded. Please try again.");

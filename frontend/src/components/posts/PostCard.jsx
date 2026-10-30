@@ -35,6 +35,8 @@ export default function PostCard({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [reactionSaving, setReactionSaving] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [commentsCount, setCommentsCount] = useState(post.comments_count || 0);
+  const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [imageOpen, setImageOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
@@ -154,7 +156,7 @@ export default function PostCard({
           )}
           {reactionCount} reactions
         </span>
-        <span>{post.comments_count || 0} comments</span>
+        <span>{commentsCount} comments</span>
       </div>
 
       <div className="post-actions">
@@ -217,8 +219,18 @@ export default function PostCard({
 
       {showComments && (
         <>
-          <CommentBox postId={post.id} />
-          <CommentList postId={post.id} currentUser={currentUser} />
+          <CommentBox
+            postId={post.id}
+            onCreated={() => {
+              setCommentsCount((count) => count + 1);
+              setCommentRefreshKey((key) => key + 1);
+            }}
+          />
+          <CommentList
+            postId={post.id}
+            currentUser={currentUser}
+            refreshKey={commentRefreshKey}
+          />
         </>
       )}
     </article>

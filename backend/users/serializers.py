@@ -123,6 +123,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         validate_strong_password(value)
         return value
 
+    def validate_username(self, value):
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError(
+                "This username is already taken. Please choose another one."
+            )
+        return value
+
     def validate_email(self, value):
         if User.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError(
@@ -138,6 +145,23 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+
+
+def suggest_usernames(username, count=3):
+    max_length = User._meta.get_field("username").max_length
+    suggestions = []
+    suffix = 1
+
+    while len(suggestions) < count:
+        suffix_text = str(suffix)
+        candidate = (
+            f"{username[:max_length - len(suffix_text)]}{suffix_text}"
+        )
+        if not User.objects.filter(username__iexact=candidate).exists():
+            suggestions.append(candidate)
+        suffix += 1
+
+    return suggestions
 
 
 class UserPrivacySettingsSerializer(serializers.ModelSerializer):

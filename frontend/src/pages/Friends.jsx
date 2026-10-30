@@ -4,6 +4,7 @@ import FriendList from "../components/friends/FriendList";
 import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
 import EmptyState from "../components/common/EmptyState";
+import { getArrayResults } from "../utils/arrayResults";
 
 export default function Friends() {
   const [friends, setFriends] = useState([]);
@@ -16,9 +17,10 @@ export default function Friends() {
     friendService
      .list()
      .then((data) => {
-        setFriends(data.results || data);
+        setFriends(getArrayResults(data, "Friends"));
       })
      .catch((err) => {
+        console.error("Friends could not be loaded:", err);
         setError(err.message || "Failed to load friends");
       })
      .finally(() => setLoading(false));

@@ -3,12 +3,9 @@ import communityService from "../services/communityService";
 import useAuth from "../hooks/useAuth";
 import friendService from "../services/friendService";
 import { getMediaUrl } from "../utils/constants";
+import { getArrayResults } from "../utils/arrayResults";
 
 const tabs = ["Stories", "Groups & Pages", "Events", "Marketplace"];
-
-function resultsOf(response) {
-  return Array.isArray(response) ? response : response?.results || [];
-}
 
 function localDateTime(value) {
   const date = new Date(value);
@@ -66,14 +63,15 @@ export default function SocialHub() {
         communityService.invitations(),
         communityService.orders(),
       ]);
-      setStories(resultsOf(storyData));
-      setCommunities(resultsOf(communityData));
-      setEvents(resultsOf(eventData));
-      setListings(resultsOf(listingData));
-      setFriends(resultsOf(friendData));
-      setInvitations(resultsOf(invitationData));
-      setOrders(resultsOf(orderData));
+      setStories(getArrayResults(storyData, "Stories"));
+      setCommunities(getArrayResults(communityData, "Communities"));
+      setEvents(getArrayResults(eventData, "Events"));
+      setListings(getArrayResults(listingData, "Marketplace listings"));
+      setFriends(getArrayResults(friendData, "Friends"));
+      setInvitations(getArrayResults(invitationData, "Event invitations"));
+      setOrders(getArrayResults(orderData, "Marketplace orders"));
     } catch (loadError) {
+      console.error("Community features could not be loaded:", loadError);
       setError(loadError.response?.data?.detail || "Community features could not be loaded.");
     } finally {
       setLoading(false);
@@ -84,9 +82,10 @@ export default function SocialHub() {
     setError("");
     try {
       const data = await communityService.communityPosts(communityId);
-      setCommunityPosts(resultsOf(data));
+      setCommunityPosts(getArrayResults(data, "Community posts"));
       setExpandedCommunityId(communityId);
     } catch (loadError) {
+      console.error("Community posts could not be loaded:", loadError);
       setError(loadError.response?.data?.detail || "Community posts could not be loaded.");
     }
   };
@@ -230,9 +229,10 @@ export default function SocialHub() {
                           const viewers = await communityService.storyViewers(story.id);
                           setStoryViewers((current) => ({
                             ...current,
-                            [story.id]: viewers,
+                            [story.id]: getArrayResults(viewers, "Story viewers"),
                           }));
                         } catch (viewerError) {
+                          console.error("Story viewers could not be loaded:", viewerError);
                           setError(viewerError.response?.data?.detail || "Story viewers could not be loaded.");
                         }
                       }}>View viewers</button>

@@ -38,6 +38,14 @@ const userService = {
 
     return response.data;
   },
+
+  async checkUsername(username) {
+    const response = await api.get("/users/username-availability/", {
+      params: { username },
+    });
+
+    return response.data;
+  },
 };
 
 export default userService;

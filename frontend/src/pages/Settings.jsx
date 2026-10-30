@@ -6,6 +6,7 @@ import authService from "../services/authService";
 import userService from "../services/userService";
 import notificationService from "../services/notificationService";
 import settingsService from "../services/settingsService";
+import { getArrayResults } from "../utils/arrayResults";
 
 const preferenceLabels = {
   friend_requests: "Friend requests",
@@ -53,8 +54,11 @@ export default function Settings() {
       .then(setPrivacy)
       .catch(() => setActionError("Privacy settings could not be loaded."));
     settingsService.getBlockedUsers()
-      .then(setBlockedUsers)
-      .catch(() => setActionError("Blocked accounts could not be loaded."));
+      .then((data) => setBlockedUsers(getArrayResults(data, "Blocked accounts")))
+      .catch((error) => {
+        console.error("Blocked accounts could not be loaded:", error);
+        setActionError("Blocked accounts could not be loaded.");
+      });
     settingsService.getSecurity()
       .then(setSecurity)
       .catch(() => setActionError("Security settings could not be loaded."));

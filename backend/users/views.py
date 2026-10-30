@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib.auth import authenticate, get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -27,6 +28,7 @@ from .serializers import (
     RegisterSerializer,
     UserPrivacySettingsSerializer,
     UserSerializer,
+    suggest_usernames,
 )
 from .two_factor import send_two_factor_code, verify_two_factor_code
 from .verification import (
@@ -83,6 +85,40 @@ class RegisterView(APIView):
                 "message": "Registration successful. You can now sign in."
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class UsernameAvailabilityView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        username = request.query_params.get("username", "").strip()
+        if not username:
+            return Response(
+                {"username": ["Enter a username to check availability."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            User._meta.get_field("username").clean(username, None)
+        except DjangoValidationError as error:
+            return Response(
+                {"username": error.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        available = not User.objects.filter(
+            username__iexact=username
+        ).exists()
+        return Response(
+            {
+                "username": username,
+                "available": available,
+                "suggestions": (
+                    [] if available else suggest_usernames(username)
+                ),
+            },
+            status=status.HTTP_200_OK,
         )
 
 
