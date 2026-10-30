@@ -26,8 +26,17 @@ export function NotificationProvider({ children }) {
     try {
       setError("");
       const data = await notificationService.list();
-      setNotifications(data.results || data);
-    } catch {
+      const notificationItems = Array.isArray(data)
+        ? data
+        : data?.results;
+
+      if (!Array.isArray(notificationItems)) {
+        throw new TypeError("Notifications API returned an invalid response.");
+      }
+
+      setNotifications(notificationItems);
+    } catch (loadError) {
+      console.error("Notifications could not be loaded:", loadError);
       setError("Notifications could not be loaded. Please try again.");
     } finally {
       setLoading(false);
