@@ -7,18 +7,9 @@ import {
 import authService from "../services/authService";
 import {
   initializePushNotifications,
-  registerPushListeners,
+  unregisterPushDevice,
 } from "../services/pushNotificationService";
 
-// Auth Login / Reload flow par execute:
-const setupNotifications = async () => {
-  try {
-    await initializePushNotifications();
-    registerPushListeners();
-  } catch (error) {
-    console.error("Push Notification setup failed:", error);
-  }
-};
 import { ACCESS_TOKEN_KEY } from "../utils/constants";
 
 export const AuthContext = createContext(null);
@@ -89,11 +80,9 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    try {
-      unregisterPushDevice();
-    } catch (e) {
-      console.warn("Unregister push device ignored on web environment:", e);
-    }
+    void unregisterPushDevice().catch((error) => {
+      console.warn("Push device could not be unregistered:", error);
+    });
     authService.logout();
     setUser(null);
   };

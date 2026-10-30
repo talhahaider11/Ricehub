@@ -122,6 +122,36 @@ a {
   outline: 3px solid rgba(24, 119, 242, 0.15);
 }
 
+.auth-password-field {
+  position: relative;
+}
+
+.auth-password-field input {
+  padding-right: 50px;
+}
+
+.auth-card .auth-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.auth-card .auth-password-toggle:hover:not(:disabled) {
+  transform: translateY(-50%);
+  background: var(--surface-secondary);
+  color: var(--text);
+}
+
 .auth-card button {
   min-height: 48px;
   border: 0;

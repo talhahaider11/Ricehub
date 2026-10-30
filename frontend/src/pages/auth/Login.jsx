@@ -1,6 +1,7 @@
 import {
   useState,
 } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 import {
   Link,
@@ -25,6 +26,8 @@ export default function Login() {
 
   const [password, setPassword] =
     useState("");
+  const [showPassword, setShowPassword] =
+    useState(false);
 
   const [error, setError] =
     useState("");
@@ -90,7 +93,8 @@ export default function Login() {
 
         {twoFactorRequired && (
           <p className="settings-description">
-            Enter the 6-digit code sent to {twoFactorEmail}.
+            Enter the 6-digit code sent to{" "}
+            {twoFactorEmail || "your registered email"}.
           </p>
         )}
 
@@ -127,14 +131,25 @@ export default function Login() {
               required
             />
 
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              autoComplete="current-password"
-              required
-            />
+            <div className="auth-password-field">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                className="auth-password-toggle"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword((visible) => !visible)}
+              >
+                {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+              </button>
+            </div>
           </>
         ) : (
           <input
