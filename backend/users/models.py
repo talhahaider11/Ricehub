@@ -1,4 +1,3 @@
-
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.db.models import F, Q
@@ -112,7 +111,7 @@ class BlockedUser(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["blocker", "blocked"],
-                name="unique_user_block",
+                name="unique_users_blocked_user",  # <--- Yahan naam change kar diya hai
             ),
             models.CheckConstraint(
                 condition=~Q(blocker=F("blocked")),

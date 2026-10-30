@@ -22,7 +22,7 @@ class UserBlock(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["blocker", "blocked"],
-                name="unique_user_block",
+                name="unique_moderation_user_block",  # <--- Yahan naam change kar diya
             ),
         ]
 
