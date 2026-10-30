@@ -25,10 +25,12 @@ export default function Messages() {
         if (!active) return;
         const items = data.results || data;
         setConversations(items);
+
         const requestedId = location.state?.conversationId;
         if (requestedId && items.some((item) => item.id === requestedId)) {
           setSelectedConversation(requestedId);
         }
+
         const requestedUsername = new URLSearchParams(location.search).get("username");
         if (requestedUsername) {
           return messageService.createConversation(requestedUsername)
@@ -49,6 +51,7 @@ export default function Messages() {
       .finally(() => {
         if (active) setLoading(false);
       });
+
     return () => {
       active = false;
     };
@@ -99,7 +102,7 @@ export default function Messages() {
         ) : (
           <>
             <div className="chat-status">
-              {connected ? "Connected" : "Connecting..."}
+              {connected ? "Connected 🟢" : "Connecting... 🔴"}
             </div>
 
             {messageError ? (

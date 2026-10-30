@@ -1,4 +1,5 @@
 import api from "./api";
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from "../utils/constants";
 
 
 const authService = {
@@ -9,8 +10,8 @@ const authService = {
     );
 
     if (response.data.access && response.data.refresh) {
-      localStorage.setItem("access_token", response.data.access);
-      localStorage.setItem("refresh_token", response.data.refresh);
+      localStorage.setItem(ACCESS_TOKEN_KEY, response.data.access);
+      localStorage.setItem(REFRESH_TOKEN_KEY, response.data.refresh);
     }
 
     return response.data;
@@ -18,8 +19,8 @@ const authService = {
 
   async verifyTwoFactor(data) {
     const response = await api.post("/users/verify-two-factor/", data);
-    localStorage.setItem("access_token", response.data.access);
-    localStorage.setItem("refresh_token", response.data.refresh);
+    localStorage.setItem(ACCESS_TOKEN_KEY, response.data.access);
+    localStorage.setItem(REFRESH_TOKEN_KEY, response.data.refresh);
     return response.data;
   },
 
@@ -43,6 +44,8 @@ const authService = {
   },
 
   logout() {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
   },

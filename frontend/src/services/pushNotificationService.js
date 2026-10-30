@@ -4,7 +4,7 @@ import {
 } from "@capacitor/push-notifications";
 import notificationService from "./notificationService";
 
-const PUSH_TOKEN_KEY = "ricehub_push_token";
+const PUSH_TOKEN_KEY = "ricemarket_push_token";
 let listenersPromise;
 
 function reportPushError(message, error) {
@@ -78,14 +78,14 @@ export function registerPushListeners() {
     PushNotifications.addListener(
       "pushNotificationReceived",
       () => {
-        window.dispatchEvent(new Event("ricehub:notifications-refresh"));
+        window.dispatchEvent(new Event("ricemarket:notifications-refresh"));
       }
     ),
 
     PushNotifications.addListener(
       "pushNotificationActionPerformed",
       () => {
-        window.dispatchEvent(new Event("ricehub:open-notifications"));
+        window.dispatchEvent(new Event("ricemarket:open-notifications"));
       }
     ),
   ]).catch((error) => {
@@ -100,7 +100,9 @@ export async function unregisterPushDevice() {
   const token = localStorage.getItem(PUSH_TOKEN_KEY);
   if (!token) return;
 
-  const accessToken = localStorage.getItem("access_token");
+  const accessToken =
+    localStorage.getItem("ricemarket_access_token") ||
+    localStorage.getItem("access_token");
   try {
     await notificationService.unregisterDevice(token, accessToken);
     localStorage.removeItem(PUSH_TOKEN_KEY);

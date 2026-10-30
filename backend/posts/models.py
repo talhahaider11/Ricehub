@@ -1,7 +1,6 @@
 from django.conf import settings
 from django.db import models
-from .validators import validate_post_image
-from .validators import validate_post_video
+from .validators import validate_post_image, validate_post_video
 
 
 class Hashtag(models.Model):
@@ -43,9 +42,7 @@ class Post(models.Model):
         upload_to="posts/%Y/%m/",
         blank=True,
         null=True,
-        validators=[
-            validate_post_image
-        ],
+        validators=[validate_post_image],
     )
 
     video = models.FileField(
@@ -83,5 +80,6 @@ class Post(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.author.username} - {self.content[:40]}"
-
+        # Username aur content ka truncated preview bina line-break syntax error ke
+        preview = self.content[:30] if self.content else "Media Post"
+        return f"{self.author.username}: {preview}"

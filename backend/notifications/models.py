@@ -9,22 +9,18 @@ class Notification(models.Model):
             "friend_request",
             "Friend Request"
         )
-
         FRIEND_ACCEPTED = (
             "friend_accepted",
             "Friend Accepted"
         )
-
         COMMENT = (
             "comment",
             "Comment"
         )
-
         REACTION = (
             "reaction",
             "Reaction"
         )
-
         MESSAGE = (
             "message",
             "Message"
@@ -82,7 +78,6 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-
         indexes = [
             models.Index(
                 fields=[
@@ -94,10 +89,8 @@ class Notification(models.Model):
         ]
 
     def __str__(self):
-        return (
-            f"{self.recipient.username}: "
-            f"{self.message}"
-        )
+        return f"{self.recipient.username}: {self.message}"
+
 
 class UserDevice(models.Model):
     PLATFORM_CHOICES = (
@@ -130,6 +123,11 @@ class UserDevice(models.Model):
         auto_now=True
     )
 
+    class Meta:
+        ordering = ["-updated_at"]
+        verbose_name = "User Device"
+        verbose_name_plural = "User Devices"
+
     def __str__(self):
         return f"{self.user.username} - {self.platform}"
 
@@ -147,3 +145,6 @@ class NotificationPreference(models.Model):
     messages = models.BooleanField(default=True)
     event_invitations = models.BooleanField(default=True)
     all_notifications = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s Notification Preferences"

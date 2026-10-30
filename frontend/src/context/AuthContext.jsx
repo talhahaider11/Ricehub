@@ -7,8 +7,19 @@ import {
 import authService from "../services/authService";
 import {
   initializePushNotifications,
-  unregisterPushDevice,
+  registerPushListeners,
 } from "../services/pushNotificationService";
+
+// Auth Login / Reload flow par execute:
+const setupNotifications = async () => {
+  try {
+    await initializePushNotifications();
+    registerPushListeners();
+  } catch (error) {
+    console.error("Push Notification setup failed:", error);
+  }
+};
+import { ACCESS_TOKEN_KEY } from "../utils/constants";
 
 export const AuthContext = createContext(null);
 
@@ -16,7 +27,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Helper function: Jab user authenticated ho tab push notifications setup honge
+  // Helper function: Jab user authenticated ho tab Push Notifications setup honge
   const setupNotifications = async () => {
     try {
       await initializePushNotifications();
@@ -26,7 +37,7 @@ export function AuthProvider({ children }) {
   };
 
   const loadUser = async () => {
-    const token = localStorage.getItem("access_token");
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem("access_token");
 
     if (!token) {
       setLoading(false);
@@ -53,7 +64,7 @@ export function AuthProvider({ children }) {
 
   const login = async (credentials) => {
     const result = await authService.login(credentials);
-    if (result.two_factor_required) return result;
+    if (result && result.two_factor_required) return result;
 
     const currentUser = await authService.getMe();
 
@@ -78,7 +89,11 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    unregisterPushDevice();
+    try {
+      unregisterPushDevice();
+    } catch (e) {
+      console.warn("Unregister push device ignored on web environment:", e);
+    }
     authService.logout();
     setUser(null);
   };

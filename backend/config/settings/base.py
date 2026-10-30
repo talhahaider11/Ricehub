@@ -25,7 +25,16 @@ SECRET_KEY = os.getenv(
 
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    (
+        "django.core.mail.backends.smtp.EmailBackend"
+        if os.getenv("EMAIL_HOST") and os.getenv("EMAIL_HOST_USER") and os.getenv("EMAIL_HOST_PASSWORD")
+        else "django.core.mail.backends.console.EmailBackend"
+        if DEBUG
+        else "django.core.mail.backends.smtp.EmailBackend"
+    ),
+)
 
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
@@ -35,30 +44,14 @@ EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() == "true"
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "15"))
 
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER or "noreply@ricehub.com"
-
-
 DEFAULT_FROM_EMAIL = os.getenv(
     "DEFAULT_FROM_EMAIL",
-    "",
+    ""
 ) or EMAIL_HOST_USER or "noreply@localhost"
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://ricehub-frontend.onrender.com")
 
-EMAIL_BACKEND = os.getenv(
-    "EMAIL_BACKEND",
-    (
-        "django.core.mail.backends.smtp.EmailBackend"
-        if EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
-        else "django.core.mail.backends.console.EmailBackend"
-        if DEBUG
-        else "django.core.mail.backends.smtp.EmailBackend"
-    ),
-)
-
-
-
-
+# Dynamic Allowed Hosts for Render and Local Environments
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv(
@@ -69,20 +62,14 @@ ALLOWED_HOSTS = [
 ]
 
 render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-
 if render_hostname and render_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(render_hostname)
 
-# Fallback: apna Render domain explicitly allow karo
 if "ricehub-umfd.onrender.com" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append("ricehub-umfd.onrender.com")
 
-REDIS_URL = os.getenv(
-    "REDIS_URL",
-    "redis://localhost:6379/0",
-)
-
-
+# Channel Layers (Redis setup for WebSockets)
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 CHANNEL_LAYERS = {
     "default": {
@@ -93,10 +80,8 @@ CHANNEL_LAYERS = {
     },
 }
 
-
 INSTALLED_APPS = [
     "daphne",
-
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -108,7 +93,6 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
 
-
     "drf_spectacular",
     "users",
     "posts",
@@ -119,12 +103,13 @@ INSTALLED_APPS = [
     "notifications",
     "search",
     "community",
+    "moderation",
 ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
-
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Render Static Files Serving
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -133,6 +118,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+# Production Security Configurations
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
@@ -165,17 +151,16 @@ ROOT_URLCONF = "config.urls"
 ASGI_APPLICATION = "config.asgi.application"
 WSGI_APPLICATION = "config.wsgi.application"
 
+# Database setup using Render environment variable
 if dj_database_url is None and os.environ.get("DATABASE_URL"):
     raise RuntimeError("Install dj-database-url to use DATABASE_URL.")
-
-
 
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
         conn_max_age=600,
         conn_health_checks=True,
-        ssl_require=True
+        ssl_require=not DEBUG
     )
 }
 
@@ -199,25 +184,18 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
-
     "DEFAULT_PAGINATION_CLASS": (
         "config.pagination.StandardPagination"
     ),
-    # Apni existing settings yahan preserve karo
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-
-
     "PAGE_SIZE": 10,
-
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
     ],
-
     "DEFAULT_THROTTLE_RATES": {
         "anon": "30/minute",
         "user": "120/minute",
@@ -225,7 +203,6 @@ REST_FRAMEWORK = {
     },
     "EXCEPTION_HANDLER": "config.exception.custom_exception_handler",
 }
-
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
@@ -235,23 +212,12 @@ SIMPLE_JWT = {
     "UPDATE_LAST_LOGIN": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME":
-        "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
-    {
-        "NAME":
-        "django.contrib.auth.password_validation.MinimumLengthValidator",
-    },
-    {
-        "NAME":
-        "django.contrib.auth.password_validation.CommonPasswordValidator",
-    },
-    {
-        "NAME":
-        "django.contrib.auth.password_validation.NumericPasswordValidator",
-    },
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 MAX_IMAGE_SIZE = 5 * 1024 * 1024
@@ -261,20 +227,18 @@ ALLOWED_IMAGE_TYPES = {
     "image/webp",
 }
 
-
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
 
-# settings.py
-
+# CORS and CSRF Settings for Mobile App & Render Frontend
 CORS_ALLOWED_ORIGINS = [
-    "https://ricehub-frontend.onrender.com",  # Aapka exact frontend URL (Render dashboard se copy karein)
+    "https://ricehub-frontend.onrender.com",
     "http://localhost:3000",
     "http://localhost:5173",
     "https://localhost",
@@ -287,3 +251,4 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = True  # Mobile APK calls access safely handle karne ke liye

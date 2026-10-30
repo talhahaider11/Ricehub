@@ -33,9 +33,9 @@ function PushNotificationNavigation() {
 
   useEffect(() => {
     const openNotifications = () => navigate("/notifications");
-    window.addEventListener("ricehub:open-notifications", openNotifications);
+    window.addEventListener("ricemarket:open-notifications", openNotifications);
     return () => {
-      window.removeEventListener("ricehub:open-notifications", openNotifications);
+      window.removeEventListener("ricemarket:open-notifications", openNotifications);
     };
   }, [navigate]);
 

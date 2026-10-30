@@ -52,9 +52,9 @@ export function NotificationProvider({ children }) {
 
   useEffect(() => {
     const refreshOnPush = () => loadNotifications();
-    window.addEventListener("ricehub:notifications-refresh", refreshOnPush);
+    window.addEventListener("ricemarket:notifications-refresh", refreshOnPush);
     return () => {
-      window.removeEventListener("ricehub:notifications-refresh", refreshOnPush);
+      window.removeEventListener("ricemarket:notifications-refresh", refreshOnPush);
     };
   }, [loadNotifications]);
 

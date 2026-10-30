@@ -89,6 +89,22 @@ class UserSerializer(serializers.ModelSerializer):
             return default
 
 
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "first_name",
+            "last_name",
+            "bio",
+            "profile_picture",
+            "cover_picture",
+            "location",
+            "website",
+            "date_of_birth",
+            "profile_visibility",
+        ]
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
         write_only=True,
@@ -117,7 +133,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         password = validated_data.pop("password")
         user = User(**validated_data)
-        user.is_active = False
+        user.is_active = True
         user.is_email_verified = False
         user.set_password(password)
         user.save()
@@ -166,7 +182,6 @@ class EmailVerificationSerializer(serializers.Serializer):
         user = User.objects.filter(
             email__iexact=email,
             is_email_verified=False,
-            is_active=False,
         ).first()
 
         if not user:
@@ -225,7 +240,6 @@ class EmailVerificationSerializer(serializers.Serializer):
         # an account after a resend or expiration.
         if (
             user.is_email_verified
-            or user.is_active
             or verification.is_expired()
             or not verification.code_hash
             or verification.attempts >= OTP_MAX_ATTEMPTS

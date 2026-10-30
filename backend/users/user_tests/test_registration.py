@@ -2,6 +2,8 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 from rest_framework import status
 
+from users.models import EmailVerification
+
 User = get_user_model()
 
 
@@ -30,6 +32,18 @@ class RegistrationTests(APITestCase):
                 username="john"
             ).exists()
         )
+        user = User.objects.get(username="john")
+        self.assertTrue(user.is_active)
+        self.assertFalse(user.is_email_verified)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+        login = self.client.post(
+            "/api/token/",
+            {"username": "john", "password": "StrongPassword123"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+        self.assertIn("access", login.data)
 
     def test_weak_password_rejected(self):
         response = self.client.post(

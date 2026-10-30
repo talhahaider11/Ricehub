@@ -1,20 +1,16 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from .models import Notification, NotificationPreference
-from .models import UserDevice
+
+from .models import Notification, NotificationPreference, UserDevice
 
 User = get_user_model()
 
 
-class NotificationSenderSerializer(
-    serializers.ModelSerializer
-):
-
+class NotificationSenderSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-
         fields = [
             "id",
             "username",
@@ -24,7 +20,6 @@ class NotificationSenderSerializer(
         ]
 
     def get_profile_picture(self, obj):
-
         request = self.context.get("request")
 
         if not obj.profile_picture:
@@ -38,17 +33,11 @@ class NotificationSenderSerializer(
         return url
 
 
-class NotificationSerializer(
-    serializers.ModelSerializer
-):
-
-    sender = NotificationSenderSerializer(
-        read_only=True
-    )
+class NotificationSerializer(serializers.ModelSerializer):
+    sender = NotificationSenderSerializer(read_only=True)
 
     class Meta:
         model = Notification
-
         fields = [
             "id",
             "sender",
@@ -60,15 +49,13 @@ class NotificationSerializer(
             "is_read",
             "created_at",
         ]
-
         read_only_fields = [
             "id",
             "created_at",
         ]
 
-class UserDeviceSerializer(
-    serializers.ModelSerializer
-):
+
+class UserDeviceSerializer(serializers.ModelSerializer):
     token = serializers.CharField(
         max_length=4096,
         trim_whitespace=True,

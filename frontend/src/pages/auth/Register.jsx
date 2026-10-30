@@ -51,22 +51,10 @@ export default function Register() {
 
     try {
       await register(form);
-      navigate("/verify-email", {
-        state: {
-          email: form.email,
-          notice: "We sent a 6-digit verification code to your email.",
-        },
+      navigate("/login", {
+        state: { notice: "Account created successfully. You can now sign in." },
       });
     } catch (err) {
-      if (err.response?.data?.verification_required) {
-        navigate("/verify-email", {
-          state: {
-            email: err.response.data.email || form.email,
-            notice: err.response.data.detail,
-          },
-        });
-        return;
-      }
       const responseData = err.response?.data;
       const messages =
         responseData && typeof responseData === "object"

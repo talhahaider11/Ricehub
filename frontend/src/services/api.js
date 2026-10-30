@@ -1,18 +1,26 @@
 import axios from "axios";
 import { API_URL, ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from "../utils/constants";
 
+// Render / Live API Endpoint Fallback Base Axios Client
+const BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  API_URL ||
+  "https://ricehub-umfd.onrender.com/api";
+
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: BASE_URL,
   timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Request Interceptor: Access token attach karne ke liye
+// Request Interceptor: Attach Access Token on every outgoing request
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const token =
+      localStorage.getItem(ACCESS_TOKEN_KEY) ||
+      localStorage.getItem("access_token");
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -26,7 +34,7 @@ api.interceptors.request.use(
 let isRefreshing = false;
 let waitingRequests = [];
 
-// Queue Processing Function
+// Queue Processing Helper for Pending Demands
 const processQueue = (error, token = null) => {
   waitingRequests.forEach((promise) => {
     if (error) {
@@ -39,19 +47,19 @@ const processQueue = (error, token = null) => {
   waitingRequests = [];
 };
 
-// Response Interceptor: 401 Unauthorized handle karne aur Token Refresh karne ke liye
+// Response Interceptor: Handle 401 Unauthorized & Smooth Token Refresh
 api.interceptors.response.use(
   (response) => response,
 
   async (error) => {
     const originalRequest = error.config;
 
-    // Agar error 401 na ho ya request pehle hi retry ho chuki ho
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    // Reject immediately if status is not 401 or request has already been retried
+    if (!error.response || error.response.status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }
 
-    // Agar refresh call pehle se chal rahi ho, toh request queue mein add karein
+    // Queue requests if token refresh is already in progress
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         waitingRequests.push({ resolve, reject });
@@ -67,35 +75,45 @@ api.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      const refreshToken =
+        localStorage.getItem(REFRESH_TOKEN_KEY) ||
+        localStorage.getItem("refresh_token");
 
       if (!refreshToken) {
         throw new Error("No refresh token available");
       }
 
-      // Refresh token request
-      const response = await axios.post(`${API_URL}/auth/refresh/`, {
+      // Separate axios instance call to prevent interceptor loop
+      const response = await axios.post(`${BASE_URL}/auth/refresh/`, {
         refresh: refreshToken,
       });
 
       const newAccessToken = response.data.access;
 
-      localStorage.setItem(ACCESS_TOKEN_KEY, newAccessToken);
+      // Store updated token in localStorage
+      if (ACCESS_TOKEN_KEY) {
+        localStorage.setItem(ACCESS_TOKEN_KEY, newAccessToken);
+      }
+      localStorage.setItem("access_token", newAccessToken);
 
-      // Pending queue process karein
+      // Process pending queued requests
       processQueue(null, newAccessToken);
 
-      // Original request retry karein
+      // Re-issue original failed request with fresh access token
       originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
       return api(originalRequest);
     } catch (refreshError) {
       processQueue(refreshError, null);
 
-      // Tokens clear karein aur login page par redirect karein
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      // Clear tokens and redirect user to login on auth failure
+      if (ACCESS_TOKEN_KEY) localStorage.removeItem(ACCESS_TOKEN_KEY);
+      if (REFRESH_TOKEN_KEY) localStorage.removeItem(REFRESH_TOKEN_KEY);
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
 
-      window.location.href = "/login";
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
 
       return Promise.reject(refreshError);
     } finally {

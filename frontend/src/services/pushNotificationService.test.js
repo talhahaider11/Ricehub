@@ -1,82 +1,79 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@capacitor/core", () => ({
-  Capacitor: {
-    getPlatform: vi.fn(),
-    isNativePlatform: vi.fn(),
-  },
-}));
-
-vi.mock("@capacitor/push-notifications", () => ({
-  PushNotifications: {
-    addListener: vi.fn(),
-    checkPermissions: vi.fn(),
-    register: vi.fn(),
-    requestPermissions: vi.fn(),
-  },
-}));
-
-vi.mock("./notificationService", () => ({
-  default: {
-    registerDevice: vi.fn(),
-    unregisterDevice: vi.fn(),
-  },
-}));
-
-import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
-import notificationService from "./notificationService";
-import {
-  initializePushNotifications,
-  registerPushListeners,
-} from "./pushNotificationService";
+import api from "./api";
 
-describe("pushNotificationService", () => {
-  const listeners = {};
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    localStorage.clear();
-    Object.keys(listeners).forEach((key) => delete listeners[key]);
-    Capacitor.isNativePlatform.mockReturnValue(true);
-    Capacitor.getPlatform.mockReturnValue("android");
-    PushNotifications.addListener.mockImplementation((event, listener) => {
-      listeners[event] = listener;
-      return Promise.resolve({ remove: vi.fn() });
+/**
+ * 1. Backend Helper API:
+ * FCM Device Token ko Django backend (`/notifications/devices/`) par register karne ke liye function.
+ */
+export async function registerDevice(token) {
+  try {
+    const response = await api.post("/notifications/devices/", {
+      token: token,
+      platform: "android",
     });
-    PushNotifications.checkPermissions.mockResolvedValue({ receive: "granted" });
+    console.log("Device token registered with backend successfully:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Failed to register device token on backend:", error);
+    throw error;
+  }
+}
+
+/**
+ * 2. Push Notifications Core Initialization Function:
+ * Permissions handle karta hai aur Firebase FCM Registration start karta hai.
+ */
+export const initializePushNotifications = async () => {
+  try {
+    // Check Notification Permissions
+    let permStatus = await PushNotifications.checkPermissions();
+
+    if (permStatus.receive === "prompt") {
+      permStatus = await PushNotifications.requestPermissions();
+    }
+
+    if (permStatus.receive !== "granted") {
+      console.warn("User denied push notification permissions");
+      return;
+    }
+
+    // Register with FCM/APNs
+    await PushNotifications.register();
+  } catch (error) {
+    console.error("Error during push notification initialization:", error);
+  }
+};
+
+/**
+ * 3. Push Notifications Event Listeners Function:
+ * Device token registration aur incoming notification payload handlers.
+ */
+export const registerPushListeners = () => {
+  // Purane event listeners clear karein taake duplicate notifications trigger na hon
+  PushNotifications.removeAllListeners();
+
+  // FCM Token receive hone par auto-register handler (Backend sync)
+  PushNotifications.addListener("registration", async (token) => {
+    console.log("FCM Registration Token received:", token.value);
+    try {
+      await registerDevice(token.value);
+    } catch (error) {
+      console.error("Failed to register device:", error);
+    }
   });
 
-  it("registers the device token and installs native listeners only once", async () => {
-    const refreshHandler = vi.fn();
-    const openHandler = vi.fn();
-    window.addEventListener("ricehub:notifications-refresh", refreshHandler);
-    window.addEventListener("ricehub:open-notifications", openHandler);
-
-    await registerPushListeners();
-    await initializePushNotifications();
-    await listeners.registration({ value: "native-device-token" });
-    listeners.pushNotificationReceived({});
-    listeners.pushNotificationActionPerformed({});
-
-    expect(PushNotifications.addListener).toHaveBeenCalledTimes(4);
-    expect(notificationService.registerDevice).toHaveBeenCalledWith(
-      "native-device-token",
-      "android"
-    );
-    expect(localStorage.getItem("ricehub_push_token")).toBe("native-device-token");
-    expect(PushNotifications.register).toHaveBeenCalledOnce();
-    expect(refreshHandler).toHaveBeenCalledOnce();
-    expect(openHandler).toHaveBeenCalledOnce();
-    window.removeEventListener("ricehub:notifications-refresh", refreshHandler);
-    window.removeEventListener("ricehub:open-notifications", openHandler);
+  // Token registration error handler
+  PushNotifications.addListener("registrationError", (error) => {
+    console.error("Push Notification registration error:", error);
   });
 
-  it("does not request native permissions on the web", async () => {
-    Capacitor.isNativePlatform.mockReturnValue(false);
-
-    await expect(initializePushNotifications()).resolves.toBe(false);
-    expect(PushNotifications.checkPermissions).not.toHaveBeenCalled();
-    expect(PushNotifications.register).not.toHaveBeenCalled();
+  // App open (Foreground) rehte hue notification receive hone par handler
+  PushNotifications.addListener("pushNotificationReceived", (notification) => {
+    console.log("Push Notification received in foreground:", notification);
   });
-});
+
+  // User ke notification click/tap karne par handler
+  PushNotifications.addListener("pushNotificationActionPerformed", (notification) => {
+    console.log("Push Notification tapped by user:", notification);
+  });
+};

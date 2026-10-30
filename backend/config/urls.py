@@ -77,6 +77,7 @@ urlpatterns = [
     # Health checks
     path("api/health/", health_check, name="api-health"),
     path("health/", HealthView.as_view(), name="health"),
+    path("health/", health_check, name="health_check"),
 ]
 
 if settings.DEBUG:

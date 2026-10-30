@@ -22,5 +22,4 @@ export function useAndroidBackButton() {
       listener?.remove();
     };
   }, []);
-  
 }
