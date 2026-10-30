@@ -6,6 +6,7 @@ from django.test import override_settings
 from rest_framework.test import APITestCase
 
 from posts.models import Post
+from comments.models import Comment
 from reactions.models import Reaction
 
 
@@ -63,3 +64,36 @@ class FeedTests(APITestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertIn("/media/posts/videos/", response.data["video"])
+
+    def test_comment_can_be_created_and_lists_its_author(self):
+        post = Post.objects.create(
+            author=self.user,
+            content="Post for comments",
+        )
+
+        create_response = self.client.post(
+            f"/api/posts/{post.id}/comments/",
+            {"content": "A test comment"},
+            format="json",
+        )
+
+        self.assertEqual(create_response.status_code, 201)
+        self.assertEqual(create_response.data["content"], "A test comment")
+        self.assertEqual(create_response.data["author"]["username"], self.user.username)
+        self.assertTrue(
+            Comment.objects.filter(
+                post=post,
+                author=self.user,
+                content="A test comment",
+            ).exists()
+        )
+
+        list_response = self.client.get(
+            f"/api/posts/{post.id}/comments/",
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(
+            list_response.data["results"][0]["author"]["username"],
+            self.user.username,
+        )

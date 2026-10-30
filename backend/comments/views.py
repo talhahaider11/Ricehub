@@ -21,6 +21,7 @@ class CommentListCreateView(
                 parent__isnull=True,
             )
             .select_related("author")
+            .order_by("created_at", "id")
             .annotate(
                 replies_count=Count(
                     "replies",
@@ -45,7 +46,7 @@ class ReplyListCreateView(
                 parent_id=self.kwargs["comment_id"]
             )
             .select_related("author")
-            .order_by("created_at")
+            .order_by("created_at", "id")
         )
     def perform_create(self, serializer):
         serializer.save(
