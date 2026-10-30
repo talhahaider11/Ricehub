@@ -54,6 +54,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (credentials) => {
+    authService.logout();
+    setUser(null);
+
     const result = await authService.login(credentials);
     if (result && result.two_factor_required) return result;
 

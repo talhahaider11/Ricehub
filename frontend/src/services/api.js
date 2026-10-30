@@ -15,6 +15,9 @@ const api = axios.create({
   },
 });
 
+const isLoginRequest = (config) =>
+  /(?:^|\/)(?:token|login)\/?$/.test(config.url || "");
+
 // Request Interceptor: Attach Access Token on every outgoing request
 api.interceptors.request.use(
   (config) => {
@@ -22,7 +25,7 @@ api.interceptors.request.use(
       localStorage.getItem(ACCESS_TOKEN_KEY) ||
       localStorage.getItem("access_token");
 
-    if (token) {
+    if (token && !isLoginRequest(config)) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
@@ -53,6 +56,10 @@ api.interceptors.response.use(
 
   async (error) => {
     const originalRequest = error.config;
+
+    if (isLoginRequest(originalRequest || {})) {
+      return Promise.reject(error);
+    }
 
     // Reject immediately if status is not 401 or request has already been retried
     if (!error.response || error.response.status !== 401 || originalRequest._retry) {

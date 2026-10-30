@@ -61,6 +61,21 @@ class AuthenticationTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 401)
+
+    def test_login_rejects_nonexistent_user(self):
+        response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "does-not-exist",
+                "password": "StrongPassword123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertNotIn("access", response.data)
+        self.assertNotIn("refresh", response.data)
+
 def test_unauthenticated_request(self):
     response = self.client.get(
         "/api/users/me/"
