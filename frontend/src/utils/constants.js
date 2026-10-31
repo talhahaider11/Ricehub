@@ -1,8 +1,8 @@
 // Environment Endpoints (Render / Production / Local)
 export const API_URL =
-  import.meta.env.VITE_API_URL || "https://ricehub-umfd.onrender.com/api";
+  import.meta.env.VITE_API_URL || "https://ricehub-backend.onrender.com/api";
 export const WS_URL =
-  import.meta.env.VITE_WS_URL || "wss://ricehub-umfd.onrender.com/ws";
+  import.meta.env.VITE_WS_URL || "wss://ricehub-backend.onrender.com/ws";
 
 const MEDIA_BASE_URL = API_URL.replace(/\/api\/?$/, "");
 

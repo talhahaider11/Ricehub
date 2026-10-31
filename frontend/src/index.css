@@ -1420,44 +1420,6 @@ textarea:focus-visible {
   color: var(--danger);
 }
 
-.auth-password-popover {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 8px);
-  right: 0;
-  left: 0;
-  display: grid;
-  gap: 8px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
-}
-
-.auth-password-popover p {
-  margin: 0 0 2px;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.auth-card .auth-password-popover button {
-  min-height: 40px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  background: var(--surface-secondary);
-  box-shadow: none;
-  color: var(--text);
-  font-size: 13px;
-  text-align: left;
-}
-
-.auth-card .auth-password-popover button:hover:not(:disabled) {
-  transform: none;
-  background: var(--border);
-}
-
 .username-suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -1465,8 +1427,7 @@ textarea:focus-visible {
   margin-top: 8px;
 }
 
-.auth-card .username-suggestion,
-.auth-card .auth-password-popover button {
+.auth-card .username-suggestion {
   min-height: 34px;
   padding: 6px 10px;
   border: 1px solid var(--border);

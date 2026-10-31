@@ -9,10 +9,16 @@ const authService = {
       credentials
     );
 
-    if (response.data.access && response.data.refresh) {
-      localStorage.setItem(ACCESS_TOKEN_KEY, response.data.access);
-      localStorage.setItem(REFRESH_TOKEN_KEY, response.data.refresh);
+    if (response.data?.two_factor_required) {
+      return response.data;
     }
+
+    if (!response.data?.access || !response.data?.refresh) {
+      throw new Error("The server did not return valid authentication tokens.");
+    }
+
+    localStorage.setItem(ACCESS_TOKEN_KEY, response.data.access);
+    localStorage.setItem(REFRESH_TOKEN_KEY, response.data.refresh);
 
     return response.data;
   },

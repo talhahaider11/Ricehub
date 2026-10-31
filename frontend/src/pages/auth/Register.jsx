@@ -11,7 +11,6 @@ import {
 
 import useAuth from "../../hooks/useAuth";
 import userService from "../../services/userService";
-import { createPasswordSuggestion } from "../../utils/passwordSuggestion";
 
 export default function Register() {
   const {
@@ -21,17 +20,12 @@ export default function Register() {
   const navigate =
     useNavigate();
 
-  const [suggestedPassword, setSuggestedPassword] = useState(
-    () => createPasswordSuggestion()
-  );
   const [form, setForm] = useState({
     username: "",
     email: "",
     password: "",
     password2: "",
   });
-  const [passwordChoice, setPasswordChoice] = useState(null);
-  const [passwordChooserOpen, setPasswordChooserOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const [error, setError] =
@@ -77,7 +71,7 @@ export default function Register() {
             : [],
           message: result.available
             ? "Username is available."
-            : "That username is already taken. Try one of these:",
+            : "That username appears to be taken. Try one of these:",
         });
       } catch (checkError) {
         if (!active) return;
@@ -120,14 +114,6 @@ export default function Register() {
       return;
     }
 
-    if (
-      usernameAvailability.status === "taken" &&
-      usernameAvailability.checkedUsername === form.username.trim()
-    ) {
-      setError("Please choose an available username.");
-      return;
-    }
-
     setLoading(true);
     try {
       await register(form);
@@ -164,7 +150,7 @@ export default function Register() {
               : [],
             message: result.available
               ? "Username is available."
-              : "That username is already taken. Try one of these:",
+              : "That username appears to be taken. Try one of these:",
           });
         } catch (checkError) {
           console.error("Username suggestions could not be loaded:", checkError);
@@ -245,19 +231,11 @@ export default function Register() {
           required
         />
 
-        <div
-          className="auth-password-field"
-          onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) {
-              setPasswordChooserOpen(false);
-            }
-          }}
-        >
+        <div className="auth-password-field">
           <input
             name="password"
             type={showPassword ? "text" : "password"}
             value={form.password}
-            onFocus={() => setPasswordChooserOpen(true)}
             onChange={change}
             placeholder="Password"
             autoComplete="new-password"
@@ -272,76 +250,30 @@ export default function Register() {
           >
             {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
           </button>
-          {passwordChooserOpen && (
-            <div className="auth-password-popover" role="dialog" aria-label="Choose a password">
-              <p>Choose how you want to set your password</p>
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  setPasswordChoice("suggested");
-                  setShowPassword(true);
-                  setForm((current) => ({
-                    ...current,
-                    password: suggestedPassword,
-                    password2: suggestedPassword,
-                  }));
-                  setPasswordChooserOpen(false);
-                  setError("");
-                }}
-              >
-                Use suggested password
-              </button>
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  setPasswordChoice("custom");
-                  setShowPassword(false);
-                  setForm((current) => ({
-                    ...current,
-                    password: "",
-                    password2: "",
-                  }));
-                  setPasswordChooserOpen(false);
-                  setError("");
-                }}
-              >
-                Create my own
-              </button>
-            </div>
-          )}
         </div>
-        <p className="auth-field-hint">
-          {passwordChoice === "suggested"
-            ? "Your suggested password is filled in. You can review it or choose another option."
-            : "Click the password field to use a suggested password or create your own."}
-        </p>
 
-        {passwordChoice === "custom" && (
-          <div className="auth-password-field">
-            <input
-              name="password2"
-              type={showPassword ? "text" : "password"}
-              value={form.password2}
-              onChange={change}
-              placeholder="Confirm password"
-              autoComplete="new-password"
-              required
-            />
-            <button
-              type="button"
-              className="auth-password-toggle"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              aria-pressed={showPassword}
-              onClick={() => setShowPassword((visible) => !visible)}
-            >
-              {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
-            </button>
-          </div>
-        )}
+        <div className="auth-password-field">
+          <input
+          name="password2"
+          type={showPassword ? "text" : "password"}
+          value={form.password2}
+          onChange={change}
+          placeholder="Confirm password"
+          autoComplete="new-password"
+          required
+          />
+          <button
+          type="button"
+          className="auth-password-toggle"
+          aria-label={showPassword ? "Hide password" : "Show password"}
+          aria-pressed={showPassword}
+          onClick={() => setShowPassword((visible) => !visible)}
+          >
+          {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+          </button>
+        </div>
 
-        <button type="submit" disabled={loading || usernameAvailability.status === "checking"}>
+        <button type="submit" disabled={loading}>
           {loading ? "Creating account..." : "Register"}
         </button>
 

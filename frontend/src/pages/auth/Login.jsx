@@ -67,12 +67,17 @@ export default function Login() {
       navigate("/");
     } catch (err) {
       const response = err.response?.data;
-      if (response?.code === "email_not_verified") {
+      if (err.message === "The server did not return valid authentication tokens.") {
+        setError("The server returned an invalid sign-in response. Please try again.");
+      } else if (!err.response) {
+        setError("Unable to reach the server. Please try again.");
+      } else if (response?.code === "email_not_verified") {
         setVerificationEmail(response.email || "");
         setError("Please verify your email before signing in.");
       } else {
         setError(
           response?.detail ||
+            response?.error ||
             (twoFactorRequired
               ? "The verification code is invalid or expired."
               : "Invalid username or password.")

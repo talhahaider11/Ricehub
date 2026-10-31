@@ -2,10 +2,14 @@ import axios from "axios";
 import { API_URL, ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from "../utils/constants";
 
 // Render / Live API Endpoint Fallback Base Axios Client
-const BASE_URL =
+const configuredApiUrl =
   import.meta.env.VITE_API_URL ||
   API_URL ||
-  "https://ricehub-umfd.onrender.com/api";
+  "https://ricehub-backend.onrender.com/api";
+const normalizedApiUrl = configuredApiUrl.replace(/\/+$/, "");
+const BASE_URL = /\/api$/i.test(normalizedApiUrl)
+  ? normalizedApiUrl
+  : `${normalizedApiUrl}/api`;
 
 const api = axios.create({
   baseURL: BASE_URL,

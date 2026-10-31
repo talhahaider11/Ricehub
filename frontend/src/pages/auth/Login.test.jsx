@@ -63,4 +63,22 @@ describe("Login", () => {
       });
     });
   });
+
+  it("does not sign in when the backend cannot be reached", async () => {
+    login.mockRejectedValue(new Error("Network Error"));
+    renderLogin();
+
+    fireEvent.change(screen.getByPlaceholderText("Username"), {
+      target: { value: "test-user" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "any-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Login" }));
+
+    expect(
+      await screen.findByText("Unable to reach the server. Please try again.")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "RiceHub home" })).not.toBeInTheDocument();
+  });
 });
