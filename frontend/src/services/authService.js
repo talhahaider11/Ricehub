@@ -31,7 +31,15 @@ const authService = {
   },
 
   async register(data) {
-    return api.post("/users/register/", data);
+    const response = await api.post("/users/register/", data);
+    if (
+      response.status !== 201 ||
+      typeof response.data?.message !== "string"
+    ) {
+      throw new Error("The server returned an invalid registration response.");
+    }
+
+    return response;
   },
 
   async verifyEmail(data) {

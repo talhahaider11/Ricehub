@@ -44,6 +44,13 @@ const userService = {
       params: { username },
     });
 
+    if (
+      typeof response.data?.available !== "boolean" ||
+      !Array.isArray(response.data?.suggestions)
+    ) {
+      throw new Error("The server returned an invalid username availability response.");
+    }
+
     return response.data;
   },
 };

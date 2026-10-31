@@ -138,7 +138,11 @@ export default function Register() {
 
       setError(message || "Registration failed. Please try again.");
 
-      if (responseData?.username) {
+      const usernameConflict = Boolean(responseData?.username) ||
+        (typeof responseData?.error === "string" &&
+          /username/i.test(responseData.error));
+
+      if (usernameConflict) {
         const username = form.username.trim();
         try {
           const result = await userService.checkUsername(username);

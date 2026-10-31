@@ -63,7 +63,7 @@ describe("Register", () => {
     const register = vi.fn().mockRejectedValue({
       response: {
         data: {
-          username: ["This username is already taken."],
+          error: "Username or email is already registered.",
         },
       },
     });

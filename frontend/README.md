@@ -17,6 +17,7 @@ If you are developing a production application, we recommend using TypeScript wi
 
 ## API configuration
 
-Set `VITE_API_URL` to the backend API base URL, including `/api` (for example,
-`https://your-backend.onrender.com/api`). For Docker deployments, pass it as the
-`VITE_API_URL` build argument so the value is included in the frontend bundle.
+Set `VITE_API_URL` to the backend API base URL, including `/api` (for this
+Render deployment, `https://ricehub-umfd.onrender.com/api`). Do not set it to
+the frontend site's URL. For Docker deployments, pass it as the `VITE_API_URL`
+build argument so the value is included in the frontend bundle.

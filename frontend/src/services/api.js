@@ -5,7 +5,7 @@ import { API_URL, ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from "../utils/constants
 const configuredApiUrl =
   import.meta.env.VITE_API_URL ||
   API_URL ||
-  "https://ricehub-backend.onrender.com/api";
+  "https://ricehub-umfd.onrender.com/api";
 const normalizedApiUrl = configuredApiUrl.replace(/\/+$/, "");
 const BASE_URL = /\/api$/i.test(normalizedApiUrl)
   ? normalizedApiUrl
