@@ -3,7 +3,7 @@ services:
     name: ricehub-backend
     env: python
     buildCommand: "pip install -r backend/requirements.txt && python backend/manage.py collectstatic --noinput && python backend/manage.py migrate"
-    startCommand: "daphne -b 0.0.0.0 -p 10000 config.asgi:application"
+    startCommand: "cd backend && daphne -b 0.0.0.0 -p ${PORT:-10000} config.asgi:application"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
