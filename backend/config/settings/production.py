@@ -64,6 +64,7 @@ CSRF_TRUSTED_ORIGINS = [
     for origin in os.environ.get(
         "CSRF_TRUSTED_ORIGINS",
         "https://ricehub-frontend.onrender.com,"
+        "https://ricehub.onrender.com,"
         "https://ricehub-umfd.onrender.com,"
         "http://localhost:5173,"
         "http://127.0.0.1:5173,"
@@ -79,6 +80,7 @@ CORS_ALLOWED_ORIGINS = [
     for origin in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
         "https://ricehub-frontend.onrender.com,"
+        "https://ricehub.onrender.com,"
         "https://ricehub-umfd.onrender.com,"
         "http://localhost:5173,"
         "http://127.0.0.1:5173,"
@@ -88,6 +90,23 @@ CORS_ALLOWED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+frontend_origin = os.environ.get(
+    "FRONTEND_URL",
+    "https://ricehub-frontend.onrender.com",
+).rstrip("/")
+frontend_origins = {
+    "https://ricehub-frontend.onrender.com",
+    "https://ricehub.onrender.com",
+    frontend_origin,
+}
+for origin in frontend_origins:
+    if origin and origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(origin)
+CORS_ALLOW_ALL_ORIGINS = False
+
+for origin in frontend_origins:
+    if origin and origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origin)
 
 
 # --------------------------------------------------

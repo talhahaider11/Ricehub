@@ -47,6 +47,23 @@ class FeedTests(APITestCase):
         self.assertEqual(results[1]["id"], recent_post.id)
         self.assertIsNone(results[1]["my_reaction"])
 
+    def test_feed_returns_paginated_list_results(self):
+        Post.objects.create(author=self.user, content="Feed post")
+
+        response = self.client.get("/api/posts/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.data["results"], list)
+        self.assertEqual(response.data["count"], 1)
+
+    def test_feed_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get("/api/posts/")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertIn("detail", response.data)
+
     def test_short_video_post_is_saved_and_returned(self):
         with tempfile.TemporaryDirectory() as media_root:
             with override_settings(MEDIA_ROOT=media_root):

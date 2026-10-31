@@ -141,4 +141,42 @@ describe("Register", () => {
       })
     );
   });
+
+  it("explains when the registration API cannot be reached", async () => {
+    useAuth.mockReturnValue({
+      register: vi.fn().mockRejectedValue(new Error("Network Error")),
+    });
+    userService.checkUsername.mockResolvedValue({
+      available: true,
+      suggestions: [],
+    });
+
+    render(
+      <MemoryRouter>
+        <Register />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Username"), {
+      target: { value: "new-user" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Email"), {
+      target: { value: "new@example.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "StrongPassword123!" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Confirm password"), {
+      target: { value: "StrongPassword123!" },
+    });
+    expect(await screen.findByText("Username is available.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Register" }));
+
+    expect(
+      await screen.findByText(
+        "Could not reach the API. Check the backend URL and CORS settings, then try again."
+      )
+    ).toBeInTheDocument();
+  });
 });

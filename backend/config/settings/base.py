@@ -251,8 +251,3 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True  # Mobile APK calls access safely handle karne ke liye
-
-ALLOWED_HOSTS = ["ricehub-frontend.onrender.com", "localhost", "127.0.0.1"]
-# Ya agar sab allow karna ho (Render par):
-ALLOWED_HOSTS = ["*"]

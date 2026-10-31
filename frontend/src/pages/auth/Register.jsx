@@ -80,7 +80,9 @@ export default function Register() {
           checkedUsername: username,
           status: "error",
           suggestions: [],
-          message: "Username availability could not be checked. You can still submit the form.",
+          message: checkError.response
+            ? "The username check failed. Please try again."
+            : "Could not reach the API. Check the backend URL and CORS settings, then try again.",
         });
       }
     }, 450);
@@ -136,7 +138,12 @@ export default function Register() {
         .filter((value) => typeof value === "string")
         .join(" ");
 
-      setError(message || "Registration failed. Please try again.");
+      setError(
+        message ||
+          (err.response
+            ? `Registration failed (${err.response.status}). Please check your information and try again.`
+            : "Could not reach the API. Check the backend URL and CORS settings, then try again.")
+      );
 
       const usernameConflict = Boolean(responseData?.username) ||
         (typeof responseData?.error === "string" &&

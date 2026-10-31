@@ -3,6 +3,7 @@ from django.db.models import Count, Prefetch, Q
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
+from config.pagination import StandardPagination
 from friendships.services import get_friend_ids
 from users.privacy import get_blocked_user_ids
 from reactions.models import Reaction
@@ -18,6 +19,7 @@ class PostListCreateView(
 ):
 
     serializer_class = PostSerializer
+    pagination_class = StandardPagination
     permission_classes = [
         IsAuthenticated
     ]
