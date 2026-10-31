@@ -1420,35 +1420,42 @@ textarea:focus-visible {
   color: var(--danger);
 }
 
-.auth-card .auth-password-choice {
+.auth-password-popover {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
   display: grid;
   gap: 8px;
-  margin: 0;
-  padding: 0;
-  border: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
 }
 
-.auth-password-choice legend {
-  margin-bottom: 8px;
+.auth-password-popover p {
+  margin: 0 0 2px;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
-.auth-password-choice label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.auth-card .auth-password-popover button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  box-shadow: none;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
+  text-align: left;
 }
 
-.auth-card .auth-password-choice input[type="radio"] {
-  width: 18px;
-  min-height: 18px;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--primary);
+.auth-card .auth-password-popover button:hover:not(:disabled) {
+  transform: none;
+  background: var(--border);
 }
 
 .username-suggestions {
@@ -1459,7 +1466,7 @@ textarea:focus-visible {
 }
 
 .auth-card .username-suggestion,
-.auth-card .auth-password-choice label {
+.auth-card .auth-password-popover button {
   min-height: 34px;
   padding: 6px 10px;
   border: 1px solid var(--border);

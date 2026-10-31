@@ -24,15 +24,15 @@ export default function Register() {
   const [suggestedPassword, setSuggestedPassword] = useState(
     () => createPasswordSuggestion()
   );
-  const [form, setForm] =
-    useState({
-      username: "",
-      email: "",
-      password: suggestedPassword,
-      password2: suggestedPassword,
-    });
-  const [passwordChoice, setPasswordChoice] = useState("suggested");
-  const [showPassword, setShowPassword] = useState(true);
+  const [form, setForm] = useState({
+    username: "",
+    email: "",
+    password: "",
+    password2: "",
+  });
+  const [passwordChoice, setPasswordChoice] = useState(null);
+  const [passwordChooserOpen, setPasswordChooserOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [error, setError] =
     useState("");
@@ -245,65 +245,20 @@ export default function Register() {
           required
         />
 
-        <fieldset className="auth-password-choice">
-          <legend>Choose a password</legend>
-          <label>
-            <input
-              type="radio"
-              name="passwordChoice"
-              value="suggested"
-              checked={passwordChoice === "suggested"}
-              onChange={() => {
-                setPasswordChoice("suggested");
-                setShowPassword(true);
-                setForm((current) => ({
-                  ...current,
-                  password: suggestedPassword,
-                  password2: suggestedPassword,
-                }));
-              }}
-            />
-            Use suggested password
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="passwordChoice"
-              value="custom"
-              checked={passwordChoice === "custom"}
-              onChange={() => {
-                setPasswordChoice("custom");
-                setShowPassword(false);
-                setForm((current) => ({
-                  ...current,
-                  password: "",
-                  password2: "",
-                }));
-              }}
-            />
-            Create my own
-          </label>
-        </fieldset>
-
-        <div className="auth-password-field">
+        <div
+          className="auth-password-field"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setPasswordChooserOpen(false);
+            }
+          }}
+        >
           <input
             name="password"
             type={showPassword ? "text" : "password"}
-            value={
-              passwordChoice === "suggested"
-                ? suggestedPassword
-                : form.password
-            }
-            onChange={(event) => {
-              change(event);
-              if (passwordChoice === "suggested") {
-                setSuggestedPassword(event.target.value);
-                setForm((current) => ({
-                  ...current,
-                  password2: event.target.value,
-                }));
-              }
-            }}
+            value={form.password}
+            onFocus={() => setPasswordChooserOpen(true)}
+            onChange={change}
             placeholder="Password"
             autoComplete="new-password"
             required
@@ -317,10 +272,50 @@ export default function Register() {
           >
             {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
           </button>
+          {passwordChooserOpen && (
+            <div className="auth-password-popover" role="dialog" aria-label="Choose a password">
+              <p>Choose how you want to set your password</p>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setPasswordChoice("suggested");
+                  setShowPassword(true);
+                  setForm((current) => ({
+                    ...current,
+                    password: suggestedPassword,
+                    password2: suggestedPassword,
+                  }));
+                  setPasswordChooserOpen(false);
+                  setError("");
+                }}
+              >
+                Use suggested password
+              </button>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setPasswordChoice("custom");
+                  setShowPassword(false);
+                  setForm((current) => ({
+                    ...current,
+                    password: "",
+                    password2: "",
+                  }));
+                  setPasswordChooserOpen(false);
+                  setError("");
+                }}
+              >
+                Create my own
+              </button>
+            </div>
+          )}
         </div>
         <p className="auth-field-hint">
-          Suggested passwords are generated securely. You can use this one or
-          create your own.
+          {passwordChoice === "suggested"
+            ? "Your suggested password is filled in. You can review it or choose another option."
+            : "Click the password field to use a suggested password or create your own."}
         </p>
 
         {passwordChoice === "custom" && (

@@ -42,7 +42,7 @@ describe("Register", () => {
     expect(username).toHaveValue("taken2");
   });
 
-  it("starts with a visible suggested password and allows creating a custom one", () => {
+  it("shows a password chooser on focus and lets the user choose either option", () => {
     render(
       <MemoryRouter>
         <Register />
@@ -50,17 +50,20 @@ describe("Register", () => {
     );
 
     const password = screen.getByPlaceholderText("Password");
-    expect(password).toHaveAttribute("type", "text");
-    expect(password.value).toMatch(/^[A-Za-z0-9!@#$%^&*()\-_=+]{18}$/);
-    expect(screen.queryByPlaceholderText("Confirm password")).not.toBeInTheDocument();
+    expect(password).toHaveValue("");
+    expect(screen.queryByRole("dialog", { name: "Choose a password" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText("Create my own"));
+    fireEvent.focus(password);
+    expect(screen.getByRole("dialog", { name: "Choose a password" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create my own" }));
     expect(password).toHaveValue("");
     expect(password).toHaveAttribute("type", "password");
     expect(screen.getByPlaceholderText("Confirm password")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText("Use suggested password"));
+    fireEvent.focus(password);
+    fireEvent.click(screen.getByRole("button", { name: "Use suggested password" }));
     expect(password).toHaveAttribute("type", "text");
+    expect(password.value).toMatch(/^[A-Za-z0-9!@#$%^&*()\-_=+]{18}$/);
     expect(screen.queryByPlaceholderText("Confirm password")).not.toBeInTheDocument();
   });
 
@@ -93,6 +96,8 @@ describe("Register", () => {
       target: { value: "person@example.com" },
     });
     expect(await screen.findByText("Username is available.")).toBeInTheDocument();
+    fireEvent.focus(screen.getByPlaceholderText("Password"));
+    fireEvent.click(screen.getByRole("button", { name: "Use suggested password" }));
     fireEvent.click(screen.getByRole("button", { name: "Register" }));
 
     expect(await screen.findByRole("button", { name: "taken1" })).toBeInTheDocument();
@@ -114,6 +119,8 @@ describe("Register", () => {
       </MemoryRouter>
     );
     const password = screen.getByPlaceholderText("Password");
+    fireEvent.focus(password);
+    fireEvent.click(screen.getByRole("button", { name: "Use suggested password" }));
     const suggestedPassword = password.value;
     expect(suggestedPassword).toMatch(/^[A-Za-z0-9!@#$%^&*()\-_=+]{18}$/);
 
