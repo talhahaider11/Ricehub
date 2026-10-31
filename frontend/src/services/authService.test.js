@@ -32,6 +32,10 @@ describe("authService.login", () => {
 
     await authService.login({ username: "test-user", password: "correct-password" });
 
+    expect(api.post).toHaveBeenCalledWith("/token/", {
+      username: "test-user",
+      password: "correct-password",
+    });
     expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBe("valid-access");
     expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBe("valid-refresh");
   });
@@ -71,5 +75,13 @@ describe("authService.register", () => {
         password: "StrongPassword123!",
       })
     ).resolves.toBe(response);
+    expect(api.post).toHaveBeenCalledWith(
+      "/users/register/",
+      expect.objectContaining({
+        username: "test-user",
+        email: "test@example.com",
+        password: "StrongPassword123!",
+      })
+    );
   });
 });

@@ -1,3 +1,5 @@
+import json
+
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
@@ -5,6 +7,12 @@ User = get_user_model()
 
 
 class AuthenticationTests(APITestCase):
+
+    def test_api_root_reports_online_status(self):
+        response = self.client.get("/api/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content)["status"], "online")
 
     def test_register(self):
         response = self.client.post(

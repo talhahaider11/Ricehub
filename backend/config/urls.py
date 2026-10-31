@@ -42,6 +42,9 @@ urlpatterns = [
     # User endpoints
     path("api/users/", include("users.urls")),
 
+    # API root
+    path("api/", api_root, name="api-root"),
+
     # Posts
     path("api/posts/", include("posts.urls")),
 
