@@ -76,6 +76,20 @@ class AuthenticationTests(APITestCase):
         self.assertNotIn("access", response.data)
         self.assertNotIn("refresh", response.data)
 
+    def test_frontend_token_endpoint_rejects_nonexistent_user(self):
+        response = self.client.post(
+            "/api/token/",
+            {
+                "username": "does-not-exist",
+                "password": "StrongPassword123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertNotIn("access", response.data)
+        self.assertNotIn("refresh", response.data)
+
 def test_unauthenticated_request(self):
     response = self.client.get(
         "/api/users/me/"

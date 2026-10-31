@@ -1420,6 +1420,37 @@ textarea:focus-visible {
   color: var(--danger);
 }
 
+.auth-card .auth-password-choice {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.auth-password-choice legend {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.auth-password-choice label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.auth-card .auth-password-choice input[type="radio"] {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary);
+}
+
 .username-suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -1428,7 +1459,7 @@ textarea:focus-visible {
 }
 
 .auth-card .username-suggestion,
-.auth-card .auth-password-suggest {
+.auth-card .auth-password-choice label {
   min-height: 34px;
   padding: 6px 10px;
   border: 1px solid var(--border);
@@ -1438,15 +1469,9 @@ textarea:focus-visible {
   font-size: 13px;
 }
 
-.auth-card .username-suggestion:hover:not(:disabled),
-.auth-card .auth-password-suggest:hover:not(:disabled) {
+.auth-card .username-suggestion:hover:not(:disabled) {
   transform: none;
   background: var(--border);
-}
-
-.auth-card .auth-password-suggest {
-  margin-top: -8px;
-  color: var(--primary);
 }
 
 .app-render-error {

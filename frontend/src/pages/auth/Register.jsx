@@ -2,6 +2,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 import {
   Link,
@@ -20,13 +21,18 @@ export default function Register() {
   const navigate =
     useNavigate();
 
+  const [suggestedPassword, setSuggestedPassword] = useState(
+    () => createPasswordSuggestion()
+  );
   const [form, setForm] =
     useState({
       username: "",
       email: "",
-      password: "",
-      password2: "",
+      password: suggestedPassword,
+      password2: suggestedPassword,
     });
+  const [passwordChoice, setPasswordChoice] = useState("suggested");
+  const [showPassword, setShowPassword] = useState(true);
 
   const [error, setError] =
     useState("");
@@ -133,7 +139,11 @@ export default function Register() {
       const messages =
         responseData && typeof responseData === "object"
           ? Object.values(responseData).flatMap((value) =>
-              Array.isArray(value) ? value : [value]
+              Array.isArray(value)
+                ? value
+                : typeof value === "string"
+                  ? [value]
+                  : []
             )
           : [];
       const message = messages
@@ -141,6 +151,31 @@ export default function Register() {
         .join(" ");
 
       setError(message || "Registration failed. Please try again.");
+
+      if (responseData?.username) {
+        const username = form.username.trim();
+        try {
+          const result = await userService.checkUsername(username);
+          setUsernameAvailability({
+            checkedUsername: username,
+            status: result.available ? "available" : "taken",
+            suggestions: Array.isArray(result.suggestions)
+              ? result.suggestions
+              : [],
+            message: result.available
+              ? "Username is available."
+              : "That username is already taken. Try one of these:",
+          });
+        } catch (checkError) {
+          console.error("Username suggestions could not be loaded:", checkError);
+          setUsernameAvailability({
+            checkedUsername: username,
+            status: "error",
+            suggestions: [],
+            message: "Username suggestions could not be loaded. Please try again.",
+          });
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -210,47 +245,106 @@ export default function Register() {
           required
         />
 
-        <input
-          name="password"
-          type="password"
-          value={form.password}
-          onChange={change}
-          placeholder="Password"
-          required
-        />
-        <p className="auth-field-hint">
-          Use at least 8 characters with uppercase, lowercase, and a number.
-          A strong password suggestion is optional.
-        </p>
-        <button
-          type="button"
-          className="auth-password-suggest"
-          onClick={() => {
-            try {
-              const suggestion = createPasswordSuggestion();
-              setForm((current) => ({
-                ...current,
-                password: suggestion,
-                password2: suggestion,
-              }));
-              setError("");
-            } catch (suggestionError) {
-              console.error("Could not create a secure password suggestion:", suggestionError);
-              setError("A password suggestion could not be created in this browser.");
-            }
-          }}
-        >
-          Use a strong password suggestion
-        </button>
+        <fieldset className="auth-password-choice">
+          <legend>Choose a password</legend>
+          <label>
+            <input
+              type="radio"
+              name="passwordChoice"
+              value="suggested"
+              checked={passwordChoice === "suggested"}
+              onChange={() => {
+                setPasswordChoice("suggested");
+                setShowPassword(true);
+                setForm((current) => ({
+                  ...current,
+                  password: suggestedPassword,
+                  password2: suggestedPassword,
+                }));
+              }}
+            />
+            Use suggested password
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="passwordChoice"
+              value="custom"
+              checked={passwordChoice === "custom"}
+              onChange={() => {
+                setPasswordChoice("custom");
+                setShowPassword(false);
+                setForm((current) => ({
+                  ...current,
+                  password: "",
+                  password2: "",
+                }));
+              }}
+            />
+            Create my own
+          </label>
+        </fieldset>
 
-        <input
-          name="password2"
-          type="password"
-          value={form.password2}
-          onChange={change}
-          placeholder="Confirm password"
-          required
-        />
+        <div className="auth-password-field">
+          <input
+            name="password"
+            type={showPassword ? "text" : "password"}
+            value={
+              passwordChoice === "suggested"
+                ? suggestedPassword
+                : form.password
+            }
+            onChange={(event) => {
+              change(event);
+              if (passwordChoice === "suggested") {
+                setSuggestedPassword(event.target.value);
+                setForm((current) => ({
+                  ...current,
+                  password2: event.target.value,
+                }));
+              }
+            }}
+            placeholder="Password"
+            autoComplete="new-password"
+            required
+          />
+          <button
+            type="button"
+            className="auth-password-toggle"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            onClick={() => setShowPassword((visible) => !visible)}
+          >
+            {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+          </button>
+        </div>
+        <p className="auth-field-hint">
+          Suggested passwords are generated securely. You can use this one or
+          create your own.
+        </p>
+
+        {passwordChoice === "custom" && (
+          <div className="auth-password-field">
+            <input
+              name="password2"
+              type={showPassword ? "text" : "password"}
+              value={form.password2}
+              onChange={change}
+              placeholder="Confirm password"
+              autoComplete="new-password"
+              required
+            />
+            <button
+              type="button"
+              className="auth-password-toggle"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword((visible) => !visible)}
+            >
+              {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+            </button>
+          </div>
+        )}
 
         <button type="submit" disabled={loading || usernameAvailability.status === "checking"}>
           {loading ? "Creating account..." : "Register"}
