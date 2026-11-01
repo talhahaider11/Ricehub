@@ -35,6 +35,10 @@ class NotificationSenderSerializer(serializers.ModelSerializer):
 
 class NotificationSerializer(serializers.ModelSerializer):
     sender = NotificationSenderSerializer(read_only=True)
+    notification_type_label = serializers.CharField(
+        source="get_notification_type_display",
+        read_only=True,
+    )
 
     class Meta:
         model = Notification
@@ -42,6 +46,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             "id",
             "sender",
             "notification_type",
+            "notification_type_label",
             "message",
             "post_id",
             "comment_id",

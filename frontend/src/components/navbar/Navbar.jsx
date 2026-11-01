@@ -4,11 +4,12 @@ import {
   MessageCircle,
   LogOut,
   Menu,
+  Plus,
+  Search,
   Settings,
-  UserRound,
 } from "lucide-react";
-import { useCallback, useContext, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useContext, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import SearchBar from "./SearchBar";
 import NotificationBell from "./NotificationBell";
 import ThemeToggle from "../common/ThemeToggle";
@@ -20,12 +21,11 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const { unreadCount } = useContext(NotificationContext);
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const mobileMenuTriggerRef = useRef(null);
 
   const closeMobileMenu = useCallback(() => {
     setMobileMenuOpen(false);
-    mobileMenuTriggerRef.current?.focus();
   }, []);
 
   const handleLogout = () => {
@@ -33,11 +33,31 @@ export default function Navbar() {
     navigate("/login");
   };
 
+  const openUpload = () => {
+    if (location.pathname !== "/") {
+      navigate("/", { state: { openCreateMenu: true } });
+      return;
+    }
+    window.dispatchEvent(new Event("ricehub:open-create-menu"));
+  };
+
   return (
     <header className="navbar">
       <div className="navbar-inner">
+        <button
+          className="mobile-menu-trigger icon-button"
+          type="button"
+          aria-label="Open menu"
+          aria-haspopup="dialog"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="ricehub-mobile-menu"
+          onClick={() => setMobileMenuOpen(true)}
+        >
+          <Menu size={21} />
+        </button>
+
         <Link to="/" className="brand">
-          RiceHub
+          <img src="/ricehub-logo.jpg" alt="RiceHub" />
         </Link>
 
         <SearchBar />
@@ -60,14 +80,21 @@ export default function Navbar() {
 
           <NotificationBell count={unreadCount} />
 
-          <Link
-            to={`/profile/${user?.id}`}
-            className="profile-nav navbar-account"
-            aria-label="Your account"
-            title="Your account"
-          >
-            <UserRound size={20} aria-hidden="true" />
+          <Link to="/search" aria-label="Search" title="Search">
+            <Search size={20} />
+            <span>Search</span>
           </Link>
+
+          <button
+            type="button"
+            className="navbar-upload"
+            onClick={openUpload}
+            aria-label="Upload or create"
+            title="Upload or create"
+          >
+            <Plus size={20} />
+            <span>Upload</span>
+          </button>
 
           <Link to="/settings" aria-label="Open settings">
             <Settings size={20} />
@@ -85,18 +112,6 @@ export default function Navbar() {
           </button>
         </nav>
 
-        <button
-          ref={mobileMenuTriggerRef}
-          className="mobile-menu-trigger icon-button"
-          type="button"
-          aria-label="Open menu"
-          aria-haspopup="dialog"
-          aria-expanded={mobileMenuOpen}
-          aria-controls="ricehub-mobile-menu"
-          onClick={() => setMobileMenuOpen(true)}
-        >
-          <Menu size={21} />
-        </button>
       </div>
       {mobileMenuOpen && <MobileMenu onClose={closeMobileMenu} />}
     </header>

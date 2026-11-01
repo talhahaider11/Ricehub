@@ -5,7 +5,7 @@ export default function AuthLayout() {
     <div className="auth-layout">
       <aside className="auth-visual" aria-hidden="true">
         <Link to="/" className="auth-visual-brand">
-          <span className="auth-logo-mark">WF</span>
+          <img className="auth-logo-image" src="/ricehub-logo.jpg" alt="" />
           <span>
             <strong>RiceHub</strong>
             <small>Connect · Share · Belong</small>
@@ -27,7 +27,7 @@ export default function AuthLayout() {
 
       <section className="auth-content">
         <div className="auth-mobile-brand">
-          <span className="auth-logo-mark">WF</span>
+          <img className="auth-logo-image" src="/ricehub-logo.jpg" alt="" />
           <strong>RiceHub</strong>
         </div>
         <Outlet />

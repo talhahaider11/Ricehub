@@ -76,9 +76,20 @@ export default function Notifications() {
                 }
                 onClick={() => handleMarkRead(notification.id)}
               >
-                <strong>
-                  {notification.message}
-                </strong>
+                <span className="notification-details">
+                  <strong>
+                    {notification.sender
+                      ? [notification.sender.first_name, notification.sender.last_name]
+                          .filter(Boolean)
+                          .join(" ") || notification.sender.username
+                      : "RiceHub"}
+                  </strong>
+                  <small className="notification-type">
+                    {notification.notification_type_label ||
+                      notification.notification_type.replace(/_/g, " ")}
+                  </small>
+                  <span>{notification.message}</span>
+                </span>
 
                 <small>
                   {new Date(

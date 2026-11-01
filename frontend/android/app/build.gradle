@@ -1,0 +1,92 @@
+apply plugin: 'com.android.application'
+
+def releaseKeystorePath = project.findProperty("RICEHUB_KEYSTORE_FILE")
+def releaseKeystorePassword = project.findProperty("RICEHUB_KEYSTORE_PASSWORD")
+def releaseKeyAlias = project.findProperty("RICEHUB_KEY_ALIAS")
+def releaseKeyPassword = project.findProperty("RICEHUB_KEY_PASSWORD")
+def releaseKeystore = releaseKeystorePath ? file(releaseKeystorePath) : null
+def riceHubVersionCode = (project.findProperty("RICEHUB_VERSION_CODE") ?: "2").toInteger()
+def riceHubVersionName = project.findProperty("RICEHUB_VERSION_NAME") ?: "1.0.1"
+def hasReleaseSigning = releaseKeystore?.isFile() &&
+    releaseKeystorePassword &&
+    releaseKeyAlias &&
+    releaseKeyPassword &&
+    !releaseKeystorePassword.toString().startsWith("YOUR_") &&
+    !releaseKeyAlias.toString().startsWith("YOUR_") &&
+    !releaseKeyPassword.toString().startsWith("YOUR_")
+
+android {
+    namespace "com.ricehub.app"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.ricehub.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode = riceHubVersionCode
+        minSdk 23
+        targetSdk 35
+        versionName = riceHubVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir
+             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+
+    // ========================================================
+    // 1. Release Signing Configuration (RiceHub Keystore Integration)
+    // ========================================================
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile releaseKeystore
+                storePassword releaseKeystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn("Release keystore not configured; release artifacts will be unsigned.")
+            }
+
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir {
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

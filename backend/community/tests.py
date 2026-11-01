@@ -48,6 +48,17 @@ class CommunityFeatureTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([item["id"] for item in response.data["results"]], [active_story.id])
 
+    def test_user_can_create_a_story(self):
+        response = self.client.post(
+            "/api/community/stories/",
+            {"text": "Shared from the stories bar"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["text"], "Shared from the stories bar")
+        self.assertEqual(response.data["author"]["id"], self.user.id)
+
     def test_story_owner_can_see_viewers_and_viewer_is_counted_once(self):
         story = Story.objects.create(author=self.other, text="Story")
         view_url = f"/api/community/stories/{story.id}/views/"

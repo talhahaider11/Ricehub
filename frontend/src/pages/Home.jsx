@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import CreatePost from "../components/posts/CreatePost";
+import StoryStrip from "../components/stories/StoryStrip";
 import PostCard from "../components/posts/PostCard";
 import InfiniteLoader from "../components/common/InfiniteLoader";
 import PostSkeleton from "../components/common/PostSkeleton";
@@ -11,7 +13,17 @@ import useAuth from "../hooks/useAuth";
 
 export default function Home() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [feedSort, setFeedSort] = useState("recent");
+  const [storyComposerOpen, setStoryComposerOpen] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.openCreateMenu) {
+      window.dispatchEvent(new Event("ricehub:open-create-menu"));
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const {
     posts,
@@ -25,31 +37,28 @@ export default function Home() {
     updatePost,
   } = usePosts(feedSort);
 
-  // Loading - first load
-  if (loading && posts.length === 0) {
-    return (
-      <div className="page-container">
-        <div className="feed">
-          <PostSkeleton />
-          <PostSkeleton />
-          <PostSkeleton />
-        </div>
-      </div>
-    );
-  }
-
-  // Error
-  if (error && posts.length === 0) {
-    return (
-      <div className="page-container">
-        <ErrorState message={error} onRetry={loadPosts} />
-      </div>
-    );
-  }
-
   return (
     <div className="page-container">
       <div className="feed">
+        <StoryStrip
+          currentUser={user}
+          composerOpen={storyComposerOpen}
+          onComposerClose={() => setStoryComposerOpen(false)}
+          onComposerOpen={() => setStoryComposerOpen(true)}
+        />
+        <CreatePost
+          onCreated={addPost}
+          onCreateStory={() => setStoryComposerOpen(true)}
+        />
+        {loading && posts.length === 0 ? (
+          <>
+            <PostSkeleton />
+            <PostSkeleton />
+          </>
+        ) : error && posts.length === 0 ? (
+          <ErrorState message={error} onRetry={loadPosts} />
+        ) : (
+          <>
         <label className="feed-sort">
           <span>Feed order</span>
           <select
@@ -61,7 +70,6 @@ export default function Home() {
             <option value="popular">Popular</option>
           </select>
         </label>
-        <CreatePost onCreated={addPost} />
 
         {posts.length === 0 ? (
           <EmptyState
@@ -85,6 +93,8 @@ export default function Home() {
           hasMore={hasMore}
           loading={loading}
         />
+          </>
+        )}
       </div>
     </div>
   );

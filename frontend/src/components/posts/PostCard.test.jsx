@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import postService from "../../services/postService";
 import PostCard from "./PostCard";
@@ -27,12 +28,19 @@ const post = {
 };
 
 describe("PostCard", () => {
+  const renderPostCard = () =>
+    render(
+      <MemoryRouter>
+        <PostCard post={post} currentUser={{ id: 1 }} />
+      </MemoryRouter>
+    );
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("shows accurate reaction and comment counts", () => {
-    render(<PostCard post={post} currentUser={{ id: 1 }} />);
+    renderPostCard();
 
     expect(screen.getByText("3 reactions")).toBeInTheDocument();
     expect(screen.getByText("2 comments")).toBeInTheDocument();
@@ -41,7 +49,7 @@ describe("PostCard", () => {
 
   it("sends the selected reaction type to the API", () => {
     postService.react.mockResolvedValue({});
-    render(<PostCard post={post} currentUser={{ id: 1 }} />);
+    renderPostCard();
 
     fireEvent.click(screen.getByRole("button", { name: "Choose a reaction" }));
     fireEvent.click(screen.getByRole("button", { name: "Haha" }));

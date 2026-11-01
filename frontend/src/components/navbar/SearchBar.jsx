@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import searchService from "../../services/searchService";
 import { getArrayResults } from "../../utils/arrayResults";
 
@@ -58,16 +58,17 @@ export default function SearchBar() {
       {results && (
         <div className="search-dropdown">
           {results.users?.slice(0, 5).map((user) => (
-            <button
+            <Link
               key={`user-${user.id}`}
+              to={`/profile/${user.id}`}
+              className="search-suggestion-user"
               onClick={() => {
-                navigate(`/profile/${user.id}`);
                 clearSearch();
               }}
             >
               <strong>{user.username}</strong>
               <small>Person</small>
-            </button>
+            </Link>
           ))}
 
           {results.hashtags?.slice(0, 5).map((hashtag) => (

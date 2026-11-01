@@ -23,6 +23,10 @@ class Hashtag(models.Model):
 
 class Post(models.Model):
 
+    class PostType(models.TextChoices):
+        POST = "post", "Post"
+        REEL = "reel", "Reel"
+
     class Visibility(models.TextChoices):
         PUBLIC = "public", "Public"
         FRIENDS = "friends", "Friends"
@@ -36,6 +40,12 @@ class Post(models.Model):
 
     content = models.TextField(
         blank=True
+    )
+
+    post_type = models.CharField(
+        max_length=10,
+        choices=PostType.choices,
+        default=PostType.POST,
     )
 
     image = models.ImageField(

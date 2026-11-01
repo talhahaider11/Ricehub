@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   MessageCircle,
   Share2,
   SmilePlus,
   ThumbsUp,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import Avatar from "../common/Avatar";
 import CommentBox from "./CommentBox";
@@ -18,10 +19,9 @@ import { getMediaUrl } from "../../utils/constants";
 const reactions = [
   { type: "like", label: "Like", emoji: "👍" },
   { type: "love", label: "Love", emoji: "❤️" },
+  { type: "care", label: "Care", emoji: "🥰" },
   { type: "haha", label: "Haha", emoji: "😂" },
   { type: "wow", label: "Wow", emoji: "😮" },
-  { type: "sad", label: "Sad", emoji: "😢" },
-  { type: "angry", label: "Angry", emoji: "😡" },
 ];
 
 export default function PostCard({
@@ -40,6 +40,21 @@ export default function PostCard({
   const [imageOpen, setImageOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
+  const longPressTimer = useRef(null);
+  const longPressTriggered = useRef(false);
+
+  const startReactionLongPress = (event) => {
+    if (event.pointerType !== "touch") return;
+    longPressTriggered.current = false;
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTriggered.current = true;
+      setShowReactionPicker(true);
+    }, 500);
+  };
+
+  const endReactionLongPress = () => {
+    window.clearTimeout(longPressTimer.current);
+  };
 
   const chooseReaction = async (nextReaction) => {
     setActionError("");
@@ -100,13 +115,19 @@ export default function PostCard({
     <article className="card post-card" id={`post-${post.id}`}>
       <div className="post-header">
         <div className="post-author">
-          <Avatar user={post.author} />
-          <div>
-            <strong>
-              {post.author?.first_name || post.author?.username}
-            </strong>
-            <small>@{post.author?.username}</small>
-          </div>
+          <Link
+            className="post-author-link"
+            to={`/profile/${post.author?.id}`}
+            aria-label={`View ${post.author?.username || "user"}'s profile`}
+          >
+            <Avatar user={post.author} />
+            <span>
+              <strong>
+                {post.author?.first_name || post.author?.username}
+              </strong>
+              <small>@{post.author?.username}</small>
+            </span>
+          </Link>
         </div>
 
         <PostMenu
@@ -117,6 +138,9 @@ export default function PostCard({
         />
       </div>
 
+      {post.post_type === "reel" && (
+        <span className="post-type-label">Reel</span>
+      )}
       {post.content && <PostContent content={post.content} />}
 
       {post.image && (
@@ -160,10 +184,24 @@ export default function PostCard({
       </div>
 
       <div className="post-actions">
-        <div className="post-reaction-control">
+        <div
+          className="post-reaction-control"
+          onMouseEnter={() => setShowReactionPicker(true)}
+          onMouseLeave={() => setShowReactionPicker(false)}
+        >
           <button
             className={reactionType ? "post-action active" : "post-action"}
-            onClick={() => chooseReaction(reactionType || "like")}
+            onPointerDown={startReactionLongPress}
+            onPointerUp={endReactionLongPress}
+            onPointerCancel={endReactionLongPress}
+            onPointerLeave={endReactionLongPress}
+            onClick={() => {
+              if (longPressTriggered.current) {
+                longPressTriggered.current = false;
+                return;
+              }
+              chooseReaction(reactionType || "like");
+            }}
             disabled={reactionSaving}
             aria-label={reactionType ? `Remove ${selectedReaction?.label} reaction` : "Like post"}
           >

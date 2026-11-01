@@ -114,3 +114,60 @@ class FeedTests(APITestCase):
             list_response.data["results"][0]["author"]["username"],
             self.user.username,
         )
+
+
+class PostAuthorizationTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="post-owner",
+            email="owner@example.com",
+            password="StrongPassword123",
+        )
+        self.other_user = User.objects.create_user(
+            username="post-viewer",
+            email="viewer@example.com",
+            password="StrongPassword123",
+        )
+        self.post = Post.objects.create(
+            author=self.owner,
+            content="Original post",
+        )
+
+    def test_owner_can_edit_and_delete_post(self):
+        self.client.force_authenticate(self.owner)
+        update = self.client.patch(
+            f"/api/posts/{self.post.pk}/",
+            {"content": "Updated by owner"},
+            format="json",
+        )
+        self.assertEqual(update.status_code, 200)
+        self.assertEqual(update.data["content"], "Updated by owner")
+
+        deleted = self.client.delete(f"/api/posts/{self.post.pk}/")
+        self.assertEqual(deleted.status_code, 204)
+        self.assertFalse(Post.objects.filter(pk=self.post.pk).exists())
+
+    def test_other_user_cannot_edit_or_delete_public_post(self):
+        self.client.force_authenticate(self.other_user)
+        update = self.client.patch(
+            f"/api/posts/{self.post.pk}/",
+            {"content": "Unauthorized edit"},
+            format="json",
+        )
+        deleted = self.client.delete(f"/api/posts/{self.post.pk}/")
+
+        self.assertEqual(update.status_code, 403)
+        self.assertEqual(deleted.status_code, 403)
+        self.post.refresh_from_db()
+        self.assertEqual(self.post.content, "Original post")
+
+    def test_reel_requires_a_video(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(
+            "/api/posts/",
+            {"content": "Video goes here", "post_type": "reel"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("video", response.data)

@@ -51,6 +51,28 @@ class NotificationPreferenceTests(APITestCase):
         self.assertIsNone(result)
         self.assertFalse(Notification.objects.filter(recipient=self.user).exists())
 
+    def test_notification_includes_sender_and_human_readable_type(self):
+        sender = User.objects.create_user(
+            username="friend-sender",
+            email="sender@example.com",
+            password="StrongPassword123",
+        )
+        Notification.objects.create(
+            recipient=self.user,
+            sender=sender,
+            notification_type=Notification.NotificationType.FRIEND_REQUEST,
+            message="friend-sender sent you a friend request.",
+        )
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get("/api/notifications/")
+
+        self.assertEqual(response.status_code, 200)
+        item = response.data["results"][0]
+        self.assertEqual(item["sender"]["username"], "friend-sender")
+        self.assertEqual(item["notification_type_label"], "Friend Request")
+        self.assertIn("sent you a friend request", item["message"])
+
 
 class PushDeviceApiTests(APITestCase):
     def setUp(self):

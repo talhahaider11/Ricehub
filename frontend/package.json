@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:debug": "npm run android:sync && android\\gradlew.bat -p android clean assembleDebug",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run"

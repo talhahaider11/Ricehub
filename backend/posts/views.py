@@ -1,7 +1,7 @@
 from django.db.models import Count, Prefetch, Q
 
 from rest_framework import generics
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, BasePermission, SAFE_METHODS
 from rest_framework.exceptions import PermissionDenied
 from config.pagination import StandardPagination
 from friendships.services import get_friend_ids
@@ -85,13 +85,19 @@ class PostListCreateView(
         )
 
 
+class IsPostOwnerOrReadOnly(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return request.method in SAFE_METHODS or obj.author_id == request.user.pk
+
+
 class PostDetailView(
     generics.RetrieveUpdateDestroyAPIView
 ):
 
     serializer_class = PostSerializer
     permission_classes = [
-        IsAuthenticated
+        IsAuthenticated,
+        IsPostOwnerOrReadOnly,
     ]
 
     queryset = (
@@ -138,26 +144,6 @@ class PostDetailView(
         raise PermissionDenied(
             "You do not have permission to view this post."
         )
-
-    def perform_update(self, serializer):
-
-        post = self.get_object()
-
-        if post.author != self.request.user:
-            raise PermissionDenied(
-                "You can only edit your own posts."
-            )
-
-        serializer.save()
-
-    def perform_destroy(self, instance):
-
-        if instance.author != self.request.user:
-            raise PermissionDenied(
-                "You can only delete your own posts."
-            )
-
-        instance.delete()
 
 class HashtagSearchView(ListAPIView):
     serializer_class = HashtagSerializer

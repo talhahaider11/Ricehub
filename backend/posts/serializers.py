@@ -83,6 +83,7 @@ class PostSerializer(serializers.ModelSerializer):
             "id",
             "author",
             "content",
+            "post_type",
             "image",
             "video",
             "visibility",
@@ -148,11 +149,16 @@ class PostSerializer(serializers.ModelSerializer):
 
         content = attrs.get(
             "content",
-            ""
+            self.instance.content if self.instance else "",
         ).strip()
-
-        image = attrs.get("image")
-        video = attrs.get("video")
+        image = attrs.get(
+            "image",
+            self.instance.image if self.instance else None,
+        )
+        video = attrs.get(
+            "video",
+            self.instance.video if self.instance else None,
+        )
 
         if not content and not image and not video:
             raise serializers.ValidationError(
@@ -160,6 +166,14 @@ class PostSerializer(serializers.ModelSerializer):
             )
         if image and video:
             raise serializers.ValidationError("Add an image or a video, not both.")
+        post_type = attrs.get(
+            "post_type",
+            self.instance.post_type if self.instance else Post.PostType.POST,
+        )
+        if post_type == Post.PostType.REEL and not video:
+            raise serializers.ValidationError(
+                {"video": "A reel must include a video."}
+            )
 
         attrs["content"] = content
 
@@ -195,6 +209,7 @@ class PostSerializer(serializers.ModelSerializer):
         sync_post_hashtags(post)
 
         return post
+
 
 class HashtagSerializer(
     serializers.ModelSerializer

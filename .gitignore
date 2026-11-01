@@ -19,6 +19,28 @@ dist/
 
 # Android / Play Store project files
 /frontend/android/
+!/frontend/android/
+/frontend/android/*
+!/frontend/android/app/
+/frontend/android/app/*
+!/frontend/android/app/build.gradle
+!/frontend/android/app/src/
+/frontend/android/app/src/*
+!/frontend/android/app/src/main/
+/frontend/android/app/src/main/*
+!/frontend/android/app/src/main/res/
+/frontend/android/app/src/main/res/*
+!/frontend/android/app/src/main/res/drawable-nodpi/
+!/frontend/android/app/src/main/res/drawable-nodpi/ricehub_logo.jpg
+!/frontend/android/app/src/main/res/drawable-nodpi/ricehub_splash.jpg
+!/frontend/android/app/src/main/res/drawable-v24/
+!/frontend/android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
+!/frontend/android/app/src/main/res/mipmap-anydpi-v26/
+!/frontend/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+!/frontend/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+!/frontend/android/app/src/main/res/values/
+/frontend/android/app/src/main/res/values/*
+!/frontend/android/app/src/main/res/values/styles.xml
 
 # IDE and OS files
 .vscode/
