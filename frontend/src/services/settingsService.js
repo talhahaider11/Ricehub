@@ -25,6 +25,25 @@ const settingsService = {
     return api.delete(`/users/blocked-users/${userId}/`);
   },
 
+  async muteUser(userId) {
+    const response = await api.post(`/users/muted-users/${userId}/`);
+    return response.data;
+  },
+
+  async unmuteUser(userId) {
+    return api.delete(`/users/muted-users/${userId}/`);
+  },
+
+  async isMuted(userId) {
+    const response = await api.get(`/users/muted-users/${userId}/`);
+    return response.data.muted;
+  },
+
+  async reportAccount(payload) {
+    const response = await api.post("/users/reports/accounts/", payload);
+    return response.data;
+  },
+
   async getSecurity() {
     const response = await api.get("/users/security/two-factor/");
     return response.data;

@@ -120,6 +120,83 @@ class BlockedUser(models.Model):
         ]
 
 
+class MutedUser(models.Model):
+    muter = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="muted_users",
+    )
+    muted = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="muted_by_users",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["muter", "muted"],
+                name="unique_muted_user",
+            ),
+            models.CheckConstraint(
+                condition=~Q(muter=F("muted")),
+                name="cannot_mute_self",
+            ),
+        ]
+
+
+class AccountReport(models.Model):
+    class Reason(models.TextChoices):
+        SPAM = "spam", "Spam"
+        HARASSMENT = "harassment", "Harassment"
+        IMPERSONATION = "impersonation", "Impersonation"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        REVIEWED = "reviewed", "Reviewed"
+
+    reporter = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="account_reports_sent",
+    )
+    reported_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="account_reports_received",
+    )
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    details = models.TextField(max_length=2000, blank=True)
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class SupportRequest(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        REVIEWED = "reviewed", "Reviewed"
+
+    reporter = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="support_requests",
+    )
+    subject = models.CharField(max_length=200)
+    details = models.TextField(max_length=5000)
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class TwoFactorChallenge(models.Model):
     class Purpose(models.TextChoices):
         LOGIN = "login", "Login"

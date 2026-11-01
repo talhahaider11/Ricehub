@@ -1,8 +1,10 @@
 import api from "./api";
 
 const communityService = {
-  async stories() {
-    return (await api.get("/community/stories/")).data;
+  async stories(authorId) {
+    return (await api.get("/community/stories/", {
+      params: { page_size: 50, ...(authorId ? { author: authorId } : {}) },
+    })).data;
   },
   async createStory(data) {
     return (await api.post("/community/stories/", data, {

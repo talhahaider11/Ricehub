@@ -52,6 +52,26 @@ const authService = {
     return response.data;
   },
 
+  async requestPasswordReset(email) {
+    const response = await api.post("/users/password-reset/", { email });
+    return response.data;
+  },
+
+  async confirmPasswordReset(data) {
+    const response = await api.post("/users/password-reset/confirm/", data);
+    return response.data;
+  },
+
+  async changePassword(data) {
+    const response = await api.post("/users/password/change/", data);
+    return response.data;
+  },
+
+  async submitSupportRequest(payload) {
+    const response = await api.post("/users/support/requests/", payload);
+    return response.data;
+  },
+
   async getMe() {
     const response = await api.get("/users/me/");
     return response.data;

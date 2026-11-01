@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import communityService from "../services/communityService";
 import useAuth from "../hooks/useAuth";
 import friendService from "../services/friendService";
@@ -15,7 +16,10 @@ function localDateTime(value) {
 
 export default function SocialHub() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState(tabs[0]);
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(
+    tabs.includes(searchParams.get("tab")) ? searchParams.get("tab") : tabs[0]
+  );
   const [stories, setStories] = useState([]);
   const [communities, setCommunities] = useState([]);
   const [events, setEvents] = useState([]);
@@ -93,6 +97,14 @@ export default function SocialHub() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const communityId = searchParams.get("community");
+    if (communityId && /^\d+$/.test(communityId)) {
+      setActiveTab("Groups & Pages");
+      loadCommunityPosts(communityId);
+    }
+  }, [searchParams]);
 
   const perform = async (action, successMessage) => {
     setSaving(true);

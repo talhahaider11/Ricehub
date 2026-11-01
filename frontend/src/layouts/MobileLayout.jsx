@@ -1,6 +1,5 @@
 import {
   Home,
-  Users,
   MessageCircle,
   Bell,
   Compass,
@@ -17,7 +16,6 @@ export default function MobileLayout() {
     { path: "/", icon: Home },
     { path: "/search", icon: Compass },
     { path: "/discover", icon: Store },
-    { path: "/friends", icon: Users },
     { path: "/friend-requests", icon: UserPlus },
     { path: "/messages", icon: MessageCircle },
     { path: "/notifications", icon: Bell },

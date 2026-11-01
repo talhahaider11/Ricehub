@@ -85,3 +85,54 @@ describe("authService.register", () => {
     );
   });
 });
+
+describe("authService password methods", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("requests and confirms password resets through the users API", async () => {
+    api.post
+      .mockResolvedValueOnce({ data: { message: "If an account exists..." } })
+      .mockResolvedValueOnce({ data: { detail: "Password reset successfully." } });
+
+    await authService.requestPasswordReset("person@example.com");
+    await authService.confirmPasswordReset({
+      uid: "encoded-user-id",
+      token: "reset-token",
+      password: "StrongPassword123",
+    });
+
+    expect(api.post).toHaveBeenNthCalledWith(
+      1,
+      "/users/password-reset/",
+      { email: "person@example.com" }
+    );
+    expect(api.post).toHaveBeenNthCalledWith(
+      2,
+      "/users/password-reset/confirm/",
+      {
+        uid: "encoded-user-id",
+        token: "reset-token",
+        password: "StrongPassword123",
+      }
+    );
+  });
+
+  it("changes a password through the authenticated users API", async () => {
+    api.post.mockResolvedValue({ data: { detail: "Password changed successfully." } });
+
+    await authService.changePassword({
+      current_password: "CurrentPassword123",
+      new_password: "NewPassword123",
+    });
+
+    expect(api.post).toHaveBeenCalledWith(
+      "/users/password/change/",
+      {
+        current_password: "CurrentPassword123",
+        new_password: "NewPassword123",
+      }
+    );
+  });
+});

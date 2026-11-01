@@ -4,8 +4,8 @@ import {
   Home,
   MessageCircle,
   Settings,
-  Users,
   Compass,
+  HelpCircle,
 } from "lucide-react";
 
 import { NavLink } from "react-router-dom";
@@ -15,11 +15,6 @@ const items = [
     label: "Home",
     path: "/",
     icon: Home,
-  },
-  {
-    label: "Friends",
-    path: "/friends",
-    icon: Users,
   },
   {
     label: "Discover",
@@ -45,6 +40,11 @@ const items = [
     label: "Settings",
     path: "/settings",
     icon: Settings,
+  },
+  {
+    label: "Help and support",
+    path: "/help-support",
+    icon: HelpCircle,
   },
 ];
 

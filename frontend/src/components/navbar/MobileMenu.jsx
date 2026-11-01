@@ -14,7 +14,6 @@ import {
   Shield,
   Sun,
   UserPlus,
-  Users,
   X,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -24,7 +23,6 @@ import useAuth from "../../hooks/useAuth";
 
 const primaryLinks = [
   { label: "Home", path: "/", icon: Home },
-  { label: "Friends", path: "/friends", icon: Users },
   { label: "Messages", path: "/messages", icon: MessageCircle },
 ];
 
@@ -33,6 +31,7 @@ const additionalLinks = [
   { label: "Friend requests", path: "/friend-requests", icon: UserPlus },
   { label: "Notifications", path: "/notifications", icon: Bell },
   { label: "Search", path: "/search", icon: Search },
+  { label: "Help and support", path: "/help-support", icon: HelpCircle },
 ];
 
 function displayName(user) {
@@ -172,25 +171,37 @@ export default function MobileMenu({ onClose }) {
           ))}
         </nav>
 
-        <button
-          type="button"
-          className="mobile-menu-expand"
-          aria-expanded={expandedSections.more}
-          onClick={() => toggleSection("more")}
-        >
-          {expandedSections.more ? "See less" : "See more"}
-          <ChevronDown size={18} aria-hidden="true" />
-        </button>
-
         {expandedSections.more && (
-          <nav className="mobile-menu-links mobile-menu-extra" aria-label="More">
-            {additionalLinks.map(({ label, path, icon: Icon }) => (
-              <Link key={path} to={path} onClick={onClose}>
-                <Icon size={21} />
-                <span>{label}</span>
-              </Link>
-            ))}
-          </nav>
+          <div className="mobile-menu-extra-section">
+            <nav className="mobile-menu-links mobile-menu-extra" aria-label="More">
+              {additionalLinks.map(({ label, path, icon: Icon }) => (
+                <Link key={path} to={path} onClick={onClose}>
+                  <Icon size={21} />
+                  <span>{label}</span>
+                </Link>
+              ))}
+            </nav>
+            <button
+              type="button"
+              className="mobile-menu-expand"
+              aria-expanded="true"
+              onClick={() => toggleSection("more")}
+            >
+              See less
+              <ChevronDown size={18} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        {!expandedSections.more && (
+          <button
+            type="button"
+            className="mobile-menu-expand"
+            aria-expanded="false"
+            onClick={() => toggleSection("more")}
+          >
+            See more
+            <ChevronDown size={18} aria-hidden="true" />
+          </button>
         )}
 
         <section className="mobile-menu-section">
@@ -205,7 +216,8 @@ export default function MobileMenu({ onClose }) {
           </button>
           {expandedSections.support && (
             <div className="mobile-menu-help">
-              <p>Find privacy, sign-in and account controls in Settings.</p>
+              <p>Browse answers, report a problem, or change your password.</p>
+              <Link to="/help-support" onClick={onClose}>Open Help and support</Link>
               <Link to="/settings" onClick={onClose}>Open settings</Link>
             </div>
           )}

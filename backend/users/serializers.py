@@ -3,12 +3,20 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
+from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
+from django.utils import timezone
 
 from rest_framework import serializers
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
 
+from friendships.services import get_friend_ids
 from .models import (
     BlockedUser,
     EmailVerification,
@@ -30,6 +38,8 @@ class UserSerializer(serializers.ModelSerializer):
     is_email_verified = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
     last_seen = serializers.SerializerMethodField()
+    friends_count = serializers.SerializerMethodField()
+    posts_count = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -39,6 +49,7 @@ class UserSerializer(serializers.ModelSerializer):
             "website", "date_of_birth", "profile_visibility",
             "is_online", "last_seen", "created_at",
             "is_email_verified",
+            "friends_count", "posts_count",
         ]
         read_only_fields = [
             "id", "is_online", "last_seen", "created_at",
@@ -80,6 +91,12 @@ class UserSerializer(serializers.ModelSerializer):
         if not self._privacy_setting(obj, "show_last_seen", True):
             return None
         return obj.last_seen
+
+    def get_friends_count(self, obj):
+        return len(get_friend_ids(obj))
+
+    def get_posts_count(self, obj):
+        return obj.posts.count()
 
     @staticmethod
     def _privacy_setting(user, field, default):
@@ -288,11 +305,15 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         user = User.objects.filter(
-            email__iexact=self.validated_data["email"]
+            email__iexact=self.validated_data["email"],
+            is_active=True,
         ).first()
 
         if user:
-            send_password_reset_email(user)
+            send_password_reset_email(
+                user,
+                getattr(settings, "FRONTEND_URL", ""),
+            )
 
         return user
 
@@ -322,12 +343,70 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
                 "Invalid or expired reset link."
             )
 
-        validate_password(attrs["password"], user=user)
+        try:
+            validate_strong_password(attrs["password"])
+            validate_password(attrs["password"], user=user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(
+                {"password": exc.messages}
+            ) from exc
         attrs["user"] = user
         return attrs
 
     def save(self, **kwargs):
         user = self.validated_data["user"]
-        user.set_password(self.validated_data["password"])
-        user.save(update_fields=["password"])
+        with transaction.atomic():
+            user.set_password(self.validated_data["password"])
+            user.save(update_fields=["password"])
+            revoke_user_refresh_tokens(user)
         return user
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    current_password = serializers.CharField(
+        write_only=True,
+        trim_whitespace=False,
+    )
+    new_password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        trim_whitespace=False,
+    )
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        if not user.check_password(attrs["current_password"]):
+            raise serializers.ValidationError(
+                {"current_password": "Your current password is incorrect."}
+            )
+        if user.check_password(attrs["new_password"]):
+            raise serializers.ValidationError(
+                {"new_password": "Choose a password you have not used before."}
+            )
+
+        try:
+            validate_strong_password(attrs["new_password"])
+            validate_password(attrs["new_password"], user=user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(
+                {"new_password": exc.messages}
+            ) from exc
+        attrs["user"] = user
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.validated_data["user"]
+        with transaction.atomic():
+            user.set_password(self.validated_data["new_password"])
+            user.save(update_fields=["password"])
+            revoke_user_refresh_tokens(user)
+        return user
+
+
+def revoke_user_refresh_tokens(user):
+    outstanding_tokens = OutstandingToken.objects.filter(
+        user=user,
+        expires_at__gt=timezone.now(),
+    )
+    for token in outstanding_tokens:
+        BlacklistedToken.objects.get_or_create(token=token)

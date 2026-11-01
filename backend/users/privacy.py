@@ -1,4 +1,4 @@
-from .models import BlockedUser
+from .models import BlockedUser, MutedUser
 from .models import UserPrivacySettings
 
 
@@ -20,6 +20,12 @@ def get_blocked_user_ids(user):
         blocked=user
     ).values_list("blocker_id", flat=True)
     return set(blocked_ids).union(blocking_ids)
+
+
+def get_muted_user_ids(user):
+    return set(
+        MutedUser.objects.filter(muter=user).values_list("muted_id", flat=True)
+    )
 
 
 def are_friends(user_one, user_two):

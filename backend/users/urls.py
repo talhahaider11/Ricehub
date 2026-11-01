@@ -8,14 +8,17 @@ from rest_framework_simplejwt.views import (
 from .views import (
     AccountDeleteView,
     AccountExportView,
+    AccountReportCreateView,
     BlockedUsersView,
     LoginView,
     MeView,
+    MutedUserView,
     PasswordResetRequestView,
     ProfileUpdateView,
     RegisterView,
     ResendVerificationCodeView,
     SecuritySessionsView,
+    SupportRequestCreateView,
     TwoFactorSettingsView,
     UserByUsernameView,
     UserDetailView,
@@ -26,6 +29,7 @@ from .views import (
     VerifyTwoFactorLoginView,
 )
 from .password_views import (
+    PasswordChangeView,
     PasswordResetConfirmView as TokenPasswordResetConfirmView,
 )
 
@@ -77,6 +81,9 @@ urlpatterns = [
         BlockedUsersView.as_view(),
         name="unblock_user",
     ),
+    path("muted-users/<int:user_id>/", MutedUserView.as_view(), name="muted_user"),
+    path("reports/accounts/", AccountReportCreateView.as_view(), name="account_report"),
+    path("support/requests/", SupportRequestCreateView.as_view(), name="support_request"),
     path("account/export/", AccountExportView.as_view(), name="account_export"),
     path("account/delete/", AccountDeleteView.as_view(), name="account_delete"),
 
@@ -92,6 +99,11 @@ urlpatterns = [
     ),
 
     # Password reset
+    path(
+        "password/change/",
+        PasswordChangeView.as_view(),
+        name="password_change",
+    ),
     path(
         "password-reset/",
         PasswordResetRequestView.as_view(),

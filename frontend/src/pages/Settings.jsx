@@ -36,7 +36,6 @@ export default function Settings() {
   const [privacy, setPrivacy] = useState(null);
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [security, setSecurity] = useState(null);
-  const [blockedUsername, setBlockedUsername] = useState("");
   const [twoFactorPassword, setTwoFactorPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [confirmingTwoFactor, setConfirmingTwoFactor] = useState(false);
@@ -46,6 +45,10 @@ export default function Settings() {
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     notificationService.getPreferences()
@@ -111,22 +114,6 @@ export default function Settings() {
   const updatePrivacy = (name, value) =>
     setPrivacy((current) => ({ ...current, [name]: value }));
 
-  const blockUser = async (event) => {
-    event.preventDefault();
-    setActionError("");
-    setActionMessage("");
-    try {
-      const blocked = await settingsService.blockUser(blockedUsername.trim());
-      setBlockedUsers((items) =>
-        items.some((item) => item.id === blocked.id) ? items : [blocked, ...items]
-      );
-      setBlockedUsername("");
-      setActionMessage(`@${blocked.username} has been blocked.`);
-    } catch (error) {
-      setActionError(error.response?.data?.detail || "This account could not be blocked.");
-    }
-  };
-
   const unblockUser = async (blocked) => {
     setActionError("");
     try {
@@ -134,6 +121,34 @@ export default function Settings() {
       setBlockedUsers((items) => items.filter((item) => item.id !== blocked.id));
     } catch (error) {
       setActionError(error.response?.data?.detail || "This account could not be unblocked.");
+    }
+  };
+
+  const changePassword = async (event) => {
+    event.preventDefault();
+    setActionError("");
+    setActionMessage("");
+    if (newPassword !== confirmNewPassword) {
+      setActionError("The new passwords do not match.");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const response = await authService.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setActionMessage(response.detail);
+    } catch (error) {
+      const detail = error.response?.data?.current_password
+        || error.response?.data?.new_password
+        || error.response?.data?.detail;
+      setActionError(Array.isArray(detail) ? detail.join(" ") : detail || "Password could not be changed.");
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -232,9 +247,10 @@ export default function Settings() {
           <p className="settings-eyebrow">SETTINGS</p>
           <a href="#account">Account</a>
           <a href="#privacy">Privacy &amp; audience</a>
-          <a href="#blocking">Blocking</a>
+          <a href="#blocking">Blocked accounts</a>
           <a href="#notifications">Notifications</a>
           <a href="#security">Security &amp; login</a>
+          <Link to="/help-support">Help &amp; support</Link>
           <a href="#appearance">Appearance</a>
           <a href="#account-data">Your information</a>
         </aside>
@@ -362,18 +378,8 @@ export default function Settings() {
           <section className="settings-section" id="blocking">
             <h2>Blocking</h2>
             <p className="settings-description">
-              Blocked accounts can’t find your profile, send friend requests or start a chat.
+              Block accounts from the options menu on their profile. You can unblock accounts here.
             </p>
-            <form className="settings-inline-form" onSubmit={blockUser}>
-              <input
-                value={blockedUsername}
-                onChange={(event) => setBlockedUsername(event.target.value)}
-                placeholder="Username to block"
-                aria-label="Username to block"
-                required
-              />
-              <button className="btn btn-secondary" type="submit">Block</button>
-            </form>
             {blockedUsers.length === 0 ? (
               <p className="settings-description">You haven’t blocked anyone.</p>
             ) : blockedUsers.map((blocked) => (
@@ -487,6 +493,41 @@ export default function Settings() {
                 </button>
               </div>
             )}
+            <form className="settings-security-form" onSubmit={changePassword}>
+              <h3>Change password</h3>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                placeholder="Current password"
+                aria-label="Current password to change password"
+                required
+              />
+              <input
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                placeholder="New password"
+                aria-label="New password"
+                required
+              />
+              <input
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={confirmNewPassword}
+                onChange={(event) => setConfirmNewPassword(event.target.value)}
+                placeholder="Confirm new password"
+                aria-label="Confirm new password"
+                required
+              />
+              <button className="btn btn-primary" type="submit" disabled={changingPassword}>
+                {changingPassword ? "Changing..." : "Change password"}
+              </button>
+            </form>
             <div className="settings-row">
               <div>
                 <strong>Password</strong>

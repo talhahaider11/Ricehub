@@ -12,11 +12,15 @@ import useAuth from "../../hooks/useAuth";
 import Avatar from "../common/Avatar";
 import Button from "../common/Button";
 
-export default function CreatePost({ onCreated, onCreateStory }) {
+export default function CreatePost({
+  onCreated,
+  onCreateStory,
+  initialPostType = "post",
+}) {
   const { user } = useAuth();
   const [content, setContent] = useState("");
   const [visibility, setVisibility] = useState("public");
-  const [postType, setPostType] = useState("post");
+  const [postType, setPostType] = useState(initialPostType);
   const [image, setImage] = useState(null);
   const [video, setVideo] = useState(null);
   const [submitting, setSubmitting] = useState(false);

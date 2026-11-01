@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import userService from "../services/userService";
 import searchService from "../services/searchService";
 import Avatar from "../components/common/Avatar";
@@ -13,11 +13,13 @@ export default function Search() {
   const [params] = useSearchParams();
   const query = params.get("q") || "";
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState("people");
   const [users, setUsers] = useState([]);
   const [posts, setPosts] = useState([]);
   const [hashtags, setHashtags] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
@@ -27,6 +29,7 @@ export default function Search() {
       setUsers([]);
       setPosts([]);
       setHashtags([]);
+      setGroups([]);
       setError("");
       return;
     }
@@ -45,6 +48,9 @@ export default function Search() {
         } else if (activeTab === "hashtags") {
           const data = await searchService.global(query);
           setHashtags(getArrayResults(data.hashtags, "Hashtag search"));
+        } else if (activeTab === "groups") {
+          const data = await searchService.global(query);
+          setGroups(getArrayResults(data.groups, "Group search"));
         }
       } catch (searchError) {
         console.error("Search results could not be loaded:", searchError);
@@ -68,6 +74,12 @@ export default function Search() {
           onClick={() => setActiveTab("people")}
         >
           People
+        </button>
+        <button
+          className={activeTab === "groups" ? "active" : ""}
+          onClick={() => setActiveTab("groups")}
+        >
+          Groups
         </button>
         <button
           className={activeTab === "posts"? "active" : ""}
@@ -135,6 +147,27 @@ export default function Search() {
                   <span>{tag.post_count || 0} posts</span>
                 </Link>
               ))}
+            </div>
+          )}
+
+          {activeTab === "groups" && (
+            <div className="search-results">
+              {groups.map((group) => (
+                <button
+                  type="button"
+                  key={group.id}
+                  className="search-user search-group-result"
+                  onClick={() =>
+                    navigate(`/discover?tab=${encodeURIComponent("Groups & Pages")}&community=${group.id}`)
+                  }
+                >
+                  <div>
+                    <strong>{group.name}</strong>
+                    <span>{group.description || `${group.kind} · ${group.member_count} members`}</span>
+                  </div>
+                </button>
+              ))}
+              {groups.length === 0 && <p className="muted">No groups found</p>}
             </div>
           )}
         </>

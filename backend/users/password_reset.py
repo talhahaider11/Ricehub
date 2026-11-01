@@ -15,8 +15,8 @@ def send_password_reset_email(user, frontend_url):
     token = default_token_generator.make_token(user)
 
     reset_url = (
-        f"{frontend_url}/reset-password/"
-        f"{uid}/{token}/"
+        f"{frontend_url.rstrip('/')}/forgot-password/"
+        f"?uid={uid}&token={token}"
     )
 
     send_mail(

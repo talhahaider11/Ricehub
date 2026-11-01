@@ -22,12 +22,18 @@ class SearchUserSerializer(
 class SearchPostSerializer(
     serializers.ModelSerializer
 ):
+    author = SearchUserSerializer(read_only=True)
+
     class Meta:
         model = Post
         fields = [
             "id",
+            "author",
             "content",
+            "post_type",
             "image",
+            "video",
+            "visibility",
             "created_at",
         ]
 

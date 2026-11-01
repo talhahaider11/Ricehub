@@ -14,8 +14,11 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import (
+    AccountReport,
     BlockedUser,
     EmailVerification,
+    MutedUser,
+    SupportRequest,
     TwoFactorChallenge,
     UserPrivacySettings,
     UserSecuritySettings,
@@ -536,6 +539,113 @@ class BlockedUsersView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class MutedUserView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, user_id):
+        if user_id == request.user.pk:
+            return Response({"muted": False})
+        return Response({
+            "muted": MutedUser.objects.filter(
+                muter=request.user,
+                muted_id=user_id,
+            ).exists()
+        })
+
+    def post(self, request, user_id):
+        muted_user = get_object_or_404(User, pk=user_id)
+        if muted_user.pk == request.user.pk:
+            return Response(
+                {"detail": "You cannot mute yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        muted, created = MutedUser.objects.get_or_create(
+            muter=request.user,
+            muted=muted_user,
+        )
+        return Response(
+            {"muted": True},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    def delete(self, request, user_id):
+        deleted, _ = MutedUser.objects.filter(
+            muter=request.user,
+            muted_id=user_id,
+        ).delete()
+        if not deleted:
+            return Response(
+                {"detail": "Muted user not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AccountReportCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        reported_user = get_object_or_404(User, pk=request.data.get("user_id"))
+        if reported_user.pk == request.user.pk:
+            return Response(
+                {"detail": "You cannot report your own account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reason = request.data.get("reason")
+        allowed_reasons = {choice for choice, _ in AccountReport.Reason.choices}
+        if reason not in allowed_reasons:
+            return Response(
+                {"reason": "Choose a valid report reason."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        details = str(request.data.get("details", "")).strip()
+        if len(details) > 2000:
+            return Response(
+                {"details": "Details must be 2000 characters or fewer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        report = AccountReport.objects.create(
+            reporter=request.user,
+            reported_user=reported_user,
+            reason=reason,
+            details=details,
+        )
+        return Response(
+            {"id": report.pk, "detail": "Your report was submitted."},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class SupportRequestCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        subject = str(request.data.get("subject", "")).strip()
+        details = str(request.data.get("details", "")).strip()
+        if not subject or len(subject) > 200:
+            return Response(
+                {"subject": "Enter a subject of 1 to 200 characters."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not details or len(details) > 5000:
+            return Response(
+                {"details": "Enter details of 1 to 5000 characters."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        support_request = SupportRequest.objects.create(
+            reporter=request.user,
+            subject=subject,
+            details=details,
+        )
+        return Response(
+            {
+                "id": support_request.pk,
+                "detail": "Your support request was submitted.",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class UserSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -609,8 +719,12 @@ class PasswordResetRequestView(APIView):
 
         try:
             serializer.save()
-        except Exception:
+        except (smtplib.SMTPException, OSError):
             logger.exception("Password reset email sending failed")
+            return Response(
+                {"detail": "Password reset email is temporarily unavailable."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         return Response(
             {

@@ -1,12 +1,13 @@
 import api from "./api";
 
 const postService = {
-  async list(page = 1, sort = "recent") {
+  async list(page = 1, sort = "recent", authorId) {
     const response = await api.get("/posts/", {
       params: {
         page,
         page_size: 10,
         sort,
+        ...(authorId ? { author: authorId } : {}),
       },
     });
 

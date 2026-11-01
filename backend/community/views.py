@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from users.privacy import get_blocked_user_ids
+from users.privacy import get_blocked_user_ids, get_muted_user_ids
 from notifications.models import Notification
 from notifications.services import create_notification
 from .models import (
@@ -41,11 +41,19 @@ class StoryListCreateView(generics.ListCreateAPIView):
     serializer_class = StorySerializer
 
     def get_queryset(self):
-        return Story.objects.filter(
+        queryset = Story.objects.filter(
             expires_at__gt=timezone.now(),
-        ).exclude(author_id__in=get_blocked_user_ids(self.request.user)).select_related(
+        ).exclude(author_id__in=get_blocked_user_ids(self.request.user)).exclude(
+            author_id__in=get_muted_user_ids(self.request.user),
+        ).select_related(
             "author",
         ).annotate(view_count=Count("views", distinct=True)).order_by("-created_at")
+        author_id = self.request.query_params.get("author")
+        if author_id and author_id == str(self.request.user.pk):
+            queryset = queryset.filter(author=self.request.user)
+        else:
+            queryset = queryset.exclude(author=self.request.user)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)

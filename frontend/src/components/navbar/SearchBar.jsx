@@ -21,6 +21,8 @@ export default function SearchBar() {
         setResults({
           users: getArrayResults(data.users, "People search"),
           hashtags: getArrayResults(data.hashtags, "Hashtag search"),
+          posts: getArrayResults(data.posts, "Post search"),
+          groups: getArrayResults(data.groups, "Group search"),
         });
       } catch (error) {
         console.error("Search suggestions could not be loaded:", error);
@@ -80,6 +82,30 @@ export default function SearchBar() {
               }}
             >
               #{hashtag.name}
+            </button>
+          ))}
+
+          {results.posts?.slice(0, 3).map((post) => (
+            <button
+              type="button"
+              key={`post-${post.id}`}
+              onClick={submit}
+              className="search-suggestion-result"
+            >
+              <span>{post.content?.slice(0, 80) || "Photo or video post"}</span>
+              <small>Post</small>
+            </button>
+          ))}
+
+          {results.groups?.slice(0, 3).map((group) => (
+            <button
+              type="button"
+              key={`group-${group.id}`}
+              onClick={submit}
+              className="search-suggestion-result"
+            >
+              <span>{group.name}</span>
+              <small>Group or page</small>
             </button>
           ))}
 

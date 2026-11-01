@@ -4,6 +4,7 @@ import {
   Route,
   Routes,
   useNavigate,
+  Navigate,
 } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
@@ -16,7 +17,6 @@ import VerifyEmail from "../pages/auth/VerifyEmail";
 import Home from "../pages/Home";
 import Profile from "../pages/Profile";
 import EditProfile from "../pages/EditProfile";
-import Friends from "../pages/Friends";
 import FriendRequests from "../pages/FriendRequests";
 import Notifications from "../pages/Notifications";
 import Search from "../pages/Search";
@@ -24,6 +24,10 @@ import Messages from "../pages/Messages";
 import Settings from "../pages/Settings";
 import SocialHub from "../pages/SocialHub";
 import NotFound from "../pages/NotFound";
+import CreateContent from "../pages/CreateContent";
+import StoryViewer from "../pages/StoryViewer";
+import HelpSupport from "../pages/HelpSupport";
+import useAuth from "../hooks/useAuth";
 
 import MainLayout from "../layouts/MainLayout";
 import AuthLayout from "../layouts/AuthLayout";
@@ -40,6 +44,11 @@ function PushNotificationNavigation() {
   }, [navigate]);
 
   return null;
+}
+
+function FriendsProfileRedirect() {
+  const { user } = useAuth();
+  return user?.id ? <Navigate to={`/profile/${user.id}`} replace /> : null;
 }
 
 export default function AppRoutes() {
@@ -79,6 +88,16 @@ export default function AppRoutes() {
             />
 
             <Route
+              path="/create"
+              element={<CreateContent />}
+            />
+
+            <Route
+              path="/stories/:id"
+              element={<StoryViewer />}
+            />
+
+            <Route
               path="/profile/:id"
               element={<Profile />}
             />
@@ -90,7 +109,7 @@ export default function AppRoutes() {
 
             <Route
               path="/friends"
-              element={<Friends />}
+              element={<FriendsProfileRedirect />}
             />
 
             <Route
@@ -116,6 +135,11 @@ export default function AppRoutes() {
             <Route
               path="/settings"
               element={<Settings />}
+            />
+
+            <Route
+              path="/help-support"
+              element={<HelpSupport />}
             />
 
             <Route

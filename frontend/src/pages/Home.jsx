@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import CreatePost from "../components/posts/CreatePost";
+import { useState } from "react";
 import StoryStrip from "../components/stories/StoryStrip";
 import PostCard from "../components/posts/PostCard";
 import InfiniteLoader from "../components/common/InfiniteLoader";
@@ -13,17 +11,7 @@ import useAuth from "../hooks/useAuth";
 
 export default function Home() {
   const { user } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
   const [feedSort, setFeedSort] = useState("recent");
-  const [storyComposerOpen, setStoryComposerOpen] = useState(false);
-
-  useEffect(() => {
-    if (location.state?.openCreateMenu) {
-      window.dispatchEvent(new Event("ricehub:open-create-menu"));
-      navigate(location.pathname, { replace: true, state: null });
-    }
-  }, [location.pathname, location.state, navigate]);
 
   const {
     posts,
@@ -32,7 +20,6 @@ export default function Home() {
     hasMore,
     loadMore,
     loadPosts,
-    addPost,
     removePost,
     updatePost,
   } = usePosts(feedSort);
@@ -42,13 +29,7 @@ export default function Home() {
       <div className="feed">
         <StoryStrip
           currentUser={user}
-          composerOpen={storyComposerOpen}
-          onComposerClose={() => setStoryComposerOpen(false)}
-          onComposerOpen={() => setStoryComposerOpen(true)}
-        />
-        <CreatePost
-          onCreated={addPost}
-          onCreateStory={() => setStoryComposerOpen(true)}
+          excludeUserId={user?.id}
         />
         {loading && posts.length === 0 ? (
           <>

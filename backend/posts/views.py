@@ -2,10 +2,10 @@ from django.db.models import Count, Prefetch, Q
 
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated, BasePermission, SAFE_METHODS
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from config.pagination import StandardPagination
 from friendships.services import get_friend_ids
-from users.privacy import get_blocked_user_ids
+from users.privacy import get_blocked_user_ids, get_muted_user_ids
 from reactions.models import Reaction
 from .models import Post
 from .serializers import PostSerializer
@@ -32,21 +32,36 @@ class PostListCreateView(
             user
         )
 
-        visibility_filter = (
-            Q(
-                author=user
+        author_id = self.request.query_params.get("author")
+        if author_id:
+            try:
+                author_id = int(author_id)
+            except ValueError as exc:
+                raise ValidationError({"author": "Enter a valid user ID."}) from exc
+            if user.pk == author_id:
+                queryset = Post.objects.filter(author=user)
+            else:
+                queryset = Post.objects.filter(
+                    Q(visibility=Post.Visibility.PUBLIC)
+                    | Q(
+                        visibility=Post.Visibility.FRIENDS,
+                        author_id__in=friend_ids,
+                    )
+                ).filter(author_id=author_id)
+        else:
+            visibility_filter = (
+                Q(
+                    visibility=Post.Visibility.PUBLIC
+                )
+                | Q(
+                    visibility=Post.Visibility.FRIENDS,
+                    author_id__in=friend_ids,
+                )
             )
-            | Q(
-                visibility=Post.Visibility.PUBLIC
-            )
-            | Q(
-                visibility=Post.Visibility.FRIENDS,
-                author_id__in=friend_ids,
-            )
-        )
+            queryset = Post.objects.filter(visibility_filter)
 
         queryset = (
-            Post.objects
+            queryset
             .select_related("author")
             .prefetch_related(
                 Prefetch(
@@ -65,10 +80,8 @@ class PostListCreateView(
                     distinct=True
                 ),
             )
-            .filter(
-                visibility_filter
-            )
             .exclude(author_id__in=get_blocked_user_ids(user))
+            .exclude(author_id__in=get_muted_user_ids(user))
         )
         if self.request.query_params.get("sort") == "popular":
             return queryset.order_by(
