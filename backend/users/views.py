@@ -1,6 +1,7 @@
 import logging
+import smtplib
 
-from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -30,7 +31,11 @@ from .serializers import (
     UserSerializer,
     suggest_usernames,
 )
-from .two_factor import send_two_factor_code, verify_two_factor_code
+from .two_factor import (
+    mask_email,
+    send_two_factor_code,
+    verify_two_factor_code,
+)
 from .verification import (
     OTP_RESEND_COOLDOWN_SECONDS,
     send_verification_code,
@@ -73,16 +78,34 @@ class RegisterView(APIView):
 
         try:
             with transaction.atomic():
-                serializer.save()
+                user = serializer.save()
+                verification, _ = EmailVerification.objects.get_or_create(
+                    user=user
+                )
+                send_verification_code(user, verification)
         except IntegrityError:
             return Response(
                 {"error": "Username or email is already registered."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except (OSError, smtplib.SMTPException):
+            logger.exception("Registration verification email could not be sent.")
+            return Response(
+                {
+                    "detail": (
+                        "Your account could not be created because the "
+                        "verification email could not be sent. Please try again."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         return Response(
             {
-                "message": "Registration successful. You can now sign in."
+                "message": (
+                    "Account created. Check your email for the verification code."
+                ),
+                "email": user.email,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -130,7 +153,10 @@ class VerifyEmailView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(
-            {"message": "Email verified successfully."},
+            {
+                "message": "Email verified successfully.",
+                "detail": "Email verified successfully.",
+            },
             status=status.HTTP_200_OK,
         )
 
@@ -161,7 +187,10 @@ class ResendVerificationCodeView(APIView):
                 )
             send_verification_code(user, verification)
         return Response(
-            {"message": "If the account can be verified, a code has been sent."},
+            {
+                "message": "If the account can be verified, a code has been sent.",
+                "detail": "If the account can be verified, a code has been sent.",
+            },
             status=status.HTTP_200_OK,
         )
 
@@ -170,7 +199,7 @@ class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        username = request.data.get("username")
+        username = request.data.get("username", "").strip()
         password = request.data.get("password")
 
         if not username or not password:
@@ -179,12 +208,34 @@ class LoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = authenticate(username=username, password=password)
+        user = User.objects.filter(username__iexact=username).first()
 
         if not user:
             return Response(
+                {
+                    "code": "user_not_found",
+                    "detail": (
+                        "No account was found with this username. "
+                        "Create a new account."
+                    ),
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not user.check_password(password):
+            return Response(
                 {"error": "Invalid credentials."},
                 status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if not user.is_email_verified:
+            return Response(
+                {
+                    "code": "email_not_verified",
+                    "email": user.email,
+                    "detail": "Please verify your email before signing in.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         if not user.is_active:
@@ -197,11 +248,27 @@ class LoginView(APIView):
             user=user,
             two_factor_enabled=True,
         ).exists():
-            send_two_factor_code(user, TwoFactorChallenge.Purpose.LOGIN)
+            try:
+                send_two_factor_code(user, TwoFactorChallenge.Purpose.LOGIN)
+            except (OSError, smtplib.SMTPException):
+                logger.exception(
+                    "Two-factor login email could not be sent for user %s.",
+                    user.pk,
+                )
+                return Response(
+                    {
+                        "detail": (
+                            "The sign-in verification email could not be sent. "
+                            "Please try again later."
+                        )
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             return Response(
                 {
                     "two_factor_required": True,
                     "username": user.username,
+                    "email": mask_email(user.email),
                 },
                 status=status.HTTP_200_OK,
             )

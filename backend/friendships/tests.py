@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
@@ -56,6 +58,49 @@ class FriendRequestApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([friend["id"] for friend in response.data], [self.sender.id])
         self.assertEqual(response.data[0]["username"], self.sender.username)
+
+    def test_request_remains_accepted_if_notification_delivery_fails(self):
+        self.client.force_authenticate(user=self.sender)
+        sent = self.client.post(
+            "/api/friends/requests/",
+            {"user_id": self.receiver.id},
+            format="json",
+        )
+        request_id = sent.data["id"]
+
+        self.client.force_authenticate(user=self.receiver)
+        with patch(
+            "friendships.views.create_notification",
+            side_effect=RuntimeError("notification delivery failed"),
+        ):
+            response = self.client.post(
+                f"/api/friends/requests/{request_id}/respond/",
+                {"action": "accept"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            FriendRequest.objects.get(pk=request_id).status,
+            FriendRequest.Status.ACCEPTED,
+        )
+
+    def test_user_can_reject_a_pending_friend_request(self):
+        friend_request = FriendRequest.objects.create(
+            sender=self.sender,
+            receiver=self.receiver,
+        )
+        self.client.force_authenticate(user=self.receiver)
+
+        response = self.client.post(
+            f"/api/friends/requests/{friend_request.id}/respond/",
+            {"action": "reject"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        friend_request.refresh_from_db()
+        self.assertEqual(friend_request.status, FriendRequest.Status.REJECTED)
 
     def test_friend_profile_lookup_uses_the_friend_id_from_the_list(self):
         FriendRequest.objects.create(

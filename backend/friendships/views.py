@@ -1,4 +1,7 @@
+import logging
+
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
@@ -12,6 +15,9 @@ from users.privacy import can_receive_friend_request
 
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
+
 class FriendRequestListCreateView(
     generics.ListCreateAPIView
 ):
@@ -66,39 +72,70 @@ class FriendRequestListCreateView(
                 {"detail": "This person is not accepting friend requests from you."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        existing = (
-            FriendRequest.objects
-            .filter(
-                Q(
-                    sender=request.user,
-                    receiver=receiver,
+        try:
+            with transaction.atomic():
+                existing_outgoing = (
+                    FriendRequest.objects.select_for_update()
+                    .filter(sender=request.user, receiver=receiver)
+                    .first()
                 )
-                | Q(
-                    sender=receiver,
-                    receiver=request.user,
+                existing_incoming = (
+                    FriendRequest.objects.select_for_update()
+                    .filter(sender=receiver, receiver=request.user)
+                    .first()
                 )
-            )
-            .first()
-        )
-        if existing:
+
+                if existing_outgoing and existing_outgoing.status in {
+                    FriendRequest.Status.PENDING,
+                    FriendRequest.Status.ACCEPTED,
+                }:
+                    return Response(
+                        {"detail": "A friend request already exists."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if existing_incoming and existing_incoming.status in {
+                    FriendRequest.Status.PENDING,
+                    FriendRequest.Status.ACCEPTED,
+                }:
+                    detail = (
+                        "This person already sent you a friend request."
+                        if existing_incoming.status == FriendRequest.Status.PENDING
+                        else "You are already friends."
+                    )
+                    return Response(
+                        {"detail": detail},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if existing_outgoing:
+                    friend_request = existing_outgoing
+                    friend_request.status = FriendRequest.Status.PENDING
+                    friend_request.save(update_fields=["status", "updated_at"])
+                else:
+                    friend_request = FriendRequest.objects.create(
+                        sender=request.user,
+                        receiver=receiver,
+                    )
+        except IntegrityError:
             return Response(
-                {
-                    "detail": "A friend request already exists."
-                },
+                {"detail": "A friend request already exists."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        friend_request = (
-            FriendRequest.objects.create(
+
+        try:
+            create_notification(
+                recipient=receiver,
                 sender=request.user,
-                receiver=receiver,
+                notification_type=Notification.NotificationType.FRIEND_REQUEST,
+                message=f"{request.user.username} sent you a friend request.",
             )
-        )
-        create_notification(
-            recipient=receiver,
-            sender=request.user,
-            notification_type=Notification.NotificationType.FRIEND_REQUEST,
-            message=f"{request.user.username} sent you a friend request.",
-        )
+        except Exception:
+            logger.exception(
+                "Friend request notification failed for request %s.",
+                friend_request.pk,
+            )
+
         return Response(
             FriendRequestSerializer(
                 friend_request,
@@ -162,14 +199,20 @@ class FriendRequestActionView(APIView):
                 FriendRequest.Status.ACCEPTED
             )
 
-            friend_request.save()
+            friend_request.save(update_fields=["status", "updated_at"])
 
-            create_notification(
-                recipient=friend_request.sender,
-                sender=request.user,
-                notification_type=Notification.NotificationType.FRIEND_ACCEPTED,
-                message=f"{request.user.username} accepted your friend request.",
-            )
+            try:
+                create_notification(
+                    recipient=friend_request.sender,
+                    sender=request.user,
+                    notification_type=Notification.NotificationType.FRIEND_ACCEPTED,
+                    message=f"{request.user.username} accepted your friend request.",
+                )
+            except Exception:
+                logger.exception(
+                    "Friend request acceptance notification failed for request %s.",
+                    friend_request.pk,
+                )
 
 
         elif action == "reject":
@@ -177,6 +220,7 @@ class FriendRequestActionView(APIView):
             friend_request.status = (
                 FriendRequest.Status.REJECTED
             )
+            friend_request.save(update_fields=["status", "updated_at"])
 
         else:
             return Response(
@@ -185,8 +229,6 @@ class FriendRequestActionView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        friend_request.save()
 
         return Response(
             FriendRequestSerializer(

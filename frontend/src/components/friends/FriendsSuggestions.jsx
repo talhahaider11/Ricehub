@@ -8,6 +8,8 @@ import { getArrayResults } from "../../utils/arrayResults";
 export default function FriendSuggestions() {
   const [users, setUsers] =
     useState([]);
+  const [sendingUserId, setSendingUserId] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     userService
@@ -25,22 +27,32 @@ export default function FriendSuggestions() {
   const sendRequest = async (
     userId
   ) => {
-    await friendService.send(
-      userId
-    );
+    setSendingUserId(userId);
+    setError("");
+    try {
+      await friendService.send(userId);
 
-    setUsers((current) =>
-      current.filter(
-        (user) =>
-          user.id !== userId
-      )
-    );
+      setUsers((current) =>
+        current.filter(
+          (user) =>
+            user.id !== userId
+        )
+      );
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.detail ||
+          "Friend request could not be sent. Please try again."
+      );
+    } finally {
+      setSendingUserId(null);
+    }
   };
 
   return (
     <div className="card suggestions">
 
       <h3>People you may know</h3>
+      {error && <p className="error" role="alert">{error}</p>}
 
       {users.map((user) => (
         <div
@@ -55,11 +67,13 @@ export default function FriendSuggestions() {
             </strong>
 
             <button
+              type="button"
+              disabled={sendingUserId === user.id}
               onClick={() =>
                 sendRequest(user.id)
               }
             >
-              Add friend
+              {sendingUserId === user.id ? "Sending..." : "Add friend"}
             </button>
           </div>
         </div>

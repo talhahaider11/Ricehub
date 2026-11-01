@@ -18,7 +18,9 @@ export default function VerifyEmail() {
     setLoading(true);
     try {
       const result = await authService.verifyEmail({ email, code });
-      navigate("/login", { state: { notice: result.detail } });
+      navigate("/login", {
+        state: { notice: result.detail || result.message },
+      });
     } catch (err) {
       const data = err.response?.data;
       const message =
@@ -37,7 +39,7 @@ export default function VerifyEmail() {
     setResending(true);
     try {
       const result = await authService.resendVerificationCode(email);
-      setNotice(result.detail);
+      setNotice(result.detail || result.message);
     } catch (err) {
       setError(
         err.response?.data?.detail ||

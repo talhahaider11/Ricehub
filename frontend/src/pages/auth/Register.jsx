@@ -119,8 +119,11 @@ export default function Register() {
     setLoading(true);
     try {
       await register(form);
-      navigate("/login", {
-        state: { notice: "Account created successfully. You can now sign in." },
+      navigate("/verify-email", {
+        state: {
+          email: form.email,
+          notice: "Account created. Enter the verification code sent to your email.",
+        },
       });
     } catch (err) {
       const responseData = err.response?.data;

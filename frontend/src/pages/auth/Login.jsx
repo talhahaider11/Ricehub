@@ -31,6 +31,7 @@ export default function Login() {
 
   const [error, setError] =
     useState("");
+  const [accountNotFound, setAccountNotFound] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState("");
   const [twoFactorRequired, setTwoFactorRequired] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState("");
@@ -43,6 +44,7 @@ export default function Login() {
     event.preventDefault();
 
     setError("");
+    setAccountNotFound(false);
     setLoading(true);
 
     try {
@@ -74,6 +76,9 @@ export default function Login() {
       } else if (response?.code === "email_not_verified") {
         setVerificationEmail(response.email || "");
         setError("Please verify your email before signing in.");
+      } else if (response?.code === "user_not_found") {
+        setAccountNotFound(true);
+        setError("No account was found with this username. Create a new account.");
       } else {
         setError(
           response?.detail ||
@@ -108,8 +113,13 @@ export default function Login() {
         )}
 
         {error && (
-          <div className="error">
+          <div className="error" role="alert">
             {error}
+            {accountNotFound && (
+              <p>
+                <Link to="/register">Create a new account</Link>
+              </p>
+            )}
             {verificationEmail && (
               <button
                 type="button"

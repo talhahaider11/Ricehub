@@ -69,6 +69,7 @@ class AuthenticationTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 401)
+        self.assertNotEqual(response.data.get("code"), "user_not_found")
 
     def test_login_rejects_nonexistent_user(self):
         response = self.client.post(
@@ -80,7 +81,8 @@ class AuthenticationTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data["code"], "user_not_found")
         self.assertNotIn("access", response.data)
         self.assertNotIn("refresh", response.data)
 
@@ -94,7 +96,8 @@ class AuthenticationTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data["code"], "user_not_found")
         self.assertNotIn("access", response.data)
         self.assertNotIn("refresh", response.data)
 

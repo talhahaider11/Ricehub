@@ -208,6 +208,8 @@ class PrivacyAndSecurityTests(APITestCase):
         self.assertFalse(User.objects.filter(pk=self.user.pk).exists())
 
     def test_two_factor_login_requires_email_code_before_issuing_tokens(self):
+        self.user.is_email_verified = True
+        self.user.save(update_fields=["is_email_verified"])
         UserSecuritySettings.objects.create(
             user=self.user,
             two_factor_enabled=True,
@@ -219,8 +221,10 @@ class PrivacyAndSecurityTests(APITestCase):
         )
         self.assertEqual(login.status_code, 200)
         self.assertTrue(login.data["two_factor_required"])
+        self.assertEqual(login.data["email"], "p******@example.com")
         self.assertNotIn("access", login.data)
         self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.user.email])
 
         code = re.search(r"\b(\d{6})\b", mail.outbox[0].body).group(1)
         verified = self.client.post(

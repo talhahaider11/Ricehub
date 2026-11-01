@@ -81,4 +81,28 @@ describe("Login", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "RiceHub home" })).not.toBeInTheDocument();
   });
+
+  it("offers account creation when the username is not registered", async () => {
+    login.mockRejectedValue({
+      response: { data: { code: "user_not_found" } },
+    });
+    renderLogin();
+
+    fireEvent.change(screen.getByPlaceholderText("Username"), {
+      target: { value: "new-user" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "any-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Login" }));
+
+    expect(
+      await screen.findByText(
+        "No account was found with this username. Create a new account."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Create a new account" })
+    ).toHaveAttribute("href", "/register");
+  });
 });
