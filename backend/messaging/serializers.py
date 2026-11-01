@@ -12,6 +12,7 @@ class MessageSenderSerializer(
 ):
 
     profile_picture = serializers.SerializerMethodField()
+    is_email_verified = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -22,6 +23,7 @@ class MessageSenderSerializer(
             "first_name",
             "last_name",
             "profile_picture",
+            "is_email_verified",
         ]
 
     def get_profile_picture(self, obj):
@@ -50,6 +52,7 @@ class MessageSerializer(
         read_only=True
     )
     attachment = serializers.SerializerMethodField()
+    verification_warning = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -60,6 +63,7 @@ class MessageSerializer(
             "sender",
             "content",
             "attachment",
+            "verification_warning",
             "is_read",
             "created_at",
         ]
@@ -85,6 +89,23 @@ class MessageSerializer(
             return request.build_absolute_uri(url)
 
         return url
+
+    def get_verification_warning(self, obj):
+        if obj.sender.is_email_verified:
+            return False
+
+        participants = getattr(
+            obj.conversation,
+            "_prefetched_objects_cache",
+            {},
+        ).get("participants")
+        if participants is None:
+            participants = obj.conversation.participants.all()
+
+        return any(
+            participant.pk != obj.sender_id and participant.is_email_verified
+            for participant in participants
+        )
 
     def validate(self, attrs):
 

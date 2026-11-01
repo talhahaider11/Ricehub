@@ -79,32 +79,15 @@ class RegisterView(APIView):
         try:
             with transaction.atomic():
                 user = serializer.save()
-                verification, _ = EmailVerification.objects.get_or_create(
-                    user=user
-                )
-                send_verification_code(user, verification)
         except IntegrityError:
             return Response(
                 {"error": "Username or email is already registered."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except (OSError, smtplib.SMTPException):
-            logger.exception("Registration verification email could not be sent.")
-            return Response(
-                {
-                    "detail": (
-                        "Your account could not be created because the "
-                        "verification email could not be sent. Please try again."
-                    )
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
 
         return Response(
             {
-                "message": (
-                    "Account created. Check your email for the verification code."
-                ),
+                "message": "Account created successfully.",
                 "email": user.email,
             },
             status=status.HTTP_201_CREATED,
@@ -228,16 +211,6 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        if not user.is_email_verified:
-            return Response(
-                {
-                    "code": "email_not_verified",
-                    "email": user.email,
-                    "detail": "Please verify your email before signing in.",
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         if not user.is_active:
             return Response(
                 {"error": "Account is disabled."},
@@ -342,6 +315,7 @@ class MeView(APIView):
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
+                "is_email_verified": user.is_email_verified,
             },
             status=status.HTTP_200_OK,
         )

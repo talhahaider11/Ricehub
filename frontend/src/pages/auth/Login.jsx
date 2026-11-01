@@ -32,7 +32,6 @@ export default function Login() {
   const [error, setError] =
     useState("");
   const [accountNotFound, setAccountNotFound] = useState(false);
-  const [verificationEmail, setVerificationEmail] = useState("");
   const [twoFactorRequired, setTwoFactorRequired] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [twoFactorEmail, setTwoFactorEmail] = useState("");
@@ -73,9 +72,6 @@ export default function Login() {
         setError("The server returned an invalid sign-in response. Please try again.");
       } else if (!err.response) {
         setError("Unable to reach the server. Please try again.");
-      } else if (response?.code === "email_not_verified") {
-        setVerificationEmail(response.email || "");
-        setError("Please verify your email before signing in.");
       } else if (response?.code === "user_not_found") {
         setAccountNotFound(true);
         setError("No account was found with this username. Create a new account.");
@@ -119,19 +115,6 @@ export default function Login() {
               <p>
                 <Link to="/register">Create a new account</Link>
               </p>
-            )}
-            {verificationEmail && (
-              <button
-                type="button"
-                className="auth-inline-link"
-                onClick={() =>
-                  navigate("/verify-email", {
-                    state: { email: verificationEmail },
-                  })
-                }
-              >
-                Verify your email
-              </button>
             )}
           </div>
         )}

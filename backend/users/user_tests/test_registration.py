@@ -61,6 +61,21 @@ class RegistrationTests(APITestCase):
             status.HTTP_400_BAD_REQUEST,
         )
 
+    def test_current_user_response_includes_email_verification_status(self):
+        user = User.objects.create_user(
+            username="unverified",
+            email="unverified@example.com",
+            password="StrongPassword123",
+            is_active=True,
+            is_email_verified=False,
+        )
+        self.client.force_authenticate(user)
+
+        response = self.client.get("/api/users/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["is_email_verified"])
+
     def test_username_availability_suggests_alternatives_case_insensitively(self):
         User.objects.create_user(
             username="john",

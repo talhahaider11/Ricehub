@@ -156,11 +156,10 @@ if dj_database_url is None and os.environ.get("DATABASE_URL"):
     raise RuntimeError("Install dj-database-url to use DATABASE_URL.")
 
 DATABASES = {
-    'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL'),
+    'default': dj_database_url.parse(
+        os.environ.get('DATABASE_URL'),
         conn_max_age=600,
-        conn_health_checks=True,
-        ssl_require=not DEBUG
+        ssl_require=True
     )
 }
 

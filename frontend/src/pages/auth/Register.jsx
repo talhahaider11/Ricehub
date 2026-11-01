@@ -119,10 +119,9 @@ export default function Register() {
     setLoading(true);
     try {
       await register(form);
-      navigate("/verify-email", {
+      navigate("/login", {
         state: {
-          email: form.email,
-          notice: "Account created. Enter the verification code sent to your email.",
+          notice: "Account created. You can verify your email later in Settings.",
         },
       });
     } catch (err) {

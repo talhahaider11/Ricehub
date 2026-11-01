@@ -72,6 +72,19 @@ export default function Messages() {
     sendMessage(content);
     sendTyping(false);
   };
+  const activeConversation = conversations.find(
+    (conversation) => conversation.id === selectedConversation
+  );
+  const otherUser =
+    activeConversation?.other_user ||
+    activeConversation?.participants?.find(
+      (participant) => String(participant.id) !== String(user?.id)
+    );
+  const showVerificationWarning = Boolean(
+    user &&
+      otherUser?.is_email_verified &&
+      !user.is_email_verified
+  );
 
   if (loading) {
     return <Loader />;
@@ -106,6 +119,11 @@ export default function Messages() {
             <div className="chat-status">
               {connected ? "Connected 🟢" : "Connecting... 🔴"}
             </div>
+            {showVerificationWarning && (
+              <p className="message-verification-warning" role="alert">
+                This is not a verified member. Trust this member at your own risk.
+              </p>
+            )}
 
             {messageError ? (
               <ErrorState message={messageError} />

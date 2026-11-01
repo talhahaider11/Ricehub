@@ -60,7 +60,7 @@ if render_hostname and render_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(render_hostname)
 
 CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in os.environ.get(
         "CSRF_TRUSTED_ORIGINS",
         "https://ricehub-frontend.onrender.com,"
@@ -76,7 +76,7 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
         "https://ricehub-frontend.onrender.com,"
@@ -94,10 +94,25 @@ frontend_origin = os.environ.get(
     "FRONTEND_URL",
     "https://ricehub-frontend.onrender.com",
 ).rstrip("/")
+vercel_origins = {
+    value.strip().rstrip("/")
+    for value in (
+        os.environ.get("VERCEL_URL", ""),
+        os.environ.get("VERCEL_PROJECT_PRODUCTION_URL", ""),
+    )
+    if value.strip()
+}
+vercel_origins = {
+    origin
+    if origin.startswith(("http://", "https://"))
+    else f"https://{origin}"
+    for origin in vercel_origins
+}
 frontend_origins = {
     "https://ricehub-frontend.onrender.com",
     "https://ricehub.onrender.com",
     frontend_origin,
+    *vercel_origins,
 }
 for origin in frontend_origins:
     if origin and origin not in CORS_ALLOWED_ORIGINS:

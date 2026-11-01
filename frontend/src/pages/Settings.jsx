@@ -42,6 +42,7 @@ export default function Settings() {
   const [confirmingTwoFactor, setConfirmingTwoFactor] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [verificationCodeSent, setVerificationCodeSent] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -211,9 +212,11 @@ export default function Settings() {
 
   const resendVerification = async () => {
     setActionError("");
+    setVerificationCodeSent(false);
     try {
       const response = await authService.resendVerificationCode(user.email);
       setActionMessage(response.detail);
+      setVerificationCodeSent(true);
     } catch (error) {
       setActionError(
         error.response?.data?.detail || "Verification email could not be sent. Check email settings."
@@ -262,9 +265,24 @@ export default function Settings() {
               </span>
             </div>
             {!user?.is_email_verified && (
-              <button className="btn btn-secondary" onClick={resendVerification}>
-                Send verification code
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={resendVerification}
+                >
+                  Verify email
+                </button>
+                {verificationCodeSent && (
+                  <Link
+                    className="btn btn-secondary"
+                    to="/verify-email"
+                    state={{ email: user.email }}
+                  >
+                    Enter verification code
+                  </Link>
+                )}
+              </>
             )}
           </section>
 

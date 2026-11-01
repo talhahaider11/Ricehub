@@ -170,8 +170,10 @@ class MessageListCreateView(
                 conversation_id=conversation_id
             )
             .select_related(
-                "sender"
+                "sender",
+                "conversation",
             )
+            .prefetch_related("conversation__participants")
             .order_by("created_at")
         )
 

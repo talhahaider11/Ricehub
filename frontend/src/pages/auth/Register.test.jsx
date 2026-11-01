@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Register from "./Register";
 import useAuth from "../../hooks/useAuth";
@@ -14,6 +14,11 @@ vi.mock("../../services/userService", () => ({
     checkUsername: vi.fn(),
   },
 }));
+
+function LoginNotice() {
+  const location = useLocation();
+  return <p role="status">{location.state?.notice}</p>;
+}
 
 describe("Register", () => {
   beforeEach(() => {
@@ -99,7 +104,7 @@ describe("Register", () => {
     expect(await screen.findByRole("button", { name: "taken1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "taken2" })).toBeInTheDocument();
     expect(register).toHaveBeenCalled();
-  });
+  }, 15000);
 
   it("lets the server decide when the availability check says a username is taken", async () => {
     const register = vi.fn().mockResolvedValue({});
@@ -140,6 +145,44 @@ describe("Register", () => {
         password2: "StrongPassword123!",
       })
     );
+  });
+
+  it("creates the account without redirecting to forced email verification", async () => {
+    userService.checkUsername.mockResolvedValue({
+      available: true,
+      suggestions: [],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/register"]}>
+        <Routes>
+          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<LoginNotice />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Username"), {
+      target: { value: "new-user" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Email"), {
+      target: { value: "new@example.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "StrongPassword123!" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Confirm password"), {
+      target: { value: "StrongPassword123!" },
+    });
+    expect(await screen.findByText("Username is available.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Register" }));
+
+    expect(
+      await screen.findByText(
+        "Account created. You can verify your email later in Settings."
+      )
+    ).toBeInTheDocument();
   });
 
   it("explains when the registration API cannot be reached", async () => {

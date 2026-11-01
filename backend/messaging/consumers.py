@@ -153,15 +153,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 )
                 return
 
-            message = await self.create_message(
+            result = await self.create_message(
                 message_text
             )
-            if not message:
+            if not result:
                 await self.send(text_data=json.dumps({
                     "type": "error",
                     "message": "This conversation is no longer available.",
                 }))
                 return
+            message, verification_warning = result
 
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -176,6 +177,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         "sender_username": (
                             self.user.username
                         ),
+                        "verification_warning": verification_warning,
                         "content": message.content,
                         "created_at": (
                             message.created_at.isoformat()
@@ -264,7 +266,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         conversation.save()
 
-        return message
+        verification_warning = (
+            not self.user.is_email_verified
+            and other_user.is_email_verified
+        )
+        return message, verification_warning
 
     @database_sync_to_async
     def can_send_message(self):

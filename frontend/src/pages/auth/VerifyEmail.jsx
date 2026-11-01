@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import authService from "../../services/authService";
+import useAuth from "../../hooks/useAuth";
 
 export default function VerifyEmail() {
+  const { user, setUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [email, setEmail] = useState(location.state?.email || "");
@@ -18,6 +20,11 @@ export default function VerifyEmail() {
     setLoading(true);
     try {
       const result = await authService.verifyEmail({ email, code });
+      if (user) {
+        setUser({ ...user, is_email_verified: true });
+        navigate("/settings");
+        return;
+      }
       navigate("/login", {
         state: { notice: result.detail || result.message },
       });

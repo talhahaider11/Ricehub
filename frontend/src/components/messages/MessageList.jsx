@@ -36,6 +36,11 @@ export default function MessageList({
             <div className="message-bubble">
               {message.content}
             </div>
+            {message.verification_warning && (
+              <small className="message-verification-warning" role="alert">
+                This is not a verified member. Trust this member at your own risk.
+              </small>
+            )}
             {mine && (
               <small className="message-receipt">
                 {message.is_read ? "Seen" : "Sent"}

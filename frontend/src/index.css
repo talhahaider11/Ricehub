@@ -922,6 +922,13 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
+.message-verification-warning {
+  display: block;
+  margin: 6px 12px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
 .message-bubble {
   max-width: min(70%, 500px);
   padding: 10px 14px;
