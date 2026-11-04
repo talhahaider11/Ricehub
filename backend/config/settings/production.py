@@ -1,8 +1,6 @@
 
+import logging
 import os
-from pathlib import Path
-
-import dj_database_url
 
 from .base import *
 
@@ -23,8 +21,6 @@ if not SECRET_KEY:
         "DJANGO_SECRET_KEY or SECRET_KEY must be set in production."
     )
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-
 if "whitenoise.middleware.WhiteNoiseMiddleware" not in MIDDLEWARE:
     MIDDLEWARE.insert(2, "whitenoise.middleware.WhiteNoiseMiddleware")
 
@@ -33,43 +29,53 @@ if "whitenoise.middleware.WhiteNoiseMiddleware" not in MIDDLEWARE:
 # Static and uploaded files
 # --------------------------------------------------
 
-INSTALLED_APPS.append("storages")
-
-MEDIA_STORAGE_ENV_VARS = (
-    "AWS_STORAGE_BUCKET_NAME",
-    "AWS_S3_ENDPOINT_URL",
-    "AWS_S3_REGION_NAME",
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-)
-missing_media_storage_vars = [
-    name for name in MEDIA_STORAGE_ENV_VARS if not os.environ.get(name, "").strip()
-]
-if missing_media_storage_vars:
-    raise RuntimeError(
-        "Production uploaded-media storage requires these environment "
-        f"variables: {', '.join(missing_media_storage_vars)}."
-    )
-
 STORAGES = {
     "default": {
-        "BACKEND": "storages.backends.s3.S3Storage",
-        "OPTIONS": {
-            "bucket_name": os.environ["AWS_STORAGE_BUCKET_NAME"].strip(),
-            "endpoint_url": os.environ["AWS_S3_ENDPOINT_URL"].strip(),
-            "region_name": os.environ["AWS_S3_REGION_NAME"].strip(),
-            "access_key": os.environ["AWS_ACCESS_KEY_ID"].strip(),
-            "secret_key": os.environ["AWS_SECRET_ACCESS_KEY"].strip(),
-            "custom_domain": os.environ.get("AWS_S3_CUSTOM_DOMAIN", "").strip()
-            or None,
-            "querystring_auth": True,
-            "querystring_expire": 3600,
-        },
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+OCI_MEDIA_ENV_VARS = (
+    "OCI_OBJECT_STORAGE_NAMESPACE",
+    "OCI_OBJECT_STORAGE_BUCKET",
+    "OCI_OBJECT_STORAGE_REGION",
+    "OCI_OBJECT_STORAGE_ACCESS_KEY",
+    "OCI_OBJECT_STORAGE_SECRET_KEY",
+)
+missing_oci_media_vars = [
+    name for name in OCI_MEDIA_ENV_VARS if not os.environ.get(name, "").strip()
+]
+if not missing_oci_media_vars:
+    INSTALLED_APPS.append("storages")
+    object_storage_namespace = os.environ["OCI_OBJECT_STORAGE_NAMESPACE"].strip()
+    object_storage_region = os.environ["OCI_OBJECT_STORAGE_REGION"].strip()
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": os.environ["OCI_OBJECT_STORAGE_BUCKET"].strip(),
+            "endpoint_url": (
+                "https://"
+                f"{object_storage_namespace}.compat.objectstorage."
+                f"{object_storage_region}.oraclecloud.com"
+            ),
+            "region_name": object_storage_region,
+            "access_key": os.environ["OCI_OBJECT_STORAGE_ACCESS_KEY"].strip(),
+            "secret_key": os.environ["OCI_OBJECT_STORAGE_SECRET_KEY"].strip(),
+            "addressing_style": "path",
+            "querystring_auth": True,
+            "querystring_expire": 3600,
+            "file_overwrite": False,
+        },
+    }
+else:
+    logging.getLogger(__name__).warning(
+        "OCI Object Storage is not fully configured; uploaded media will use "
+        "local disk, which is not persistent on Render. Missing: %s",
+        ", ".join(missing_oci_media_vars),
+    )
 
 
 # --------------------------------------------------
@@ -196,23 +202,33 @@ LOGGING = {
 
 
 # --------------------------------------------------
-# PostgreSQL database
+# Oracle Cloud Autonomous Database
 # --------------------------------------------------
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-if not DATABASE_URL:
-    raise RuntimeError(
-        "DATABASE_URL is missing. Production must use PostgreSQL."
-    )
+WALLET_DIR = os.getenv(
+    "WALLET_DIR",
+    os.path.join(BASE_DIR, "oracle_wallet"),
+)
+DB_SERVICE_NAME = os.getenv("DB_SERVICE_NAME", "ricehub_low").strip()
+oracle_options = {
+    "config_dir": WALLET_DIR,
+    "dsn": DB_SERVICE_NAME,
+    "wallet_location": WALLET_DIR,
+}
+wallet_password = os.getenv("WALLET_PASSWORD")
+if wallet_password:
+    oracle_options["wallet_password"] = wallet_password
 
 DATABASES = {
-    "default": dj_database_url.parse(
-        DATABASE_URL,
-        conn_max_age=600,
-        conn_health_checks=True,
-        ssl_require=True,
-    )
+    "default": {
+        "ENGINE": "django.db.backends.oracle",
+        "NAME": "",
+        "USER": os.getenv("DB_USER", "admin"),
+        "PASSWORD": os.getenv("DB_PASSWORD", ""),
+        "OPTIONS": oracle_options,
+        "CONN_MAX_AGE": 600,
+        "CONN_HEALTH_CHECKS": True,
+    }
 }
 
 

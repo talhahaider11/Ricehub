@@ -3,7 +3,7 @@ services:
     name: ricehub-backend
     env: python
     healthCheckPath: /health/
-    buildCommand: "pip install -r backend/requirements.txt && python backend/manage.py check --deploy && python backend/manage.py collectstatic --noinput"
+    buildCommand: "pip install -r backend/requirements.txt && python backend/manage.py check --deploy --tag security && python backend/manage.py collectstatic --noinput"
     startCommand: "cd backend && daphne -b 0.0.0.0 -p ${PORT:-10000} config.asgi:application"
     envVars:
       - key: PYTHON_VERSION
@@ -12,19 +12,25 @@ services:
         value: config.settings.production
       - key: DJANGO_SECRET_KEY
         sync: false
-      - key: DATABASE_URL
+      - key: DB_USER
+        value: admin
+      - key: DB_PASSWORD
         sync: false
+      - key: DB_SERVICE_NAME
+        sync: false
+      - key: WALLET_DIR
+        value: /etc/secrets
       - key: REDIS_URL
         sync: false
-      - key: AWS_STORAGE_BUCKET_NAME
+      - key: OCI_OBJECT_STORAGE_NAMESPACE
         sync: false
-      - key: AWS_S3_ENDPOINT_URL
+      - key: OCI_OBJECT_STORAGE_BUCKET
         sync: false
-      - key: AWS_S3_REGION_NAME
+      - key: OCI_OBJECT_STORAGE_REGION
         sync: false
-      - key: AWS_ACCESS_KEY_ID
+      - key: OCI_OBJECT_STORAGE_ACCESS_KEY
         sync: false
-      - key: AWS_SECRET_ACCESS_KEY
+      - key: OCI_OBJECT_STORAGE_SECRET_KEY
         sync: false
       - key: FRONTEND_URL
         value: https://ricehub-frontend.onrender.com
@@ -54,19 +60,25 @@ services:
         value: config.settings.production
       - key: DJANGO_SECRET_KEY
         sync: false
-      - key: DATABASE_URL
+      - key: DB_USER
+        value: admin
+      - key: DB_PASSWORD
         sync: false
+      - key: DB_SERVICE_NAME
+        sync: false
+      - key: WALLET_DIR
+        value: /etc/secrets
       - key: REDIS_URL
         sync: false
-      - key: AWS_STORAGE_BUCKET_NAME
+      - key: OCI_OBJECT_STORAGE_NAMESPACE
         sync: false
-      - key: AWS_S3_ENDPOINT_URL
+      - key: OCI_OBJECT_STORAGE_BUCKET
         sync: false
-      - key: AWS_S3_REGION_NAME
+      - key: OCI_OBJECT_STORAGE_REGION
         sync: false
-      - key: AWS_ACCESS_KEY_ID
+      - key: OCI_OBJECT_STORAGE_ACCESS_KEY
         sync: false
-      - key: AWS_SECRET_ACCESS_KEY
+      - key: OCI_OBJECT_STORAGE_SECRET_KEY
         sync: false
       - key: FIREBASE_CREDENTIALS_JSON
         sync: false
