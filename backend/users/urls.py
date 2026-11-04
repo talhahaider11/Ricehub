@@ -2,7 +2,6 @@
 from django.urls import path
 from rest_framework_simplejwt.views import (
     TokenBlacklistView,
-    TokenRefreshView,
 )
 
 from .views import (
@@ -12,6 +11,8 @@ from .views import (
     BlockedUsersView,
     LoginView,
     MeView,
+    ContactSuggestionsView,
+    PhoneVerificationView,
     MutedUserView,
     PasswordResetRequestView,
     ProfileUpdateView,
@@ -32,6 +33,7 @@ from .password_views import (
     PasswordChangeView,
     PasswordResetConfirmView as TokenPasswordResetConfirmView,
 )
+from .security_views import SecurityTokenRefreshView
 
 urlpatterns = [
     # Registration and email verification
@@ -44,6 +46,16 @@ urlpatterns = [
     ),
     path("verify-email/", VerifyEmailView.as_view(), name="verify-email"),
     path(
+        "phone/verification/",
+        PhoneVerificationView.as_view(),
+        name="phone-verification",
+    ),
+    path(
+        "suggestions/contacts/",
+        ContactSuggestionsView.as_view(),
+        name="contact-suggestions",
+    ),
+    path(
         "resend-verification/",
         ResendVerificationCodeView.as_view(),
         name="resend-verification",
@@ -51,7 +63,11 @@ urlpatterns = [
 
     # Login and JWT
     path("token/", LoginView.as_view(), name="token_obtain_pair"),
-    path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path(
+        "token/refresh/",
+        SecurityTokenRefreshView.as_view(),
+        name="token_refresh",
+    ),
     path(
         "token/logout/",
         TokenBlacklistView.as_view(),

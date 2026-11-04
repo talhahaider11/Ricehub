@@ -1,27 +1,36 @@
 import { useEffect, useState } from "react";
 
-import userService from "../../services/userService";
 import friendService from "../../services/friendService";
+import searchService from "../../services/searchService";
 import Avatar from "../common/Avatar";
 import { getArrayResults } from "../../utils/arrayResults";
 
 export default function FriendSuggestions() {
   const [users, setUsers] =
     useState([]);
+  const [loading, setLoading] = useState(true);
   const [sendingUserId, setSendingUserId] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    userService
-      .search("")
-      .then((data) =>
-        setUsers(
-          getArrayResults(data, "Friend suggestions").slice(0, 5)
-        )
-      )
-      .catch((error) =>
-        console.error("Friend suggestions could not be loaded:", error)
-      );
+    let active = true;
+    searchService.suggestions()
+      .then((data) => {
+        if (active) {
+          setUsers(getArrayResults(data, "Friend suggestions").slice(0, 5));
+        }
+      })
+      .catch((loadError) => {
+        console.error("Friend suggestions could not be loaded:", loadError);
+        if (active) setError("Friend suggestions could not be loaded.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const sendRequest = async (
@@ -53,6 +62,7 @@ export default function FriendSuggestions() {
 
       <h3>People you may know</h3>
       {error && <p className="error" role="alert">{error}</p>}
+      {loading && <p className="muted">Loading suggestions...</p>}
 
       {users.map((user) => (
         <div
@@ -78,6 +88,9 @@ export default function FriendSuggestions() {
           </div>
         </div>
       ))}
+      {!loading && !error && users.length === 0 && (
+        <p className="muted">No suggestions right now.</p>
+      )}
 
     </div>
   );

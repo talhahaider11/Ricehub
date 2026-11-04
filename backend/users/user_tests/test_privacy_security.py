@@ -1,13 +1,22 @@
 import re
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core import mail
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from messaging.models import Conversation, Message
-from users.models import UserPrivacySettings, UserSecuritySettings
+from users.models import (
+    SecurityEvent,
+    UserPrivacySettings,
+    UserSecuritySettings,
+)
+from users.tasks import purge_expired_security_events
 
 
 User = get_user_model()
@@ -206,6 +215,144 @@ class PrivacyAndSecurityTests(APITestCase):
         )
         self.assertEqual(deleted.status_code, 200)
         self.assertFalse(User.objects.filter(pk=self.user.pk).exists())
+        event = SecurityEvent.objects.get(
+            event_type=SecurityEvent.EventType.ACCOUNT_DELETED,
+        )
+        self.assertIsNone(event.user_id)
+
+    def test_successful_and_failed_logins_are_audited(self):
+        failed = self.client.post(
+            "/api/token/",
+            {"username": self.user.username, "password": "incorrect"},
+            format="json",
+            HTTP_USER_AGENT="RiceHub test client",
+        )
+        self.assertEqual(failed.status_code, 401)
+        failed_event = SecurityEvent.objects.get(
+            user=self.user,
+            event_type=SecurityEvent.EventType.LOGIN_FAILED,
+        )
+        self.assertEqual(failed_event.user_agent, "RiceHub test client")
+
+        success = self.client.post(
+            "/api/token/",
+            {"username": self.user.username, "password": "StrongPassword123"},
+            format="json",
+        )
+        self.assertEqual(success.status_code, 200)
+        self.assertTrue(
+            SecurityEvent.objects.filter(
+                user=self.user,
+                event_type=SecurityEvent.EventType.LOGIN,
+            ).exists()
+        )
+
+    def test_suspended_users_are_denied_and_expired_suspensions_are_cleared(self):
+        self.client.force_authenticate(self.user)
+        self.user.is_suspended = True
+        self.user.is_active = False
+        self.user.save(update_fields=["is_suspended", "is_active"])
+
+        denied = self.client.get("/api/users/privacy/")
+        self.assertEqual(denied.status_code, 403)
+
+        self.user.suspended_until = timezone.now() - timedelta(minutes=1)
+        self.user.suspension_was_active = True
+        self.user.save(
+            update_fields=["suspended_until", "suspension_was_active"]
+        )
+        resumed = self.client.get("/api/users/privacy/")
+
+        self.assertEqual(resumed.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_suspended)
+        self.assertTrue(self.user.is_active)
+
+    def test_signing_out_other_sessions_blacklists_other_refresh_tokens(self):
+        current_refresh = RefreshToken.for_user(self.user)
+        other_refresh = RefreshToken.for_user(self.user)
+        self.client.force_authenticate(self.user)
+
+        response = self.client.post(
+            "/api/users/security/sessions/logout-all/",
+            {"refresh": str(current_refresh)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["revoked_sessions"], 1)
+        self.assertFalse(
+            BlacklistedToken.objects.filter(
+                token__jti=current_refresh["jti"],
+            ).exists()
+        )
+        self.assertTrue(
+            BlacklistedToken.objects.filter(
+                token__jti=other_refresh["jti"],
+            ).exists()
+        )
+
+    def test_successful_token_refresh_is_audited(self):
+        refresh = RefreshToken.for_user(self.user)
+
+        response = self.client.post(
+            "/api/token/refresh/",
+            {"refresh": str(refresh)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            SecurityEvent.objects.filter(
+                user=self.user,
+                event_type=SecurityEvent.EventType.TOKEN_REFRESH,
+            ).exists()
+        )
+
+    def test_security_events_older_than_retention_period_are_purged(self):
+        old_event = SecurityEvent.objects.create(
+            user=self.user,
+            event_type=SecurityEvent.EventType.LOGIN,
+        )
+        recent_event = SecurityEvent.objects.create(
+            user=self.user,
+            event_type=SecurityEvent.EventType.LOGIN,
+        )
+        SecurityEvent.objects.filter(pk=old_event.pk).update(
+            created_at=timezone.now() - timedelta(days=91)
+        )
+
+        deleted_count = purge_expired_security_events.run()
+
+        self.assertEqual(deleted_count, 1)
+        self.assertFalse(
+            SecurityEvent.objects.filter(pk=old_event.pk).exists()
+        )
+        self.assertTrue(
+            SecurityEvent.objects.filter(pk=recent_event.pk).exists()
+        )
+
+    def test_account_report_rejects_duplicate_open_reports(self):
+        self.client.force_authenticate(self.user)
+        payload = {
+            "user_id": self.other.pk,
+            "reason": "spam",
+            "details": "Repeated spam messages.",
+        }
+
+        first = self.client.post(
+            "/api/users/reports/accounts/",
+            payload,
+            format="json",
+        )
+        duplicate = self.client.post(
+            "/api/users/reports/accounts/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(duplicate.status_code, 400)
 
     def test_two_factor_login_requires_email_code_before_issuing_tokens(self):
         self.user.is_email_verified = True

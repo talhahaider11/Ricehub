@@ -1,5 +1,9 @@
-from django.db import connection
+import logging
+
+from django.db import DatabaseError, connection
 from django.http import JsonResponse
+
+logger = logging.getLogger(__name__)
 
 
 def health_check(request):
@@ -20,13 +24,13 @@ def health_check(request):
             status=200,
         )
 
-    except Exception as e:
+    except DatabaseError:
+        logger.exception("Health check database query failed.")
         return JsonResponse(
             {
                 "status": "error",
                 "service": "ricehub-api",
                 "database": "unavailable",
-                "details": str(e),
             },
             status=503,
         )

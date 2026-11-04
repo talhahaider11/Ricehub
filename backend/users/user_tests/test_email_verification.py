@@ -1,6 +1,7 @@
 import re
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core import mail
 from django.test import override_settings
 from rest_framework.test import APITestCase
@@ -17,6 +18,9 @@ User = get_user_model()
     DEFAULT_FROM_EMAIL="noreply@ricehub.test",
 )
 class EmailVerificationTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+
     def create_unverified_user(
         self,
         username="verify-user",

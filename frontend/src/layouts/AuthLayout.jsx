@@ -31,6 +31,11 @@ export default function AuthLayout() {
           <strong>RiceHub</strong>
         </div>
         <Outlet />
+        <nav className="auth-legal-links" aria-label="Legal">
+          <Link to="/privacy">Privacy Policy</Link>
+          <Link to="/terms">Terms of Service</Link>
+          <Link to="/delete-account">Delete Account</Link>
+        </nav>
       </section>
     </div>
   );

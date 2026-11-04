@@ -1,59 +1,112 @@
-import { useState } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 import StoryStrip from "./StoryStrip";
-import communityService from "../../services/communityService";
+import storyService from "../../services/storyService";
 
-vi.mock("../../services/communityService", () => ({
+vi.mock("../../services/storyService", () => ({
   default: {
-    stories: vi.fn(),
-    createStory: vi.fn(),
-    viewStory: vi.fn(),
+    list: vi.fn(),
+    markViewed: vi.fn(),
   },
 }));
+
+function StoryRouteProbe() {
+  const { id } = useParams();
+  return <p>Story route {id}</p>;
+}
 
 describe("StoryStrip", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    communityService.stories.mockResolvedValue({ results: [] });
+    storyService.list.mockResolvedValue({ results: [] });
+    storyService.markViewed.mockResolvedValue({});
   });
 
-  it("opens the story composer and creates a text story", async () => {
-    communityService.createStory.mockResolvedValue({
-      id: 4,
-      author: { id: 2, username: "story-user" },
-      text: "A quick update",
-      created_at: new Date().toISOString(),
-    });
-    const onComposerOpen = vi.fn();
+  it("navigates to the story composer", async () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <StoryStrip
+                currentUser={{ id: 2, username: "story-user" }}
+                showCreate
+              />
+            }
+          />
+          <Route path="/create" element={<p>Create story page</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
 
-    function StoryHarness() {
-      const [open, setOpen] = useState(false);
-      return (
-        <StoryStrip
-          currentUser={{ id: 2, username: "story-user" }}
-          composerOpen={open}
-          onComposerOpen={() => {
-            setOpen(true);
-            onComposerOpen();
-          }}
-          onComposerClose={() => setOpen(false)}
-        />
-      );
-    }
-
-    render(<StoryHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Create a story" }));
-    expect(onComposerOpen).toHaveBeenCalled();
 
-    fireEvent.change(await screen.findByRole("textbox", { name: "Story text" }), {
-      target: { value: "A quick update" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Share story" }));
+    expect(await screen.findByText("Create story page")).toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(communityService.createStory).toHaveBeenCalled();
+  it("shows story authors and opens the selected story", async () => {
+    storyService.list.mockResolvedValue({
+      results: [
+        {
+          id: 4,
+          author: {
+            id: 7,
+            username: "story-user",
+            profile_picture: null,
+          },
+          caption: "A quick update",
+          is_seen: false,
+        },
+      ],
     });
-    expect(await screen.findByText("story-user")).toBeInTheDocument();
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<StoryStrip />} />
+          <Route path="/stories/:id" element={<StoryRouteProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "View story-user's story" })
+    );
+
+    expect(await screen.findByText("Story route 4")).toBeInTheDocument();
+  });
+
+  it("groups stories by author and opens the first unseen story", async () => {
+    storyService.list.mockResolvedValue({
+      results: [
+        {
+          id: 8,
+          author: { id: 7, username: "story-user" },
+          is_seen: true,
+        },
+        {
+          id: 9,
+          author: { id: 7, username: "story-user" },
+          is_seen: false,
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<StoryStrip />} />
+          <Route path="/stories/:id" element={<StoryRouteProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "View story-user's story" })
+    );
+
+    expect(await screen.findByText("Story route 9")).toBeInTheDocument();
   });
 });

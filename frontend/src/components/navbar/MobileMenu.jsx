@@ -13,7 +13,9 @@ import {
   Settings,
   Shield,
   Sun,
+  TrendingUp,
   UserPlus,
+  UsersRound,
   X,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -24,13 +26,16 @@ import useAuth from "../../hooks/useAuth";
 const primaryLinks = [
   { label: "Home", path: "/", icon: Home },
   { label: "Messages", path: "/messages", icon: MessageCircle },
+  { label: "Suggestions", path: "/suggestions", icon: UsersRound },
 ];
 
 const additionalLinks = [
   { label: "Discover", path: "/discover", icon: Compass },
+  { label: "Explore", path: "/explore", icon: TrendingUp },
   { label: "Friend requests", path: "/friend-requests", icon: UserPlus },
   { label: "Notifications", path: "/notifications", icon: Bell },
   { label: "Search", path: "/search", icon: Search },
+  { label: "Get verified", path: "/billing", icon: Shield },
   { label: "Help and support", path: "/help-support", icon: HelpCircle },
 ];
 
@@ -180,6 +185,12 @@ export default function MobileMenu({ onClose }) {
                   <span>{label}</span>
                 </Link>
               ))}
+              {user?.is_staff && (
+                <Link to="/admin" onClick={onClose}>
+                  <Shield size={21} />
+                  <span>Administration dashboard</span>
+                </Link>
+              )}
             </nav>
             <button
               type="button"

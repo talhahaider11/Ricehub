@@ -5,13 +5,19 @@ export default function ConversationList({
   selectedId,
   onSelect,
   currentUser,
+  onCreateGroup,
 }) {
   return (
     <aside className="conversation-list">
 
-      <h2>Messages</h2>
+      <div className="conversation-list-header">
+        <h2>Messages</h2>
+        <button type="button" onClick={onCreateGroup}>New group</button>
+      </div>
 
       {conversations.map((conversation) => {
+        const isGroup = conversation.is_group
+          || conversation.conversation_type === "group";
         const otherUser =
           conversation.other_user ||
           conversation.participants?.find(
@@ -33,24 +39,16 @@ export default function ConversationList({
             }
           >
             <Avatar
-              user={otherUser}
+              user={isGroup ? null : otherUser}
               size="small"
             />
 
             <div>
-              <strong>
-                {
-                  otherUser?.username || "Conversation"
-                }
-              </strong>
+              <strong>{isGroup
+                ? conversation.name || "Group conversation"
+                : otherUser?.username || "Conversation"}</strong>
 
-              <small>
-                {
-                  conversation
-                    .last_message
-                    ?.content
-                }
-              </small>
+              <small>{conversation.last_message?.content || "No messages yet"}</small>
             </div>
           </button>
         );

@@ -27,6 +27,10 @@ class Post(models.Model):
         POST = "post", "Post"
         REEL = "reel", "Reel"
 
+    class ModerationStatus(models.TextChoices):
+        APPROVED = "approved", "Approved"
+        PENDING = "pending", "Pending review"
+
     class Visibility(models.TextChoices):
         PUBLIC = "public", "Public"
         FRIENDS = "friends", "Friends"
@@ -62,11 +66,24 @@ class Post(models.Model):
         validators=[validate_post_video],
     )
 
+    media_assets = models.ManyToManyField(
+        "media.MediaAsset",
+        blank=True,
+        related_name="posts",
+    )
+
     visibility = models.CharField(
         max_length=20,
         choices=Visibility.choices,
         default=Visibility.PUBLIC,
     )
+    moderation_status = models.CharField(
+        max_length=10,
+        choices=ModerationStatus.choices,
+        default=ModerationStatus.APPROVED,
+        db_index=True,
+    )
+    boosted_until = models.DateTimeField(blank=True, null=True)
 
     hashtags = models.ManyToManyField(
         Hashtag,

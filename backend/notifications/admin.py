@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Notification
+from .models import Notification, PushDeliveryLog, UserDevice
 
 
 @admin.register(Notification)
@@ -31,4 +31,37 @@ class NotificationAdmin(
 
     ordering = (
         "-created_at",
+    )
+
+
+@admin.register(UserDevice)
+class UserDeviceAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "platform", "updated_at")
+    list_filter = ("platform",)
+    search_fields = ("user__username",)
+    readonly_fields = ("token", "created_at", "updated_at")
+
+
+@admin.register(PushDeliveryLog)
+class PushDeliveryLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "notification",
+        "device",
+        "status",
+        "attempts",
+        "error_code",
+        "updated_at",
+    )
+    list_filter = ("status", "created_at")
+    search_fields = ("notification__recipient__username", "error_code")
+    readonly_fields = (
+        "notification",
+        "device",
+        "token_hash",
+        "status",
+        "attempts",
+        "error_code",
+        "created_at",
+        "updated_at",
     )

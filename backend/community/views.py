@@ -3,14 +3,20 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, status
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from config.permissions import IsActiveAndNotSuspended as IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from users.privacy import get_blocked_user_ids, get_muted_user_ids
 from notifications.models import Notification
 from notifications.services import create_notification
+from stories.views import (
+    MarkStoryViewedView,
+    StoryDetailView as SecureStoryDetailView,
+    StoryListCreateView as SecureStoryListCreateView,
+    StoryViewerListView as SecureStoryViewerListView,
+)
 from .models import (
     Community,
     CommunityMembership,
@@ -20,8 +26,6 @@ from .models import (
     EventInvitation,
     MarketplaceListing,
     MarketplaceOrder,
-    Story,
-    StoryView,
 )
 from .serializers import (
     CommunitySerializer,
@@ -31,32 +35,11 @@ from .serializers import (
     EventSerializer,
     MarketplaceListingSerializer,
     MarketplaceOrderSerializer,
-    StorySerializer,
-    StoryViewSerializer,
 )
 
 
-class StoryListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
-    serializer_class = StorySerializer
-
-    def get_queryset(self):
-        queryset = Story.objects.filter(
-            expires_at__gt=timezone.now(),
-        ).exclude(author_id__in=get_blocked_user_ids(self.request.user)).exclude(
-            author_id__in=get_muted_user_ids(self.request.user),
-        ).select_related(
-            "author",
-        ).annotate(view_count=Count("views", distinct=True)).order_by("-created_at")
-        author_id = self.request.query_params.get("author")
-        if author_id and author_id == str(self.request.user.pk):
-            queryset = queryset.filter(author=self.request.user)
-        else:
-            queryset = queryset.exclude(author=self.request.user)
-        return queryset
-
-    def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+class StoryListCreateView(SecureStoryListCreateView):
+    pass
 
 
 class CommunityListCreateView(generics.ListCreateAPIView):
@@ -168,44 +151,30 @@ class CommunityPostDetailView(generics.DestroyAPIView):
         return post
 
 
-class StoryViewListCreateView(APIView):
-    permission_classes = [IsAuthenticated]
+class StoryViewListCreateView(SecureStoryViewerListView):
 
     def post(self, request, story_id):
-        story = get_object_or_404(
-            Story.objects.filter(expires_at__gt=timezone.now()),
-            pk=story_id,
-        )
-        if story.author_id == request.user.pk:
-            return Response(
-                {"detail": "You cannot count your own story as a view."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if story.author_id in get_blocked_user_ids(request.user):
-            raise PermissionDenied("This story is unavailable.")
-        view, _ = StoryView.objects.get_or_create(story=story, viewer=request.user)
-        return Response(StoryViewSerializer(view).data, status=status.HTTP_201_CREATED)
+        response = MarkStoryViewedView.post(self, request, story_id)
+        if response.status_code == status.HTTP_200_OK:
+            response.status_code = status.HTTP_201_CREATED
+        return response
 
     def get(self, request, story_id):
-        story = get_object_or_404(Story, pk=story_id)
-        if story.author_id != request.user.pk:
-            raise PermissionDenied("Only the story owner can see its viewers.")
-        views = story.views.exclude(
-            viewer_id__in=get_blocked_user_ids(request.user),
-        ).select_related("viewer").order_by("-viewed_at")
-        return Response(StoryViewSerializer(views, many=True).data)
+        response = super().get(request, story_id)
+        return Response([
+            {
+                "viewer": {
+                    "id": entry["id"],
+                    "username": entry["username"],
+                },
+                "viewed_at": entry["viewed_at"],
+            }
+            for entry in response.data["results"]
+        ])
 
 
-class StoryDetailView(generics.DestroyAPIView):
-    permission_classes = [IsAuthenticated]
-    serializer_class = StorySerializer
-    queryset = Story.objects.all()
-
-    def get_object(self):
-        story = super().get_object()
-        if story.author_id != self.request.user.pk:
-            raise PermissionDenied("You can only delete your own story.")
-        return story
+class StoryDetailView(SecureStoryDetailView):
+    pass
 
 
 class EventListCreateView(generics.ListCreateAPIView):

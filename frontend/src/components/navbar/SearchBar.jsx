@@ -77,7 +77,7 @@ export default function SearchBar() {
             <button
               key={`tag-${hashtag.id}`}
               onClick={() => {
-                navigate(`/search?q=${encodeURIComponent(`#${hashtag.name}`)}`);
+                navigate(`/hashtag/${encodeURIComponent(hashtag.name)}`);
                 clearSearch();
               }}
             >

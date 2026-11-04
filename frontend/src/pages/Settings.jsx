@@ -7,6 +7,7 @@ import userService from "../services/userService";
 import notificationService from "../services/notificationService";
 import settingsService from "../services/settingsService";
 import { getArrayResults } from "../utils/arrayResults";
+import { useLanguage } from "../context/LanguageContext";
 
 const preferenceLabels = {
   friend_requests: "Friend requests",
@@ -21,6 +22,7 @@ const preferenceLabels = {
 export default function Settings() {
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
+  const { language, setLanguage } = useLanguage();
   const {
     theme,
     toggleTheme,
@@ -91,6 +93,25 @@ export default function Settings() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveLanguage = async (nextLanguage) => {
+    const previousLanguage = language;
+    setLanguage(nextLanguage);
+    setActionError("");
+    try {
+      const formData = new FormData();
+      formData.append("preferred_language", nextLanguage);
+      const updatedUser = await userService.updateMe(formData);
+      setUser(updatedUser);
+      setActionMessage("Language preference saved.");
+    } catch (error) {
+      setLanguage(previousLanguage);
+      setActionError(
+        error.response?.data?.preferred_language?.[0]
+          || "Language preference could not be saved."
+      );
     }
   };
 
@@ -300,6 +321,36 @@ export default function Settings() {
                 )}
               </>
             )}
+            <div className="settings-row">
+              <div>
+                <strong>Verification subscription</strong>
+                <p>
+                  {user?.is_verified
+                    ? "Verified account · PKR 249/month"
+                    : "Unverified account · up to 3 posts"}
+                </p>
+              </div>
+              <Link className="btn btn-secondary" to="/billing">
+                {user?.is_verified ? "Manage verification" : "Get verified"}
+              </Link>
+            </div>
+          </section>
+
+          <section className="settings-section" id="language">
+            <h2>Language</h2>
+            <p className="settings-description">
+              Your initial language follows your region. You can change it at any time.
+            </p>
+            <label className="settings-row">
+              <span><strong>App language</strong></span>
+              <select
+                value={language}
+                onChange={(event) => void saveLanguage(event.target.value)}
+              >
+                <option value="en">English</option>
+                <option value="ur">اردو</option>
+              </select>
+            </label>
           </section>
 
           <section className="settings-section" id="privacy">
@@ -350,6 +401,7 @@ export default function Settings() {
                 </label>
                 {[
                   ["discoverable_by_email", "Allow people to find me by email"],
+                  ["discoverable_by_phone", "Allow account suggestions by phone number"],
                   ["show_activity_status", "Show when I’m active"],
                   ["show_last_seen", "Show my last active time"],
                   ["read_receipts", "Send read receipts in chats"],

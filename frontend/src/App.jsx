@@ -4,6 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { NotificationProvider } from "./context/NotificationContext";
+import { LanguageProvider } from "./context/LanguageContext";
 import AppRoutes from "./routes/AppRoutes";
 
 // Android Physical Back Button Handler Component
@@ -41,10 +42,10 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <NotificationProvider>
-          {/* Native Android Physical Back Button Listener */}
-          <AndroidBackHandler />
-          {/* App Navigation Routes */}
-          <AppRoutes />
+          <LanguageProvider>
+            <AndroidBackHandler />
+            <AppRoutes />
+          </LanguageProvider>
         </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>

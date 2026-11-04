@@ -40,6 +40,9 @@ class UserSerializer(serializers.ModelSerializer):
     last_seen = serializers.SerializerMethodField()
     friends_count = serializers.SerializerMethodField()
     posts_count = serializers.SerializerMethodField()
+    is_staff = serializers.SerializerMethodField()
+    phone_number = serializers.SerializerMethodField()
+    subscription_expires_at = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -49,7 +52,9 @@ class UserSerializer(serializers.ModelSerializer):
             "website", "date_of_birth", "profile_visibility",
             "is_online", "last_seen", "created_at",
             "is_email_verified",
-            "friends_count", "posts_count",
+            "is_verified", "subscription_expires_at", "phone_number",
+            "is_phone_verified", "preferred_language",
+            "friends_count", "posts_count", "is_staff",
         ]
         read_only_fields = [
             "id", "is_online", "last_seen", "created_at",
@@ -82,6 +87,18 @@ class UserSerializer(serializers.ModelSerializer):
             return obj.email
         return None
 
+    def get_phone_number(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated and request.user.pk == obj.pk:
+            return obj.phone_number
+        return None
+
+    def get_subscription_expires_at(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated and request.user.pk == obj.pk:
+            return obj.subscription_expires_at
+        return None
+
     def get_is_online(self, obj):
         if not self._privacy_setting(obj, "show_activity_status", True):
             return None
@@ -97,6 +114,15 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_posts_count(self, obj):
         return obj.posts.count()
+
+    def get_is_staff(self, obj):
+        request = self.context.get("request")
+        return bool(
+            request
+            and request.user.is_authenticated
+            and request.user.pk == obj.pk
+            and obj.is_staff
+        )
 
     @staticmethod
     def _privacy_setting(user, field, default):
@@ -119,6 +145,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             "website",
             "date_of_birth",
             "profile_visibility",
+            "preferred_language",
         ]
 
 
@@ -133,7 +160,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "username", "email", "first_name",
-            "last_name", "password",
+            "last_name", "password", "preferred_language",
         ]
 
     def validate_password(self, value):

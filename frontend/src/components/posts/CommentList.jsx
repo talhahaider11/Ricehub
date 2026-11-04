@@ -4,9 +4,11 @@ import Avatar from "../common/Avatar";
 import Loader from "../common/Loader";
 import ErrorState from "../common/ErrorState";
 import { getArrayResults } from "../../utils/arrayResults";
+import ReportContentButton from "../common/ReportContentButton";
 
 export default function CommentList({
   postId,
+  currentUser,
   refreshKey = 0,
 }) {
   const [comments, setComments] =
@@ -71,6 +73,12 @@ export default function CommentList({
             <p>
               {comment.content}
             </p>
+            {String(comment.author?.id) !== String(currentUser?.id) && (
+              <ReportContentButton
+                targetType="comment"
+                targetId={comment.id}
+              />
+            )}
           </div>
         </div>
       ))}

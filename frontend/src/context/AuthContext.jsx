@@ -7,6 +7,7 @@ import {
 import authService from "../services/authService";
 import {
   initializePushNotifications,
+  registerPushListeners,
   unregisterPushDevice,
 } from "../services/pushNotificationService";
 
@@ -21,6 +22,7 @@ export function AuthProvider({ children }) {
   // Helper function: Jab user authenticated ho tab Push Notifications setup honge
   const setupNotifications = async () => {
     try {
+      await registerPushListeners();
       await initializePushNotifications();
     } catch (error) {
       console.error("Push notification setup error:", error);
@@ -38,9 +40,7 @@ export function AuthProvider({ children }) {
     try {
       const currentUser = await authService.getMe();
       setUser(currentUser);
-      
-      // Page reload hone par agar user logged-in mile toh push notifications initialize karein
-      setupNotifications();
+      void setupNotifications();
     } catch {
       authService.logout();
       setUser(null);
@@ -63,9 +63,7 @@ export function AuthProvider({ children }) {
     const currentUser = await authService.getMe();
 
     setUser(currentUser);
-
-    // Login successful hone par push notifications initialize karein
-    setupNotifications();
+    void setupNotifications();
 
     return currentUser;
   };
@@ -74,7 +72,7 @@ export function AuthProvider({ children }) {
     await authService.verifyTwoFactor(credentials);
     const currentUser = await authService.getMe();
     setUser(currentUser);
-    setupNotifications();
+    void setupNotifications();
     return currentUser;
   };
 

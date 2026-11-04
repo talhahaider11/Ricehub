@@ -23,7 +23,7 @@ from .views import (
 
 urlpatterns = [
     path("stories/", StoryListCreateView.as_view(), name="story-list-create"),
-    path("stories/<int:pk>/", StoryDetailView.as_view(), name="story-detail"),
+    path("stories/<int:story_id>/", StoryDetailView.as_view(), name="story-detail"),
     path(
         "stories/<int:story_id>/views/",
         StoryViewListCreateView.as_view(),

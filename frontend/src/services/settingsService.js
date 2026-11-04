@@ -1,9 +1,10 @@
 import api from "./api";
+import { REFRESH_TOKEN_KEY } from "../utils/constants";
 
 const settingsService = {
   async getPrivacy() {
     const response = await api.get("/users/privacy/");
-    return response.data;
+    return response.data.privacy || response.data;
   },
 
   async updatePrivacy(settings) {
@@ -55,7 +56,11 @@ const settingsService = {
   },
 
   async signOutOtherSessions() {
-    const response = await api.post("/users/security/sessions/logout-all/");
+    const response = await api.post("/users/security/sessions/logout-all/", {
+      refresh:
+        localStorage.getItem(REFRESH_TOKEN_KEY)
+        || localStorage.getItem("refresh_token"),
+    });
     return response.data;
   },
 

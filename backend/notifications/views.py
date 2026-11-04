@@ -1,5 +1,5 @@
 from rest_framework import generics
-from rest_framework.permissions import IsAuthenticated
+from config.permissions import IsActiveAndNotSuspended as IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Notification, NotificationPreference
@@ -18,6 +18,14 @@ class NotificationListView(
     ]
 
     serializer_class = NotificationSerializer
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        response.data["unread_count"] = Notification.objects.filter(
+            recipient=request.user,
+            is_read=False,
+        ).count()
+        return response
 
     def get_queryset(self):
 

@@ -148,3 +148,48 @@ class NotificationPreference(models.Model):
 
     def __str__(self):
         return f"{self.user.username}'s Notification Preferences"
+
+
+class PushDeliveryLog(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+
+    notification = models.ForeignKey(
+        Notification,
+        on_delete=models.CASCADE,
+        related_name="push_deliveries",
+    )
+    device = models.ForeignKey(
+        UserDevice,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="push_deliveries",
+    )
+    token_hash = models.CharField(max_length=64)
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    attempts = models.PositiveSmallIntegerField(default=0)
+    error_code = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["notification", "device"],
+                name="unique_notification_push_device",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Notification {self.notification_id}: {self.status}"

@@ -1,0 +1,120 @@
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+from rest_framework.test import APITestCase
+
+from billing.models import PaymentRequest
+from billing.services import review_payment_request
+from billing.tasks import expire_verification_subscriptions
+from posts.models import Post
+
+
+User = get_user_model()
+
+
+class BillingTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="billing-user",
+            email="billing@example.com",
+            password="billing-test-password",
+            is_email_verified=True,
+            is_phone_verified=True,
+        )
+        self.staff = User.objects.create_user(
+            username="billing-staff",
+            email="staff@example.com",
+            password="billing-test-password",
+            is_staff=True,
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_billing_options_keep_automatic_charges_disabled(self):
+        response = self.client.get("/api/billing/options/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["automatic_billing"])
+        self.assertEqual(response.data["subscription"]["amount_pkr"], "249.00")
+        self.assertEqual(response.data["subscription"]["grace_days"], 5)
+
+    def test_subscription_payment_is_manual_and_server_priced(self):
+        response = self.client.post(
+            "/api/billing/payment-requests/",
+            {
+                "kind": PaymentRequest.Kind.SUBSCRIPTION,
+                "method": PaymentRequest.Method.SADAPAY,
+                "amount_pkr": "1.00",
+                "reference": "transfer-123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["amount_pkr"], "249.00")
+        self.assertEqual(response.data["status"], PaymentRequest.Status.PENDING)
+        self.assertFalse(self.user.is_verified)
+
+        payment = PaymentRequest.objects.get(pk=response.data["id"])
+        review_payment_request(payment.pk, self.staff, approved=True)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_verified)
+        self.assertGreater(
+            self.user.subscription_expires_at,
+            timezone.now() + timedelta(days=29),
+        )
+
+    def test_subscription_requires_email_and_phone_verification(self):
+        self.user.is_phone_verified = False
+        self.user.save(update_fields=("is_phone_verified",))
+
+        response = self.client.post(
+            "/api/billing/payment-requests/",
+            {
+                "kind": PaymentRequest.Kind.SUBSCRIPTION,
+                "method": PaymentRequest.Method.SADAPAY,
+                "reference": "transfer-123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(PaymentRequest.objects.exists())
+
+    def test_boost_request_uses_fixed_price_and_approves_post_boost(self):
+        post = Post.objects.create(author=self.user, content="Rice crop update")
+        response = self.client.post(
+            "/api/billing/payment-requests/",
+            {
+                "kind": PaymentRequest.Kind.BOOST_MONTH,
+                "method": PaymentRequest.Method.EASYPAISA,
+                "reference": "boost-transfer",
+                "post": post.pk,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["amount_pkr"], "350.00")
+        payment = PaymentRequest.objects.get(pk=response.data["id"])
+        review_payment_request(payment.pk, self.staff, approved=True)
+        post.refresh_from_db()
+        self.assertGreater(
+            post.boosted_until,
+            timezone.now() + timedelta(days=29),
+        )
+
+    def test_expired_accounts_remain_verified_during_five_day_grace(self):
+        self.user.is_verified = True
+        self.user.subscription_expires_at = timezone.now() - timedelta(days=4)
+        self.user.save(update_fields=("is_verified", "subscription_expires_at"))
+
+        self.assertEqual(expire_verification_subscriptions.run(), 0)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_verified)
+
+        self.user.subscription_expires_at = timezone.now() - timedelta(days=6)
+        self.user.save(update_fields=("subscription_expires_at",))
+        self.assertEqual(expire_verification_subscriptions.run(), 1)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_verified)

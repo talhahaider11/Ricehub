@@ -25,9 +25,7 @@ export default function PostContent({
             return (
               <Link
                 key={index}
-                to={`/search?q=${encodeURIComponent(
-                  part
-                )}`}
+                to={`/hashtag/${encodeURIComponent(tag)}`}
                 className="hashtag"
               >
                 {part}

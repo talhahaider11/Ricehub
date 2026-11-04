@@ -12,6 +12,7 @@ export const NotificationContext = createContext(null);
 
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
+  const [totalUnreadCount, setTotalUnreadCount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { user } = useAuth();
@@ -19,6 +20,7 @@ export function NotificationProvider({ children }) {
   const loadNotifications = useCallback(async () => {
     if (!user) {
       setNotifications([]);
+      setTotalUnreadCount(0);
       setLoading(false);
       setError("");
       return;
@@ -28,6 +30,9 @@ export function NotificationProvider({ children }) {
       setError("");
       const data = await notificationService.list();
       setNotifications(getArrayResults(data, "Notifications"));
+      if (Number.isInteger(data.unread_count)) {
+        setTotalUnreadCount(data.unread_count);
+      }
     } catch (loadError) {
       console.error("Notifications could not be loaded:", loadError);
       setError("Notifications could not be loaded. Please try again.");
@@ -39,6 +44,7 @@ export function NotificationProvider({ children }) {
   useEffect(() => {
     if (!user) {
       setNotifications([]);
+      setTotalUnreadCount(0);
       setLoading(false);
       setError("");
       return;
@@ -60,7 +66,8 @@ export function NotificationProvider({ children }) {
     };
   }, [loadNotifications]);
 
-  const unreadCount = notifications.filter((item) =>!item.is_read).length;
+  const unreadCount =
+    totalUnreadCount ?? notifications.filter((item) => !item.is_read).length;
 
   const markRead = async (id) => {
     try {
@@ -70,6 +77,14 @@ export function NotificationProvider({ children }) {
       throw markError;
     }
 
+    const wasUnread = notifications.some(
+      (item) => item.id === id && !item.is_read
+    );
+    if (wasUnread) {
+      setTotalUnreadCount((count) =>
+        count === null ? null : Math.max(0, count - 1)
+      );
+    }
     setNotifications((current) =>
       current.map((item) =>
         item.id === id? {...item, is_read: true } : item
@@ -88,6 +103,7 @@ export function NotificationProvider({ children }) {
     setNotifications((current) =>
       current.map((item) => ({...item, is_read: true }))
     );
+    setTotalUnreadCount(0);
   };
 
   return (

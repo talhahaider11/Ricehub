@@ -1,11 +1,15 @@
-from django.db.models import Count, Prefetch, Q
+from django.contrib.auth import get_user_model
+from django.db import transaction
+from django.db.models import Case, Count, IntegerField, Prefetch, Value, When
+from django.utils import timezone
 
 from rest_framework import generics
-from rest_framework.permissions import IsAuthenticated, BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from config.permissions import IsActiveAndNotSuspended as IsAuthenticated
 from config.pagination import StandardPagination
-from friendships.services import get_friend_ids
-from users.privacy import get_blocked_user_ids, get_muted_user_ids
+from config.throttling import PostCreateRateThrottle
+from users.privacy import can_view_post, filter_visible_posts
 from reactions.models import Reaction
 from .models import Post
 from .serializers import PostSerializer
@@ -24,13 +28,15 @@ class PostListCreateView(
         IsAuthenticated
     ]
 
+    def get_throttles(self):
+        throttles = super().get_throttles()
+        if self.request.method == "POST":
+            return [PostCreateRateThrottle(), *throttles]
+        return throttles
+
     def get_queryset(self):
 
         user = self.request.user
-
-        friend_ids = get_friend_ids(
-            user
-        )
 
         author_id = self.request.query_params.get("author")
         if author_id:
@@ -38,27 +44,15 @@ class PostListCreateView(
                 author_id = int(author_id)
             except ValueError as exc:
                 raise ValidationError({"author": "Enter a valid user ID."}) from exc
-            if user.pk == author_id:
-                queryset = Post.objects.filter(author=user)
+            if author_id == user.pk:
+                queryset = Post.objects.filter(author_id=user.pk)
             else:
-                queryset = Post.objects.filter(
-                    Q(visibility=Post.Visibility.PUBLIC)
-                    | Q(
-                        visibility=Post.Visibility.FRIENDS,
-                        author_id__in=friend_ids,
-                    )
-                ).filter(author_id=author_id)
+                queryset = filter_visible_posts(user).filter(author_id=author_id)
         else:
-            visibility_filter = (
-                Q(
-                    visibility=Post.Visibility.PUBLIC
-                )
-                | Q(
-                    visibility=Post.Visibility.FRIENDS,
-                    author_id__in=friend_ids,
-                )
+            queryset = filter_visible_posts(user).exclude(
+                author_id=user.pk,
+                visibility=Post.Visibility.PRIVATE,
             )
-            queryset = Post.objects.filter(visibility_filter)
 
         queryset = (
             queryset
@@ -68,7 +62,8 @@ class PostListCreateView(
                     "reactions",
                     queryset=Reaction.objects.filter(user=user),
                     to_attr="current_user_reactions",
-                )
+                ),
+                "media_assets",
             )
             .annotate(
                 comments_count=Count(
@@ -80,22 +75,43 @@ class PostListCreateView(
                     distinct=True
                 ),
             )
-            .exclude(author_id__in=get_blocked_user_ids(user))
-            .exclude(author_id__in=get_muted_user_ids(user))
+            .annotate(
+                boost_priority=Case(
+                    When(boosted_until__gt=timezone.now(), then=Value(1)),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                )
+            )
         )
         if self.request.query_params.get("sort") == "popular":
             return queryset.order_by(
+                "-boost_priority",
                 "-reactions_count",
                 "-comments_count",
                 "-created_at",
             )
-        return queryset.order_by("-created_at")
+        return queryset.order_by("-boost_priority", "-created_at")
 
     def perform_create(self, serializer):
-
-        serializer.save(
-            author=self.request.user
-        )
+        User = get_user_model()
+        with transaction.atomic():
+            author = User.objects.select_for_update().get(
+                pk=self.request.user.pk
+            )
+            if (
+                not author.is_verified
+                and max(author.posts_created, author.posts.count()) >= 3
+            ):
+                raise PermissionDenied(
+                    "Unverified accounts can publish up to 3 posts. "
+                    "Complete verification to post more."
+                )
+            serializer.save(author=author)
+            author.posts_created = max(
+                author.posts_created,
+                author.posts.count() - 1,
+            ) + 1
+            author.save(update_fields=("posts_created",))
 
 
 class IsPostOwnerOrReadOnly(BasePermission):
@@ -116,6 +132,7 @@ class PostDetailView(
     queryset = (
         Post.objects
         .select_related("author")
+        .prefetch_related("media_assets")
         .annotate(
             comments_count=Count(
                 "comments",
@@ -134,29 +151,9 @@ class PostDetailView(
 
         user = self.request.user
 
-        if post.author_id in get_blocked_user_ids(user):
-            raise PermissionDenied(
-                "You do not have permission to view this post."
-            )
-
-        if post.author == user:
-            return post
-
-        if post.visibility == Post.Visibility.PUBLIC:
-            return post
-
-        if post.visibility == Post.Visibility.FRIENDS:
-
-            friend_ids = get_friend_ids(
-                user
-            )
-
-            if post.author_id in friend_ids:
-                return post
-
-        raise PermissionDenied(
-            "You do not have permission to view this post."
-        )
+        if not can_view_post(user, post):
+            raise PermissionDenied("You do not have permission to view this post.")
+        return post
 
 class HashtagSearchView(ListAPIView):
     serializer_class = HashtagSerializer

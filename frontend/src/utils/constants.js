@@ -33,6 +33,8 @@ export const THEME_KEY = "ricemarket_theme";
 
 // Upload Limits & Post Restrictions[cite: 4, 5]
 export const MAX_POST_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB[cite: 4, 5]
+export const MAX_POST_VIDEO_SIZE = 100 * 1024 * 1024;
+export const MAX_POST_MEDIA_COUNT = 10;
 export const MAX_MESSAGE_FILE_SIZE = 10 * 1024 * 1024; // 10 MB[cite: 4, 5]
 export const MAX_POST_LENGTH = 5000;
 export const MAX_COMMENT_LENGTH = 2000;

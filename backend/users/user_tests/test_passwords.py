@@ -2,6 +2,7 @@ from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.cache import cache
 from django.test import override_settings
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
@@ -10,6 +11,7 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from django.contrib.auth.tokens import default_token_generator
+from users.models import SecurityEvent
 
 
 User = get_user_model()
@@ -22,6 +24,7 @@ User = get_user_model()
 )
 class PasswordFlowTests(APITestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(
             username="password-user",
             email="password@example.com",
@@ -83,6 +86,12 @@ class PasswordFlowTests(APITestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("N3wRiverStone58"))
         self.assertFalse(self.user.check_password("OriginalPassword123"))
+        self.assertTrue(
+            SecurityEvent.objects.filter(
+                user=self.user,
+                event_type=SecurityEvent.EventType.PASSWORD_CHANGED,
+            ).exists()
+        )
 
         reused_link = self.client.post(
             "/api/users/password-reset/confirm/",

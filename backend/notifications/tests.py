@@ -73,6 +73,25 @@ class NotificationPreferenceTests(APITestCase):
         self.assertEqual(item["notification_type_label"], "Friend Request")
         self.assertIn("sent you a friend request", item["message"])
 
+    def test_paginated_response_includes_total_unread_count(self):
+        Notification.objects.bulk_create(
+            [
+                Notification(
+                    recipient=self.user,
+                    notification_type=Notification.NotificationType.COMMENT,
+                    message=f"Comment notification {index}.",
+                )
+                for index in range(12)
+            ]
+        )
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get("/api/notifications/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 10)
+        self.assertEqual(response.data["unread_count"], 12)
+
 
 class PushDeviceApiTests(APITestCase):
     def setUp(self):

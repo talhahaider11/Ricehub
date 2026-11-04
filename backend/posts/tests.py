@@ -69,7 +69,7 @@ class FeedTests(APITestCase):
             with override_settings(MEDIA_ROOT=media_root):
                 video = SimpleUploadedFile(
                     "clip.mp4",
-                    b"video content",
+                    b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00",
                     content_type="video/mp4",
                 )
 
@@ -171,3 +171,56 @@ class PostAuthorizationTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("video", response.data)
+
+
+class PostVerificationAndModerationTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="rice-poster",
+            email="rice-poster@example.com",
+            password="posts-test-password",
+        )
+        self.viewer = User.objects.create_user(
+            username="rice-viewer",
+            email="rice-viewer@example.com",
+            password="posts-test-password",
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_unverified_users_can_create_only_three_posts_in_total(self):
+        for index in range(3):
+            response = self.client.post(
+                "/api/posts/",
+                {"content": f"Rice farming update {index}"},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 201)
+
+        first_post = self.user.posts.first()
+        self.client.delete(f"/api/posts/{first_post.pk}/")
+        response = self.client.post(
+            "/api/posts/",
+            {"content": "Rice harvest update"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.posts_created, 3)
+
+    def test_non_rice_content_is_held_for_review(self):
+        response = self.client.post(
+            "/api/posts/",
+            {"content": "A general update"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.data["moderation_status"],
+            Post.ModerationStatus.PENDING,
+        )
+        self.assertEqual(self.client.get("/api/posts/").data["count"], 1)
+
+        self.client.force_authenticate(self.viewer)
+        self.assertEqual(self.client.get("/api/posts/").data["count"], 0)

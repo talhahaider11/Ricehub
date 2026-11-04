@@ -1,29 +1,58 @@
 import logging
+import re
+import secrets
 import smtplib
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from rest_framework import permissions, status
+from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
 from rest_framework_simplejwt.tokens import RefreshToken
+
+from config.permissions import IsActiveAndNotSuspended
+from config.throttling import (
+    LoginRateThrottle,
+    ModerationThrottleMixin,
+    PasswordRateThrottle,
+    RegisterRateThrottle,
+    ReportRateThrottle,
+)
+from config.pagination import StandardPagination
 
 from .models import (
     AccountReport,
     BlockedUser,
     EmailVerification,
+    PhoneVerification,
     MutedUser,
+    SecurityEvent,
     SupportRequest,
     TwoFactorChallenge,
     UserPrivacySettings,
     UserSecuritySettings,
 )
-from .privacy import are_friends, get_blocked_user_ids, is_blocked_between
+from .phone_verification import (
+    SMSConfigurationError,
+    SMSDeliveryError,
+    send_sms,
+)
+from .account_status import is_user_suspended
+from .privacy import are_friends, is_blocked_between
+from .security_events import record_security_event
+from search.services import search_users
 from .serializers import (
     BlockedUserSerializer,
     EmailVerificationSerializer,
@@ -49,6 +78,12 @@ logger = logging.getLogger(__name__)
 
 
 def profile_access_error(request, user):
+    suspended = is_user_suspended(user)
+    if not user.is_active or suspended:
+        return Response(
+            {"detail": "This profile is unavailable."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
     if is_blocked_between(request.user, user):
         return Response(
             {"detail": "This profile is unavailable."},
@@ -74,6 +109,7 @@ def profile_access_error(request, user):
 
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [RegisterRateThrottle]
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -133,6 +169,7 @@ class UsernameAvailabilityView(APIView):
 
 class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [RegisterRateThrottle]
 
     def post(self, request):
         serializer = EmailVerificationSerializer(data=request.data)
@@ -147,8 +184,181 @@ class VerifyEmailView(APIView):
         )
 
 
+class PhoneVerificationView(APIView):
+    permission_classes = [IsActiveAndNotSuspended]
+    throttle_classes = [RegisterRateThrottle]
+    phone_pattern = re.compile(r"^\+[1-9]\d{7,14}$")
+
+    def post(self, request):
+        phone_number = request.data.get("phone_number")
+        if not isinstance(phone_number, str):
+            return Response(
+                {"phone_number": "Enter a phone number in international format."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        phone_number = phone_number.strip()
+        if not self.phone_pattern.fullmatch(phone_number):
+            return Response(
+                {"phone_number": "Use E.164 format, for example +923001234567."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if request.data.get("action") == "verify":
+            return self.verify_code(request, phone_number)
+        if request.data.get("action") != "send":
+            return Response(
+                {"action": "Choose send or verify."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            verification = request.user.phone_verification
+        except PhoneVerification.DoesNotExist:
+            verification = None
+        if (
+            request.user.is_phone_verified
+            and request.user.phone_number == phone_number
+        ):
+            return Response({"detail": "Phone number is already verified."})
+        if (
+            verification
+            and verification.phone_number == phone_number
+            and (timezone.now() - verification.last_sent_at).total_seconds() < 60
+        ):
+            return Response(
+                {"detail": "Please wait before requesting another code."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        old_phone_number = request.user.phone_number
+        old_is_phone_verified = request.user.is_phone_verified
+        request.user.phone_number = phone_number
+        request.user.is_phone_verified = False
+        request.user.save(update_fields=("phone_number", "is_phone_verified"))
+        verification, _ = PhoneVerification.objects.update_or_create(
+            user=request.user,
+            defaults={
+                "phone_number": phone_number,
+                "code_hash": make_password(code),
+                "expires_at": timezone.now() + timedelta(minutes=10),
+                "last_sent_at": timezone.now(),
+                "attempts": 0,
+            },
+        )
+        try:
+            send_sms(phone_number, f"Your RiceHub verification code is {code}.")
+        except SMSConfigurationError:
+            verification.delete()
+            request.user.phone_number = old_phone_number
+            request.user.is_phone_verified = old_is_phone_verified
+            request.user.save(
+                update_fields=("phone_number", "is_phone_verified")
+            )
+            return Response(
+                {"detail": "Phone verification is temporarily unavailable."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SMSDeliveryError:
+            verification.delete()
+            request.user.phone_number = old_phone_number
+            request.user.is_phone_verified = old_is_phone_verified
+            request.user.save(
+                update_fields=("phone_number", "is_phone_verified")
+            )
+            return Response(
+                {"detail": "The verification code could not be sent. Try again later."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(
+            {"detail": "A verification code has been sent."},
+            status=status.HTTP_200_OK,
+        )
+
+    def verify_code(self, request, phone_number):
+        code = request.data.get("code")
+        if not isinstance(code, str) or not re.fullmatch(r"\d{6}", code):
+            return Response(
+                {"code": "Enter the 6-digit code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            verification = request.user.phone_verification
+        except PhoneVerification.DoesNotExist:
+            return Response(
+                {"detail": "Request a new verification code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if (
+            verification.phone_number != phone_number
+            or timezone.now() >= verification.expires_at
+            or verification.attempts >= 5
+        ):
+            return Response(
+                {"detail": "The verification code is invalid or expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not check_password(code, verification.code_hash):
+            verification.attempts += 1
+            verification.save(update_fields=("attempts",))
+            return Response(
+                {"detail": "The verification code is invalid or expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        request.user.phone_number = phone_number
+        request.user.is_phone_verified = True
+        request.user.save(update_fields=("phone_number", "is_phone_verified"))
+        verification.delete()
+        return Response({"detail": "Phone number verified."})
+
+
+class ContactSuggestionsView(APIView):
+    permission_classes = [IsActiveAndNotSuspended]
+
+    def post(self, request):
+        from friendships.services import get_friend_ids
+
+        phone_numbers = request.data.get("phone_numbers")
+        if not isinstance(phone_numbers, list) or len(phone_numbers) > 500:
+            return Response(
+                {"phone_numbers": "Provide at most 500 phone numbers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        normalized_numbers = set()
+        for phone_number in phone_numbers:
+            if (
+                not isinstance(phone_number, str)
+                or not PhoneVerificationView.phone_pattern.fullmatch(
+                    phone_number.strip()
+                )
+            ):
+                return Response(
+                    {"phone_numbers": "All numbers must use international format."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            normalized_numbers.add(phone_number.strip())
+
+        users = User.objects.filter(
+            phone_number__in=normalized_numbers,
+            is_phone_verified=True,
+            is_active=True,
+            is_suspended=False,
+            privacy_settings__discoverable_by_phone=True,
+        ).exclude(pk=request.user.pk).exclude(
+            pk__in=get_friend_ids(request.user)
+        ).order_by("username")[:50]
+        return Response(
+            UserSerializer(
+                users,
+                many=True,
+                context={"request": request},
+            ).data
+        )
+
+
 class ResendVerificationCodeView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [RegisterRateThrottle]
 
     def post(self, request):
         email = request.data.get("email") or ""
@@ -184,10 +394,19 @@ class ResendVerificationCodeView(APIView):
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
+    def get_throttles(self):
+        return [LoginRateThrottle(), *super().get_throttles()]
+
     def post(self, request):
-        username = request.data.get("username", "").strip()
+        username = request.data.get("username", "")
         password = request.data.get("password")
 
+        if not isinstance(username, str) or not isinstance(password, str):
+            return Response(
+                {"error": "Username and password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        username = username.strip()
         if not username or not password:
             return Response(
                 {"error": "Username and password are required."},
@@ -197,6 +416,11 @@ class LoginView(APIView):
         user = User.objects.filter(username__iexact=username).first()
 
         if not user:
+            record_security_event(
+                None,
+                SecurityEvent.EventType.LOGIN_FAILED,
+                request,
+            )
             return Response(
                 {
                     "code": "user_not_found",
@@ -209,12 +433,33 @@ class LoginView(APIView):
             )
 
         if not user.check_password(password):
+            record_security_event(
+                user,
+                SecurityEvent.EventType.LOGIN_FAILED,
+                request,
+            )
             return Response(
                 {"error": "Invalid credentials."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
+        if is_user_suspended(user):
+            record_security_event(
+                user,
+                SecurityEvent.EventType.LOGIN_FAILED,
+                request,
+            )
+            return Response(
+                {"error": "Account is suspended. Contact support for assistance."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if not user.is_active:
+            record_security_event(
+                user,
+                SecurityEvent.EventType.LOGIN_FAILED,
+                request,
+            )
             return Response(
                 {"error": "Account is disabled."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -249,6 +494,11 @@ class LoginView(APIView):
                 status=status.HTTP_200_OK,
             )
 
+        record_security_event(
+            user,
+            SecurityEvent.EventType.LOGIN,
+            request,
+        )
         refresh = RefreshToken.for_user(user)
         return Response(
             {
@@ -267,9 +517,18 @@ class LoginView(APIView):
 class VerifyTwoFactorLoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
+    def get_throttles(self):
+        return [LoginRateThrottle(), *super().get_throttles()]
+
     def post(self, request):
-        username = request.data.get("username", "").strip()
+        username = request.data.get("username", "")
         code = request.data.get("code", "")
+        if not isinstance(username, str) or not isinstance(code, str):
+            return Response(
+                {"detail": "Invalid verification code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        username = username.strip()
         user = User.objects.filter(username__iexact=username).first()
         if not user or not user.is_active:
             return Response(
@@ -292,12 +551,22 @@ class VerifyTwoFactorLoginView(APIView):
 
         valid, error = verify_two_factor_code(challenge, code)
         if not valid:
+            record_security_event(
+                user,
+                SecurityEvent.EventType.LOGIN_FAILED,
+                request,
+            )
             return Response(
                 {"detail": error},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         challenge.delete()
+        record_security_event(
+            user,
+            SecurityEvent.EventType.LOGIN,
+            request,
+        )
         refresh = RefreshToken.for_user(user)
         return Response(
             {
@@ -309,7 +578,7 @@ class VerifyTwoFactorLoginView(APIView):
 
 
 class MeView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
 
     def get(self, request):
         user = request.user
@@ -319,13 +588,18 @@ class MeView(APIView):
                 "username": user.username,
                 "email": user.email,
                 "is_email_verified": user.is_email_verified,
+                "is_verified": user.is_verified,
+                "subscription_expires_at": user.subscription_expires_at,
+                "phone_number": user.phone_number,
+                "is_phone_verified": user.is_phone_verified,
+                "preferred_language": user.preferred_language,
             },
             status=status.HTTP_200_OK,
         )
 
 
 class ProfileUpdateView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
 
     def patch(self, request):
         return self.update_profile(request, partial=True)
@@ -351,7 +625,8 @@ class ProfileUpdateView(APIView):
 
 
 class TwoFactorSettingsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
+    throttle_classes = [PasswordRateThrottle]
 
     def post(self, request):
         action = request.data.get("action")
@@ -419,17 +694,52 @@ class TwoFactorSettingsView(APIView):
 
 
 class SecuritySessionsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
+    throttle_classes = [PasswordRateThrottle]
 
     def post(self, request):
+        current_refresh = request.data.get("refresh")
+        if not isinstance(current_refresh, str) or not current_refresh:
+            return Response(
+                {"refresh": ["Your current refresh token is required."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            current_token = RefreshToken(current_refresh)
+            current_user_id = current_token["user_id"]
+            current_jti = current_token["jti"]
+        except (TokenError, KeyError) as error:
+            return Response(
+                {"refresh": ["The current refresh token is invalid or expired."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if str(current_user_id) != str(request.user.pk):
+            return Response(
+                {"refresh": ["The refresh token does not belong to this account."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tokens = OutstandingToken.objects.filter(
+            user=request.user,
+            expires_at__gt=timezone.now(),
+        ).exclude(jti=current_jti)
+        revoked = 0
+        for token in tokens:
+            _, created = BlacklistedToken.objects.get_or_create(token=token)
+            revoked += int(created)
+
         return Response(
-            {"message": "Session revocation needs implementation."},
-            status=status.HTTP_501_NOT_IMPLEMENTED,
+            {
+                "detail": "Other sessions have been signed out.",
+                "revoked_sessions": revoked,
+            },
+            status=status.HTTP_200_OK,
         )
 
 
 class UserPrivacySettingsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
 
     def get(self, request):
         settings_obj, _ = UserPrivacySettings.objects.get_or_create(
@@ -468,7 +778,7 @@ class UserPrivacySettingsView(APIView):
 
 
 class BlockedUsersView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
 
     def get(self, request, user_id=None):
         if user_id is not None:
@@ -540,7 +850,7 @@ class BlockedUsersView(APIView):
 
 
 class MutedUserView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
 
     def get(self, request, user_id):
         if user_id == request.user.pk:
@@ -581,10 +891,13 @@ class MutedUserView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class AccountReportCreateView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+class AccountReportCreateView(ModerationThrottleMixin, APIView):
+    permission_classes = [IsActiveAndNotSuspended]
+    throttle_classes = [ReportRateThrottle]
 
+    @transaction.atomic
     def post(self, request):
+        User.objects.select_for_update().only("pk").get(pk=request.user.pk)
         reported_user = get_object_or_404(User, pk=request.data.get("user_id"))
         if reported_user.pk == request.user.pk:
             return Response(
@@ -604,6 +917,15 @@ class AccountReportCreateView(APIView):
                 {"details": "Details must be 2000 characters or fewer."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if AccountReport.objects.filter(
+            reporter=request.user,
+            reported_user=reported_user,
+            status=AccountReport.Status.OPEN,
+        ).exists():
+            return Response(
+                {"detail": "You already have an open report for this account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         report = AccountReport.objects.create(
             reporter=request.user,
             reported_user=reported_user,
@@ -617,7 +939,8 @@ class AccountReportCreateView(APIView):
 
 
 class SupportRequestCreateView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
+    throttle_classes = [ReportRateThrottle]
 
     def post(self, request):
         subject = str(request.data.get("subject", "")).strip()
@@ -646,44 +969,41 @@ class SupportRequestCreateView(APIView):
         )
 
 
-class UserSearchView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+class UserSearchView(GenericAPIView):
+    permission_classes = [IsActiveAndNotSuspended]
+    pagination_class = StandardPagination
 
     def get(self, request):
         query = request.query_params.get(
             "q",
             request.query_params.get("search", ""),
         ).strip()
-        if not query:
-            return Response({"results": []}, status=status.HTTP_200_OK)
-
-        users = User.objects.exclude(pk=request.user.pk).filter(
-            Q(username__icontains=query)
-            | Q(first_name__icontains=query)
-            | Q(last_name__icontains=query)
-            | Q(
-                email__icontains=query,
-                privacy_settings__discoverable_by_email=True,
+        if len(query) < 2:
+            return Response(
+                {
+                    "count": 0,
+                    "next": None,
+                    "previous": None,
+                    "results": [],
+                },
+                status=status.HTTP_200_OK,
             )
-        )
-        blocked_ids = get_blocked_user_ids(request.user)
-        if blocked_ids:
-            users = users.exclude(pk__in=blocked_ids)
-        users = users.distinct().order_by("username")
+
+        users = search_users(request.user, query)
+        page = self.paginate_queryset(users)
         return Response(
-            {
-                "results": UserSerializer(
-                    users,
+            self.get_paginated_response(
+                UserSerializer(
+                    page,
                     many=True,
                     context={"request": request},
                 ).data
-            },
-            status=status.HTTP_200_OK,
+            ).data,
         )
 
 
 class UserDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
 
     def get(self, request, id):
         user = get_object_or_404(User, pk=id)
@@ -697,7 +1017,7 @@ class UserDetailView(APIView):
 
 
 class UserByUsernameView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
 
     def get(self, request, username):
         user = get_object_or_404(User, username__iexact=username)
@@ -712,6 +1032,7 @@ class UserByUsernameView(APIView):
 
 class PasswordResetRequestView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PasswordRateThrottle]
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -738,7 +1059,7 @@ class PasswordResetRequestView(APIView):
 
 
 class AccountExportView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
 
     def get(self, request):
         user = request.user
@@ -755,8 +1076,10 @@ class AccountExportView(APIView):
 
 
 class AccountDeleteView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsActiveAndNotSuspended]
+    throttle_classes = [PasswordRateThrottle]
 
+    @transaction.atomic
     def delete_account(self, request, response_status):
         if (
             request.data.get("confirmation") != "DELETE"
@@ -768,6 +1091,11 @@ class AccountDeleteView(APIView):
                 {"detail": "Password and DELETE confirmation are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        record_security_event(
+            request.user,
+            SecurityEvent.EventType.ACCOUNT_DELETED,
+            request,
+        )
         request.user.delete()
         return Response(
             {"message": "Account deleted."}

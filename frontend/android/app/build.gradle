@@ -24,8 +24,6 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode = riceHubVersionCode
-        minSdk 23
-        targetSdk 35
         versionName = riceHubVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

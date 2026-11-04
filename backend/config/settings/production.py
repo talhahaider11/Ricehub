@@ -25,16 +25,46 @@ if not SECRET_KEY:
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-MIDDLEWARE.insert(2, "whitenoise.middleware.WhiteNoiseMiddleware")
+if "whitenoise.middleware.WhiteNoiseMiddleware" not in MIDDLEWARE:
+    MIDDLEWARE.insert(2, "whitenoise.middleware.WhiteNoiseMiddleware")
 
 
 # --------------------------------------------------
 # Static and uploaded files
 # --------------------------------------------------
 
+INSTALLED_APPS.append("storages")
+
+MEDIA_STORAGE_ENV_VARS = (
+    "AWS_STORAGE_BUCKET_NAME",
+    "AWS_S3_ENDPOINT_URL",
+    "AWS_S3_REGION_NAME",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+)
+missing_media_storage_vars = [
+    name for name in MEDIA_STORAGE_ENV_VARS if not os.environ.get(name, "").strip()
+]
+if missing_media_storage_vars:
+    raise RuntimeError(
+        "Production uploaded-media storage requires these environment "
+        f"variables: {', '.join(missing_media_storage_vars)}."
+    )
+
 STORAGES = {
     "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": os.environ["AWS_STORAGE_BUCKET_NAME"].strip(),
+            "endpoint_url": os.environ["AWS_S3_ENDPOINT_URL"].strip(),
+            "region_name": os.environ["AWS_S3_REGION_NAME"].strip(),
+            "access_key": os.environ["AWS_ACCESS_KEY_ID"].strip(),
+            "secret_key": os.environ["AWS_SECRET_ACCESS_KEY"].strip(),
+            "custom_domain": os.environ.get("AWS_S3_CUSTOM_DOMAIN", "").strip()
+            or None,
+            "querystring_auth": True,
+            "querystring_expire": 3600,
+        },
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
@@ -128,9 +158,9 @@ for origin in frontend_origins:
 # HTTPS and security
 # --------------------------------------------------
 
-SECURE_SSL_REDIRECT = not DEBUG
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
@@ -143,7 +173,7 @@ SECURE_PROXY_SSL_HEADER = (
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
-SECURE_REFERRER_POLICY = "same-origin"
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 
 # --------------------------------------------------
@@ -218,16 +248,26 @@ EMAIL_TIMEOUT = 20
 # Redis / Django Channels
 # --------------------------------------------------
 
+REDIS_URL = os.environ.get("REDIS_URL", "").strip()
+if not REDIS_URL:
+    raise RuntimeError(
+        "REDIS_URL is missing. Production Django Channels requires Redis."
+    )
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [
-                os.environ.get(
-                    "REDIS_URL",
-                    "redis://localhost:6379/0",
-                )
-            ],
+            "hosts": [REDIS_URL],
         },
+    },
+}
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+        "KEY_PREFIX": "ricehub",
+        "TIMEOUT": 60 * 60 * 24,
     },
 }

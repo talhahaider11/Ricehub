@@ -1,15 +1,12 @@
 import api from "./api";
+import storyService from "./storyService";
 
 const communityService = {
   async stories(authorId) {
-    return (await api.get("/community/stories/", {
-      params: { page_size: 50, ...(authorId ? { author: authorId } : {}) },
-    })).data;
+    return storyService.list(authorId);
   },
-  async createStory(data) {
-    return (await api.post("/community/stories/", data, {
-      headers: { "Content-Type": "multipart/form-data" },
-    })).data;
+  async createStory(mediaId, visibility, caption) {
+    return storyService.createStory(mediaId, visibility, caption);
   },
   async communities() {
     return (await api.get("/community/communities/")).data;
@@ -88,13 +85,13 @@ const communityService = {
     return (await api.patch(`/community/marketplace/${id}/`, data)).data;
   },
   async viewStory(id) {
-    return (await api.post(`/community/stories/${id}/views/`)).data;
+    return storyService.markViewed(id);
   },
   async deleteStory(id) {
-    return api.delete(`/community/stories/${id}/`);
+    return storyService.remove(id);
   },
   async storyViewers(id) {
-    return (await api.get(`/community/stories/${id}/views/`)).data;
+    return storyService.viewers(id);
   },
 };
 

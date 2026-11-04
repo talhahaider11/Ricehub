@@ -17,4 +17,3 @@ export default function useDebounce(
 
   return debouncedValue;
 }
-const debouncedQuery = useDebounce(query, 400);

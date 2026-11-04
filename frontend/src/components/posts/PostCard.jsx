@@ -1,11 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MessageCircle,
   Share2,
   SmilePlus,
   ThumbsUp,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import Avatar from "../common/Avatar";
 import CommentBox from "./CommentBox";
@@ -15,6 +15,10 @@ import PostMenu from "./PostMenu";
 import ImageLightbox from "../common/ImageLightbox";
 import PostContent from "./PostContent";
 import { getMediaUrl } from "../../utils/constants";
+import ReportContentButton from "../common/ReportContentButton";
+import MediaGrid from "../media/MediaGrid";
+import VerifiedBadge from "../common/VerifiedBadge";
+import { useLanguage } from "../../context/LanguageContext";
 
 const reactions = [
   { type: "like", label: "Like", emoji: "👍" },
@@ -27,9 +31,12 @@ const reactions = [
 export default function PostCard({
   post,
   currentUser,
+  trackView = false,
   onDeleted,
   onUpdated,
 }) {
+  const navigate = useNavigate();
+  const { t } = useLanguage();
   const [reactionType, setReactionType] = useState(post.my_reaction || null);
   const [reactionCount, setReactionCount] = useState(post.reactions_count || 0);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -42,6 +49,33 @@ export default function PostCard({
   const [actionError, setActionError] = useState("");
   const longPressTimer = useRef(null);
   const longPressTriggered = useRef(false);
+  const articleRef = useRef(null);
+
+  useEffect(() => {
+    if (
+      !trackView
+      || !articleRef.current
+      || !("IntersectionObserver" in window)
+    ) {
+      return undefined;
+    }
+
+    let recorded = false;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!recorded && entry.isIntersecting) {
+          recorded = true;
+          observer.disconnect();
+          postService.trackFeedView(post.id).catch((error) => {
+            console.error("Could not record feed post view.", error);
+          });
+        }
+      },
+      { threshold: 0.5 }
+    );
+    observer.observe(articleRef.current);
+    return () => observer.disconnect();
+  }, [post.id, trackView]);
 
   const startReactionLongPress = (event) => {
     if (event.pointerType !== "touch") return;
@@ -85,7 +119,7 @@ export default function PostCard({
   const sharePost = async () => {
     setActionError("");
     setActionMessage("");
-    const shareUrl = `${window.location.origin}/#post-${post.id}`;
+    const shareUrl = `${window.location.origin}/posts/${post.id}`;
 
     try {
       if (navigator.share) {
@@ -112,7 +146,11 @@ export default function PostCard({
   );
 
   return (
-    <article className="card post-card" id={`post-${post.id}`}>
+    <article
+      ref={articleRef}
+      className="card post-card"
+      id={`post-${post.id}`}
+    >
       <div className="post-header">
         <div className="post-author">
           <Link
@@ -125,6 +163,7 @@ export default function PostCard({
               <strong>
                 {post.author?.first_name || post.author?.username}
               </strong>
+              <VerifiedBadge verified={post.author?.is_verified} />
               <small>@{post.author?.username}</small>
             </span>
           </Link>
@@ -169,6 +208,9 @@ export default function PostCard({
         >
           Your browser does not support video playback.
         </video>
+      )}
+      {post.media_assets?.length > 0 && (
+        <MediaGrid media={post.media_assets} />
       )}
 
       <div className="post-stats">
@@ -251,6 +293,19 @@ export default function PostCard({
           <Share2 size={18} />
           Share
         </button>
+        {currentUser?.id
+          && String(post.author?.id) === String(currentUser.id) && (
+          <button
+            className="post-action"
+            type="button"
+            onClick={() => navigate(`/billing?postId=${post.id}`)}
+          >
+            {t("boostPost")}
+          </button>
+        )}
+        {String(post.author?.id) !== String(currentUser?.id) && (
+          <ReportContentButton targetType="post" targetId={post.id} />
+        )}
       </div>
       {actionError && <p className="settings-error" role="alert">{actionError}</p>}
       {actionMessage && <p className="settings-status" role="status">{actionMessage}</p>}

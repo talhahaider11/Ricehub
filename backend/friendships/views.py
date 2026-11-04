@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from rest_framework import generics, status
-from rest_framework.permissions import IsAuthenticated
+from config.permissions import IsActiveAndNotSuspended as IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import FriendRequest

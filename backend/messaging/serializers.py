@@ -12,7 +12,7 @@ class MessageSenderSerializer(
 ):
 
     profile_picture = serializers.SerializerMethodField()
-    is_email_verified = serializers.BooleanField(read_only=True)
+    is_verified = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -23,7 +23,7 @@ class MessageSenderSerializer(
             "first_name",
             "last_name",
             "profile_picture",
-            "is_email_verified",
+            "is_verified",
         ]
 
     def get_profile_picture(self, obj):
@@ -53,6 +53,14 @@ class MessageSerializer(
     )
     attachment = serializers.SerializerMethodField()
     verification_warning = serializers.SerializerMethodField()
+    reply_to = serializers.SerializerMethodField()
+    reply_to_id = serializers.PrimaryKeyRelatedField(
+        source="reply_to",
+        queryset=Message.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
 
     class Meta:
         model = Message
@@ -65,7 +73,12 @@ class MessageSerializer(
             "attachment",
             "verification_warning",
             "is_read",
+            "is_deleted",
+            "edited_at",
+            "reply_to",
+            "reply_to_id",
             "created_at",
+            "updated_at",
         ]
 
         read_only_fields = [
@@ -73,7 +86,10 @@ class MessageSerializer(
             "conversation",
             "sender",
             "is_read",
+            "is_deleted",
+            "edited_at",
             "created_at",
+            "updated_at",
         ]
 
     def get_attachment(self, obj):
@@ -91,21 +107,29 @@ class MessageSerializer(
         return url
 
     def get_verification_warning(self, obj):
-        if obj.sender.is_email_verified:
-            return False
+        return not obj.sender.is_verified
 
-        participants = getattr(
-            obj.conversation,
-            "_prefetched_objects_cache",
-            {},
-        ).get("participants")
-        if participants is None:
-            participants = obj.conversation.participants.all()
+    def get_reply_to(self, obj):
+        if not obj.reply_to_id:
+            return None
+        return {
+            "id": obj.reply_to_id,
+            "content": (
+                "This message was deleted."
+                if obj.reply_to.is_deleted
+                else obj.reply_to.content
+            ),
+            "sender_id": obj.reply_to.sender_id,
+        }
 
-        return any(
-            participant.pk != obj.sender_id and participant.is_email_verified
-            for participant in participants
-        )
+    def validate_reply_to(self, value):
+        if self.instance is None and value:
+            conversation_id = self.context.get("conversation_id")
+            if conversation_id and value.conversation_id != conversation_id:
+                raise serializers.ValidationError(
+                    "Reply target must belong to this conversation."
+                )
+        return value
 
     def validate(self, attrs):
 
@@ -123,9 +147,19 @@ class MessageSerializer(
         attachment = attrs.get(
             "attachment"
         )
+        reply_to = attrs.get("reply_to")
+        conversation_id = self.context.get("conversation_id")
+        if (
+            reply_to
+            and conversation_id
+            and reply_to.conversation_id != conversation_id
+        ):
+            raise serializers.ValidationError(
+                {"reply_to_id": "Reply target must belong to this conversation."}
+            )
 
         # Message must have text or attachment
-        if not content and not attachment:
+        if not content and not attachment and not self.instance:
             raise serializers.ValidationError(
                 "A message must contain text or an attachment."
             )
@@ -153,18 +187,25 @@ class ConversationSerializer(
     last_message = serializers.SerializerMethodField()
 
     unread_count = serializers.SerializerMethodField()
+    is_group = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
 
         fields = [
             "id",
+            "conversation_type",
+            "name",
+            "is_group",
             "participants",
             "last_message",
             "unread_count",
             "created_at",
             "updated_at",
         ]
+
+    def get_is_group(self, obj):
+        return obj.conversation_type == Conversation.ConversationType.GROUP
 
     def get_last_message(self, obj):
 

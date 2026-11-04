@@ -3,10 +3,17 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Profile from "./Profile";
 import userService from "../services/userService";
+import postService from "../services/postService";
 
 vi.mock("../services/userService", () => ({
   default: {
     getUser: vi.fn(),
+  },
+}));
+
+vi.mock("../services/postService", () => ({
+  default: {
+    list: vi.fn(),
   },
 }));
 
@@ -39,6 +46,10 @@ function renderProfile(path) {
 describe("Profile route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    postService.list.mockResolvedValue({
+      results: [],
+      next: null,
+    });
   });
 
   it("loads the selected friend's profile from a direct profile URL", async () => {

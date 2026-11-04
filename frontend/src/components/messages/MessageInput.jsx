@@ -4,6 +4,8 @@ export default function MessageInput({
   onSend,
   onTyping,
   disabled = false,
+  replyTarget,
+  onCancelReply,
 }) {
   const [message, setMessage] =
     useState("");
@@ -20,8 +22,9 @@ export default function MessageInput({
     try {
       setSending(true);
       setError("");
-      await onSend(content);
+      await onSend(content, replyTarget?.id);
       setMessage("");
+      onCancelReply?.();
       onTyping?.(false);
     } catch (sendError) {
       setError(sendError.message || "Message could not be sent.");
@@ -31,26 +34,30 @@ export default function MessageInput({
   };
 
   return (
-    <form
-      className="message-input"
-      onSubmit={submit}
-    >
-      <input
-        value={message}
-        onChange={(event) => {
-          setMessage(event.target.value);
-          onTyping?.(Boolean(event.target.value.trim()));
-        }}
-        placeholder="Write a message..."
-        maxLength={5000}
-        disabled={disabled || sending}
-        aria-label="Write a message"
-      />
-
-      <button type="submit" disabled={disabled || sending || !message.trim()}>
-        {sending ? "Sending..." : "Send"}
-      </button>
-      {error && <span className="error" role="alert">{error}</span>}
-    </form>
+    <>
+      {replyTarget && (
+        <div className="message-reply-target">
+          <span>Replying to: {replyTarget.content}</span>
+          <button type="button" onClick={onCancelReply}>Cancel</button>
+        </div>
+      )}
+      <form className="message-input" onSubmit={submit}>
+        <input
+          value={message}
+          onChange={(event) => {
+            setMessage(event.target.value);
+            onTyping?.(Boolean(event.target.value.trim()));
+          }}
+          placeholder="Write a message..."
+          maxLength={5000}
+          disabled={disabled || sending}
+          aria-label="Write a message"
+        />
+        <button type="submit" disabled={disabled || sending || !message.trim()}>
+          {sending ? "Sending..." : "Send"}
+        </button>
+        {error && <span className="error" role="alert">{error}</span>}
+      </form>
+    </>
   );
 }

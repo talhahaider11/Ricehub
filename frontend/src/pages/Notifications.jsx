@@ -1,10 +1,13 @@
 import { useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import { NotificationContext } from "../context/NotificationContext";
 import Loader from "../components/common/Loader";
 import Button from "../components/common/Button";
 import EmptyState from "../components/common/EmptyState";
+import { getNotificationPath } from "../utils/notificationNavigation";
 
 export default function Notifications() {
+  const navigate = useNavigate();
   const {
     notifications,
     loading,
@@ -23,12 +26,13 @@ export default function Notifications() {
     }
   };
 
-  const handleMarkRead = async (id) => {
+  const handleMarkRead = async (notification) => {
     try {
-      await markRead(id);
+      await markRead(notification.id);
     } catch {
       // The context exposes the action error in the page.
     }
+    navigate(getNotificationPath(notification));
   };
 
   return (
@@ -74,7 +78,7 @@ export default function Notifications() {
                     ? "notification read"
                     : "notification unread"
                 }
-                onClick={() => handleMarkRead(notification.id)}
+                onClick={() => handleMarkRead(notification)}
               >
                 <span className="notification-details">
                   <strong>

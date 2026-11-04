@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import AccountReport, SupportRequest, User
+from .models import AccountReport, SecurityEvent, SupportRequest, User
 
 
 @admin.register(AccountReport)
@@ -30,6 +30,8 @@ class CustomUserAdmin(UserAdmin):
         "first_name",
         "last_name",
         "is_active",
+        "is_verified",
+        "is_suspended",
         "is_staff",
         "created_at",
     )
@@ -44,3 +46,27 @@ class CustomUserAdmin(UserAdmin):
     ordering = (
         "-created_at",
     )
+    list_filter = ("is_active", "is_verified", "is_staff", "is_suspended")
+
+
+@admin.register(SecurityEvent)
+class SecurityEventAdmin(admin.ModelAdmin):
+    list_display = ("event_type", "user", "ip_address", "created_at")
+    list_filter = ("event_type", "created_at")
+    search_fields = ("user__username", "ip_address")
+    readonly_fields = (
+        "user",
+        "event_type",
+        "ip_address",
+        "user_agent",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

@@ -13,13 +13,13 @@ class MessageVerificationWarningTests(APITestCase):
             username="unverified-sender",
             email="sender@example.com",
             password="StrongPassword123",
-            is_email_verified=False,
+            is_verified=False,
         )
         self.verified_recipient = User.objects.create_user(
             username="verified-recipient",
             email="recipient@example.com",
             password="StrongPassword123",
-            is_email_verified=True,
+            is_verified=True,
         )
         self.conversation = Conversation.objects.create()
         self.conversation.participants.add(
@@ -46,14 +46,14 @@ class MessageVerificationWarningTests(APITestCase):
         self.assertEqual(history.status_code, 200)
         self.assertTrue(history.data["results"][0]["verification_warning"])
         self.assertFalse(
-            history.data["results"][0]["sender"]["is_email_verified"]
+            history.data["results"][0]["sender"]["is_verified"]
         )
 
     def test_verified_sender_does_not_trigger_warning(self):
-        self.verified_recipient.is_email_verified = False
-        self.verified_recipient.save(update_fields=["is_email_verified"])
-        self.unverified_sender.is_email_verified = True
-        self.unverified_sender.save(update_fields=["is_email_verified"])
+        self.verified_recipient.is_verified = False
+        self.verified_recipient.save(update_fields=["is_verified"])
+        self.unverified_sender.is_verified = True
+        self.unverified_sender.save(update_fields=["is_verified"])
         self.client.force_authenticate(self.unverified_sender)
 
         response = self.client.post(

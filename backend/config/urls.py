@@ -8,11 +8,16 @@ from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
 )
-from rest_framework_simplejwt.views import TokenRefreshView
-
+from users.security_views import SecurityTokenRefreshView
 from users.views import LoginView
+from search.views import (
+    ExploreView,
+    HashtagDetailView,
+    PostSearchView,
+    TrendingHashtagsView,
+    UserSuggestionsView,
+)
 from .health import health_check
-from .views import HealthView
 
 
 def api_root(request):
@@ -40,13 +45,36 @@ urlpatterns = [
     path("admin/", admin.site.urls),
 
     # User endpoints
+    path(
+        "api/users/suggestions/",
+        UserSuggestionsView.as_view(),
+        name="user-suggestions",
+    ),
     path("api/users/", include("users.urls")),
+
+    # Discovery endpoints
+    path("api/posts/search/", PostSearchView.as_view(), name="post-search"),
+    path(
+        "api/hashtags/trending/",
+        TrendingHashtagsView.as_view(),
+        name="trending-hashtags",
+    ),
+    path(
+        "api/hashtags/<str:tag>/",
+        HashtagDetailView.as_view(),
+        name="hashtag-detail",
+    ),
+    path("api/explore/", ExploreView.as_view(), name="explore"),
 
     # API root
     path("api/", api_root, name="api-root"),
 
     # Posts
     path("api/posts/", include("posts.urls")),
+    path("api/billing/", include("billing.urls")),
+    path("api/media/", include("media_app.urls")),
+    path("api/feed/", include("feed.urls")),
+    path("api/stories/", include("stories.urls")),
 
     # Comments and reactions
     path("api/", include("comments.urls")),
@@ -63,11 +91,23 @@ urlpatterns = [
     # Community
     path("api/community/", include("community.urls")),
 
+    # Moderation and staff dashboard APIs
+    path("api/moderation/", include("moderation.urls")),
+    path("api/admin/", include("administration.urls")),
+
     # Authentication
     path("api/token/", LoginView.as_view(), name="token_obtain_pair"),
-    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path(
+        "api/token/refresh/",
+        SecurityTokenRefreshView.as_view(),
+        name="token_refresh",
+    ),
     path("api/auth/login/", LoginView.as_view(), name="auth-login"),
-    path("api/auth/refresh/", TokenRefreshView.as_view(), name="auth-refresh"),
+    path(
+        "api/auth/refresh/",
+        SecurityTokenRefreshView.as_view(),
+        name="auth-refresh",
+    ),
 
     # API documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
@@ -79,7 +119,6 @@ urlpatterns = [
 
     # Health checks
     path("api/health/", health_check, name="api-health"),
-    path("health/", HealthView.as_view(), name="health"),
     path("health/", health_check, name="health_check"),
 ]
 

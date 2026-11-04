@@ -2,11 +2,17 @@ import {
   useEffect,
   useRef,
 } from "react";
+import MessageActions from "./MessageActions";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function MessageList({
   messages,
   currentUser,
+  onReply,
+  onEdit,
+  onDelete,
 }) {
+  const { t } = useLanguage();
   const bottomRef =
     useRef(null);
 
@@ -34,17 +40,36 @@ export default function MessageList({
             }
           >
             <div className="message-bubble">
-              {message.content}
+              {message.reply_to && (
+                <blockquote className="message-reply-preview">
+                  {message.reply_to.content}
+                </blockquote>
+              )}
+              {message.is_deleted
+                ? "This message was deleted."
+                : message.content}
             </div>
-            {message.verification_warning && (
+            {message.edited_at && !message.is_deleted && (
+              <small className="message-edited-label">Edited</small>
+            )}
+            {message.verification_warning && !mine && (
               <small className="message-verification-warning" role="alert">
-                This is not a verified member. Trust this member at your own risk.
+                {t("unverifiedWarning")}
               </small>
             )}
             {mine && (
               <small className="message-receipt">
                 {message.is_read ? "Seen" : "Sent"}
               </small>
+            )}
+            {!message.is_deleted && (
+              <MessageActions
+                message={message}
+                own={mine}
+                onReply={onReply}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
             )}
           </div>
         );

@@ -118,7 +118,12 @@ export default function Register() {
 
     setLoading(true);
     try {
-      await register(form);
+      const locale = navigator.language || "";
+      const region = locale.split("-")[1]?.toUpperCase();
+      const preferredLanguage = locale.toLowerCase().startsWith("ur") || region === "PK"
+        ? "ur"
+        : "en";
+      await register({ ...form, preferred_language: preferredLanguage });
       navigate("/login", {
         state: {
           notice: "Account created. You can verify your email later in Settings.",

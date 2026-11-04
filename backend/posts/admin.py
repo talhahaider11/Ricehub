@@ -10,10 +10,11 @@ class PostAdmin(admin.ModelAdmin):
         "author",
         "content",
         "visibility",
+        "moderation_status",
         "created_at",
     )
     search_fields = ("content", "author__username")
-    list_filter = ("visibility", "created_at")
+    list_filter = ("visibility", "moderation_status", "created_at")
 
 
 @admin.register(Hashtag)

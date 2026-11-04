@@ -70,6 +70,34 @@ if "ricehub-umfd.onrender.com" not in ALLOWED_HOSTS:
 
 # Channel Layers (Redis setup for WebSockets)
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_RESULT_SERIALIZER = "json"
+SECURITY_EVENT_RETENTION_DAYS = int(
+    os.getenv("SECURITY_EVENT_RETENTION_DAYS", "90")
+)
+if SECURITY_EVENT_RETENTION_DAYS < 1:
+    raise ValueError("SECURITY_EVENT_RETENTION_DAYS must be at least 1.")
+CELERY_BEAT_SCHEDULE = {
+    "delete-expired-stories-hourly": {
+        "task": "stories.tasks.delete_expired_stories",
+        "schedule": 3600.0,
+    },
+    "purge-expired-security-events-daily": {
+        "task": "users.tasks.purge_expired_security_events",
+        "schedule": 86400.0,
+    },
+    "expire-verification-subscriptions-hourly": {
+        "task": "billing.tasks.expire_verification_subscriptions",
+        "schedule": 3600.0,
+    },
+}
+SMS_PROVIDER = os.getenv("SMS_PROVIDER", "")
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER", "")
+PAYMENT_INSTRUCTIONS = os.getenv("PAYMENT_INSTRUCTIONS", "")
 
 CHANNEL_LAYERS = {
     "default": {
@@ -104,9 +132,15 @@ INSTALLED_APPS = [
     "search",
     "community",
     "moderation",
+    "administration.apps.AdministrationConfig",
+    "feed",
+    "stories",
+    "media_app.apps.MediaConfig",
+    "billing.apps.BillingConfig",
 ]
 
 MIDDLEWARE = [
+    "config.middleware.RequestIDMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",  # Render Static Files Serving
@@ -184,7 +218,7 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.IsAuthenticated",
+        "config.permissions.IsActiveAndNotSuspended",
     ),
     "DEFAULT_PAGINATION_CLASS": (
         "config.pagination.StandardPagination"
@@ -194,11 +228,24 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
+        "config.throttling.BurstRateThrottle",
+        "config.throttling.SustainedRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "30/minute",
         "user": "120/minute",
         "login": "5/minute",
+        "register": "5/hour",
+        "password": "5/hour",
+        "refresh": "20/minute",
+        "message": "60/minute",
+        "post_create": "10/hour",
+        "media_upload": "20/hour",
+        "burst": "60/minute",
+        "sustained": "1000/day",
+        "moderation": "10/hour",
+        "report": "10/hour",
+        "admin": "300/minute",
     },
     "EXCEPTION_HANDLER": "config.exception.custom_exception_handler",
 }

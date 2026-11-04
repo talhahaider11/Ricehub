@@ -5,12 +5,18 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+from posts.validators import validate_post_image, validate_post_video
+
 
 def story_expiry_default():
     return timezone.now() + timedelta(hours=24)
 
 
 class Story(models.Model):
+    class Visibility(models.TextChoices):
+        PUBLIC = "public", "Public"
+        FRIENDS = "friends", "Friends"
+
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -18,6 +24,31 @@ class Story(models.Model):
     )
     text = models.CharField(max_length=500, blank=True)
     media = models.FileField(upload_to="stories/%Y/%m/", blank=True)
+    image = models.ImageField(
+        upload_to="stories/images/%Y/%m/",
+        blank=True,
+        null=True,
+        validators=[validate_post_image],
+    )
+    video = models.FileField(
+        upload_to="stories/videos/%Y/%m/",
+        blank=True,
+        null=True,
+        validators=[validate_post_video],
+    )
+    media_asset = models.ForeignKey(
+        "media.MediaAsset",
+        on_delete=models.SET_NULL,
+        related_name="stories",
+        blank=True,
+        null=True,
+    )
+    visibility = models.CharField(
+        max_length=20,
+        choices=Visibility.choices,
+        default=Visibility.FRIENDS,
+        db_index=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(
         default=story_expiry_default,
@@ -26,6 +57,34 @@ class Story(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["author", "-created_at"],
+                name="comm_story_author_created_idx",
+            ),
+            models.Index(
+                fields=["visibility", "expires_at"],
+                name="comm_story_visibility_exp_idx",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~(models.Q(image__isnull=False) & ~models.Q(image="") & models.Q(video__isnull=False) & ~models.Q(video="")),
+                name="story_one_media_type",
+            ),
+        ]
+
+    @property
+    def caption(self):
+        return self.text
+
+    @caption.setter
+    def caption(self, value):
+        self.text = value
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
 
 
 class StoryView(models.Model):
@@ -47,6 +106,16 @@ class StoryView(models.Model):
                 fields=["story", "viewer"],
                 name="unique_story_viewer",
             )
+        ]
+        indexes = [
+            models.Index(
+                fields=["viewer", "-viewed_at"],
+                name="comm_storyview_viewer_date_idx",
+            ),
+            models.Index(
+                fields=["story", "-viewed_at"],
+                name="comm_storyview_story_date_idx",
+            ),
         ]
 
 

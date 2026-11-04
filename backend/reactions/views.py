@@ -1,13 +1,19 @@
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from config.permissions import IsActiveAndNotSuspended as IsAuthenticated
+from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Reaction
 from .serializers import ReactionSerializer
-from django.contrib.auth import get_user_model
 from notifications.models import Notification
 from notifications.services import create_notification
 from posts.models import Post
+from users.privacy import (
+    can_view_post,
+    get_blocked_user_ids,
+    get_muted_user_ids,
+)
 
 
 class PostReactionView(APIView):
@@ -17,6 +23,12 @@ class PostReactionView(APIView):
     ]
 
     def post(self, request, post_id):
+        post = get_object_or_404(
+            Post.objects.select_related("author"),
+            pk=post_id,
+        )
+        if not can_view_post(request.user, post):
+            raise PermissionDenied("This post is unavailable.")
 
         reaction_type = request.data.get(
             "reaction_type"
@@ -45,8 +57,6 @@ class PostReactionView(APIView):
             )
         )
 
-        post = Post.objects.select_related("author").get(id=post_id)
-
         if post.author != request.user:
             create_notification(
                 recipient=post.author,
@@ -70,6 +80,12 @@ class PostReactionView(APIView):
         )
 
     def delete(self, request, post_id):
+        post = get_object_or_404(
+            Post.objects.select_related("author"),
+            pk=post_id,
+        )
+        if not can_view_post(request.user, post):
+            raise PermissionDenied("This post is unavailable.")
 
         deleted, _ = (
             Reaction.objects.filter(
@@ -98,10 +114,22 @@ class PostReactionListView(APIView):
     ]
 
     def get(self, request, post_id):
+        post = get_object_or_404(
+            Post.objects.select_related("author"),
+            pk=post_id,
+        )
+        if not can_view_post(request.user, post):
+            raise PermissionDenied("This post is unavailable.")
 
         reactions = (
             Reaction.objects
             .filter(post_id=post_id)
+            .exclude(
+                user_id__in=(
+                    get_blocked_user_ids(request.user)
+                    | get_muted_user_ids(request.user)
+                )
+            )
             .select_related("user")
         )
 

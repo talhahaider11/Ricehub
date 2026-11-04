@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import communityService from "../services/communityService";
 import useAuth from "../hooks/useAuth";
 import friendService from "../services/friendService";
+import StoryUploader from "../components/stories/StoryUploader";
 import { getMediaUrl } from "../utils/constants";
 import { getArrayResults } from "../utils/arrayResults";
 
@@ -38,8 +39,6 @@ export default function SocialHub() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [storyText, setStoryText] = useState("");
-  const [storyMedia, setStoryMedia] = useState(null);
   const [communityName, setCommunityName] = useState("");
   const [communityDescription, setCommunityDescription] = useState("");
   const [communityKind, setCommunityKind] = useState("group");
@@ -126,18 +125,6 @@ export default function SocialHub() {
     }
   };
 
-  const createStory = (event) => {
-    event.preventDefault();
-    const data = new FormData();
-    data.append("text", storyText);
-    if (storyMedia) data.append("media", storyMedia);
-    return perform(async () => {
-      await communityService.createStory(data);
-      setStoryText("");
-      setStoryMedia(null);
-    }, "Your story is live for 24 hours.");
-  };
-
   const createCommunity = (event) => {
     event.preventDefault();
     return perform(async () => {
@@ -213,20 +200,18 @@ export default function SocialHub() {
 
       {activeTab === "Stories" && (
         <section className="social-section">
-          <form className="card social-form" onSubmit={createStory}>
-            <h2>Share a story</h2>
-            <textarea value={storyText} onChange={(e) => setStoryText(e.target.value)} maxLength={500} placeholder="Add a short update" />
-            <label>Image or video (up to 20 MB)<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(e) => setStoryMedia(e.target.files?.[0] || null)} /></label>
-            <button className="btn btn-primary" disabled={saving || (!storyText.trim() && !storyMedia)}>Share story</button>
-          </form>
+          <StoryUploader onCreated={() => {
+            setNotice("Your story is live for 24 hours.");
+            void load();
+          }} />
           <div className="social-grid">
             {stories.map((story) => (
               <article className="card social-card" key={story.id}>
                 <strong>@{story.author.username}</strong>
-                {(story.author.id === user?.id || viewedStories[story.id]) && story.text && <p>{story.text}</p>}
-                {(story.author.id === user?.id || viewedStories[story.id]) && story.media && (/\.(mp4|webm)$/i.test(story.media)
-                  ? <video src={getMediaUrl(story.media)} controls playsInline />
-                  : <img src={getMediaUrl(story.media)} alt="Story" />)}
+                {(story.author.id === user?.id || viewedStories[story.id]) && (story.caption || story.text) && <p>{story.caption || story.text}</p>}
+                {(story.author.id === user?.id || viewedStories[story.id]) && (story.media_url || story.image || story.video || story.media) && (story.media_type === "video" || /\.(mp4|webm|mov)(?:$|\?)/i.test(story.media_url || story.media || "")
+                  ? <video src={getMediaUrl(story.media_url || story.video || story.media)} controls playsInline />
+                  : <img src={getMediaUrl(story.media_url || story.image || story.media)} alt="Story" />)}
                 <small>Expires {new Date(story.expires_at).toLocaleString()} · {story.view_count} views</small>
                 {story.author.id !== user?.id && (
                   <button className="btn btn-secondary" disabled={saving || viewedStories[story.id]} onClick={() => perform(async () => {
@@ -252,7 +237,7 @@ export default function SocialHub() {
                   </div>
                 )}
                 {storyViewers[story.id]?.map((entry) => (
-                  <small key={entry.id}>@{entry.viewer.username} · {new Date(entry.viewed_at).toLocaleString()}</small>
+                  <small key={entry.id}>@{entry.username} · {new Date(entry.viewed_at).toLocaleString()}</small>
                 ))}
               </article>
             ))}

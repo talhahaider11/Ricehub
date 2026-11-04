@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo } from "react";
 import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Avatar from "../common/Avatar";
-import communityService from "../../services/communityService";
-import { getArrayResults } from "../../utils/arrayResults";
-import { getMediaUrl } from "../../utils/constants";
+import StoryAvatar from "./StoryAvatar";
+import useStories from "../../hooks/useStories";
 
 export default function StoryStrip({
   currentUser,
@@ -12,33 +11,39 @@ export default function StoryStrip({
   excludeUserId,
   onlyUserId,
 }) {
-  const [stories, setStories] = useState([]);
-  const [error, setError] = useState("");
   const navigate = useNavigate();
-
-  const loadStories = useCallback(async () => {
-    try {
-      const data = await communityService.stories(onlyUserId);
-      setStories(getArrayResults(data, "Stories"));
-      setError("");
-    } catch (loadError) {
-      console.error("Stories could not be loaded:", loadError);
-      setError("Stories could not be loaded.");
-    }
-  }, [onlyUserId]);
-
-  useEffect(() => {
-    loadStories();
-    const refresh = () => loadStories();
-    window.addEventListener("ricehub:stories-updated", refresh);
-    return () => window.removeEventListener("ricehub:stories-updated", refresh);
-  }, [loadStories]);
+  const { stories, loading, error } = useStories(onlyUserId);
 
   const visibleStories = stories.filter((story) => {
     if (onlyUserId != null) return String(story.author?.id) === String(onlyUserId);
     if (excludeUserId != null) return String(story.author?.id) !== String(excludeUserId);
     return true;
   });
+
+  const groups = useMemo(() => {
+    const byAuthor = new Map();
+    visibleStories.forEach((story) => {
+      const authorId = story.author?.id;
+      if (!byAuthor.has(authorId)) {
+        byAuthor.set(authorId, { author: story.author, stories: [] });
+      }
+      byAuthor.get(authorId).stories.push(story);
+    });
+
+    return Array.from(byAuthor.values())
+      .map((group) => ({
+        ...group,
+        stories: group.stories.sort(
+          (left, right) =>
+            new Date(left.created_at) - new Date(right.created_at)
+        ),
+      }))
+      .sort((left, right) => {
+        const leftUnseen = left.stories.some((story) => !story.is_seen);
+        const rightUnseen = right.stories.some((story) => !story.is_seen);
+        return Number(rightUnseen) - Number(leftUnseen);
+      });
+  }, [visibleStories]);
 
   return (
     <section className="story-strip card" aria-label="Stories">
@@ -62,35 +67,23 @@ export default function StoryStrip({
             <strong>Create story</strong>
           </button>
         )}
-        {visibleStories.map((story) => (
-          <button
-            type="button"
-            className={`story-card${story.media ? " has-media" : ""}`}
-            key={story.id}
-            onClick={() => {
-              navigate(`/stories/${story.id}`);
-              if (story.author?.id !== currentUser?.id) {
-                communityService.viewStory(story.id).catch((viewError) => {
-                  console.error("Story view could not be recorded:", viewError);
-                });
-              }
-            }}
-            aria-label={`View ${story.author?.username || "user"}'s story`}
-          >
-            {story.media ? (
-              story.media.match(/\.(mp4|webm)(?:$|\?)/i) ? (
-                <video src={getMediaUrl(story.media)} muted playsInline />
-              ) : (
-                <img src={getMediaUrl(story.media)} alt="" />
-              )
-            ) : (
-              <span className="story-text-preview">{story.text}</span>
-            )}
-            <Avatar user={story.author} size={38} />
-            <strong>{story.author?.first_name || story.author?.username}</strong>
-          </button>
-        ))}
-        {visibleStories.length === 0 && !error && (
+        {groups.map((group) => {
+          const story =
+            group.stories.find((item) => !item.is_seen) || group.stories[0];
+          const hasUnseen = group.stories.some((item) => !item.is_seen);
+
+          return (
+            <StoryAvatar
+              key={group.author?.id}
+              author={group.author}
+              story={story}
+              hasUnseen={hasUnseen}
+              onSelect={() => navigate(`/stories/${story.id}`)}
+            />
+          );
+        })}
+        {loading && groups.length === 0 && <p className="story-empty">Loading stories...</p>}
+        {!loading && groups.length === 0 && !error && (
           <p className="story-empty">No stories yet. Share the first one.</p>
         )}
       </div>

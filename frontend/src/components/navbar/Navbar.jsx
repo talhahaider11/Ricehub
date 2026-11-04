@@ -6,6 +6,7 @@ import {
   Plus,
   Search,
   Settings,
+  Shield,
 } from "lucide-react";
 import { useCallback, useContext, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -109,6 +110,13 @@ export default function Navbar() {
           <Link to="/settings" aria-label="Open settings">
             <Settings size={20} />
           </Link>
+
+          {user?.is_staff && (
+            <Link to="/admin" aria-label="Open administration dashboard">
+              <Shield size={20} />
+              <span>Moderation</span>
+            </Link>
+          )}
 
           <ThemeToggle />
 

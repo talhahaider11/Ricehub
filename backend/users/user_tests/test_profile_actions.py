@@ -27,7 +27,7 @@ class ProfileActionTests(APITestCase):
     def test_mute_hides_account_posts_and_stories_from_home(self):
         Post.objects.create(author=self.user, content="My private profile post", visibility="private")
         Post.objects.create(author=self.other, content="Muted public post", visibility="public")
-        Story.objects.create(author=self.user, text="My story")
+        own_story = Story.objects.create(author=self.user, text="My story")
         Story.objects.create(author=self.other, text="Muted story")
 
         muted = self.client.post(f"/api/users/muted-users/{self.other.pk}/")
@@ -39,7 +39,10 @@ class ProfileActionTests(APITestCase):
         self.assertEqual(posts.status_code, status.HTTP_200_OK)
         self.assertEqual(stories.status_code, status.HTTP_200_OK)
         self.assertEqual(posts.data["results"], [])
-        self.assertEqual(stories.data["results"], [])
+        self.assertEqual(
+            [story["id"] for story in stories.data["results"]],
+            [own_story.pk],
+        )
 
     def test_own_private_posts_are_available_from_profile_query_only(self):
         Post.objects.create(author=self.user, content="Profile-only post", visibility="private")

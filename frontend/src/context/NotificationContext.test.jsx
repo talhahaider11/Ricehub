@@ -32,6 +32,7 @@ describe("NotificationProvider", () => {
   it("counts unread notifications from the paginated API response", async () => {
     notificationService.list.mockResolvedValue({
       results: [{ is_read: false }, { is_read: true }],
+      unread_count: 17,
     });
 
     render(
@@ -40,7 +41,7 @@ describe("NotificationProvider", () => {
       </NotificationProvider>
     );
 
-    expect(await screen.findByText("Unread: 1")).toBeInTheDocument();
+    expect(await screen.findByText("Unread: 17")).toBeInTheDocument();
   });
 
   it("keeps the app rendered when the API returns a non-list response", async () => {
@@ -57,7 +58,7 @@ describe("NotificationProvider", () => {
     await waitFor(() => {
       expect(consoleError).toHaveBeenCalledWith(
         "Notifications could not be loaded:",
-        expect.any(TypeError)
+        expect.any(Error)
       );
     });
     consoleError.mockRestore();

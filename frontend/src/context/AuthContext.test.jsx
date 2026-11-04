@@ -2,6 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useContext } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import authService from "../services/authService";
+import {
+  initializePushNotifications,
+  registerPushListeners,
+} from "../services/pushNotificationService";
 import { AuthContext, AuthProvider } from "./AuthContext";
 
 vi.mock("../services/authService", () => ({
@@ -16,24 +20,38 @@ vi.mock("../services/authService", () => ({
 
 vi.mock("../services/pushNotificationService", () => ({
   initializePushNotifications: vi.fn(),
+  registerPushListeners: vi.fn(),
   unregisterPushDevice: vi.fn(),
 }));
 
 function AuthStateProbe() {
   const { user, login } = useContext(AuthContext);
 
-  const attemptLogin = async () => {
+  const attemptLogin = async (credentials) => {
     try {
-      await login({ username: "unknown", password: "wrong" });
+      await login(credentials);
     } catch {
-      // The test checks that a rejected login does not preserve the old user.
+      // The test checks the final authentication state after login.
     }
   };
 
   return (
     <>
       <p>{user ? `Signed in as ${user.username}` : "Signed out"}</p>
-      <button onClick={attemptLogin}>Try login</button>
+      <button
+        onClick={() =>
+          attemptLogin({ username: "unknown", password: "wrong" })
+        }
+      >
+        Try login
+      </button>
+      <button
+        onClick={() =>
+          attemptLogin({ username: "new-user", password: "correct" })
+        }
+      >
+        Login successfully
+      </button>
     </>
   );
 }
@@ -75,5 +93,45 @@ describe("AuthProvider login", () => {
     );
     expect(localStorage.getItem("ricemarket_access_token")).toBeNull();
     expect(localStorage.getItem("ricemarket_refresh_token")).toBeNull();
+  });
+
+  it("initializes push listeners when restoring an authenticated session", async () => {
+    authService.getMe.mockResolvedValue({ id: 2, username: "new-user" });
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>
+    );
+
+    await screen.findByText("Signed in as new-user");
+    await waitFor(() => {
+      expect(registerPushListeners).toHaveBeenCalledOnce();
+      expect(initializePushNotifications).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("initializes push listeners after a successful login", async () => {
+    authService.login.mockResolvedValue({ access: "access", refresh: "refresh" });
+    authService.getMe
+      .mockResolvedValueOnce({ id: 1, username: "previous-user" })
+      .mockResolvedValueOnce({ id: 2, username: "new-user" });
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>
+    );
+
+    await screen.findByText("Signed in as previous-user");
+    await waitFor(() => {
+      expect(registerPushListeners).toHaveBeenCalledOnce();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Login successfully" }));
+
+    await screen.findByText("Signed in as new-user");
+    await waitFor(() => {
+      expect(registerPushListeners).toHaveBeenCalledTimes(2);
+      expect(initializePushNotifications).toHaveBeenCalledTimes(2);
+    });
   });
 });

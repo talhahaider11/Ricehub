@@ -6,6 +6,8 @@ import {
   Settings,
   Compass,
   HelpCircle,
+  TrendingUp,
+  UsersRound,
 } from "lucide-react";
 
 import { NavLink } from "react-router-dom";
@@ -20,6 +22,16 @@ const items = [
     label: "Discover",
     path: "/discover",
     icon: Compass,
+  },
+  {
+    label: "Explore",
+    path: "/explore",
+    icon: TrendingUp,
+  },
+  {
+    label: "Suggestions",
+    path: "/suggestions",
+    icon: UsersRound,
   },
   {
     label: "Messages",

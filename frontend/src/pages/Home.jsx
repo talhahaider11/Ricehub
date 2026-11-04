@@ -1,10 +1,11 @@
 import { useState } from "react";
-import StoryStrip from "../components/stories/StoryStrip";
+import StoryTray from "../components/stories/StoryTray";
 import PostCard from "../components/posts/PostCard";
 import InfiniteLoader from "../components/common/InfiniteLoader";
 import PostSkeleton from "../components/common/PostSkeleton";
 import ErrorState from "../components/common/ErrorState";
 import EmptyState from "../components/common/EmptyState";
+import FeedTabs from "../components/feed/FeedTabs";
 
 import usePosts from "../hooks/usePosts";
 import useAuth from "../hooks/useAuth";
@@ -27,10 +28,8 @@ export default function Home() {
   return (
     <div className="page-container">
       <div className="feed">
-        <StoryStrip
-          currentUser={user}
-          excludeUserId={user?.id}
-        />
+        <StoryTray currentUser={user} />
+        <FeedTabs />
         {loading && posts.length === 0 ? (
           <>
             <PostSkeleton />
@@ -41,7 +40,7 @@ export default function Home() {
         ) : (
           <>
         <label className="feed-sort">
-          <span>Feed order</span>
+          <span>Feed</span>
           <select
             value={feedSort}
             onChange={(event) => setFeedSort(event.target.value)}
@@ -63,6 +62,7 @@ export default function Home() {
               key={post.id}
               post={post}
               currentUser={user}
+              trackView={false}
               onDeleted={removePost}
               onUpdated={updatePost}
             />

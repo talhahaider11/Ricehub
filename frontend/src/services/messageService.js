@@ -21,6 +21,14 @@ const messageService = {
     return response.data;
   },
 
+  async createGroup(name, userIds) {
+    const response = await api.post(
+      "/messages/conversations/group/",
+      { name, user_ids: userIds }
+    );
+    return response.data;
+  },
+
   async messages(conversationId, page = 1) {
     const response = await api.get(
       `/messages/conversations/${conversationId}/messages/`,
@@ -37,6 +45,21 @@ const messageService = {
       `/messages/conversations/${conversationId}/read/`
     );
 
+    return response.data;
+  },
+
+  async editMessage(messageId, content) {
+    const response = await api.patch(
+      `/messages/messages/${messageId}/edit/`,
+      { content }
+    );
+    return response.data;
+  },
+
+  async deleteMessage(messageId) {
+    const response = await api.delete(
+      `/messages/messages/${messageId}/delete/`
+    );
     return response.data;
   },
 

@@ -6,7 +6,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from .models import Conversation, Message
+from .models import Conversation, ConversationMember, Message
 from users.privacy import can_message_between
 
 
@@ -153,9 +153,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 )
                 return
 
-            result = await self.create_message(
-                message_text
-            )
+            reply_to_id = data.get("reply_to_id")
+            if reply_to_id is not None and (
+                not isinstance(reply_to_id, int)
+                or isinstance(reply_to_id, bool)
+            ):
+                await self.send_json({
+                    "type": "error",
+                    "message": "Reply target is invalid.",
+                })
+                return
+            result = await self.create_message(message_text, reply_to_id)
             if not result:
                 await self.send(text_data=json.dumps({
                     "type": "error",
@@ -174,6 +182,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
                             message.conversation_id
                         ),
                         "sender": message.sender_id,
+                        "reply_to": (
+                            {
+                                "id": message.reply_to_id,
+                                "content": (
+                                    "This message was deleted."
+                                    if message.reply_to.is_deleted
+                                    else message.reply_to.content
+                                ),
+                                "sender_id": message.reply_to.sender_id,
+                            }
+                            if message.reply_to_id
+                            else None
+                        ),
+                        "reply_to_id": message.reply_to_id,
                         "sender_username": (
                             self.user.username
                         ),
@@ -197,6 +219,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 **event["message"],
             })
         )
+
+    async def message_updated(self, event):
+        await self.send_json({
+            "type": "message_updated",
+            "message": event["message"],
+        })
+
+    async def message_deleted(self, event):
+        await self.send_json({
+            "type": "message_deleted",
+            "message_id": event["message_id"],
+        })
+
     async def typing_event(
         self,
         event,
@@ -233,15 +268,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
         if not conversation:
             return False
-        other_user = conversation.participants.exclude(
-            pk=self.user.pk
-        ).first()
-        return bool(
-            other_user and can_message_between(self.user, other_user)
-        )
+        if conversation.conversation_type == Conversation.ConversationType.GROUP:
+            return True
+        other_user = conversation.participants.exclude(pk=self.user.pk).first()
+        return bool(other_user and can_message_between(self.user, other_user))
 
     @database_sync_to_async
-    def create_message(self, content):
+    def create_message(self, content, reply_to_id=None):
 
         conversation = (
             Conversation.objects
@@ -252,24 +285,30 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 id=self.conversation_id
             )
         )
-        other_user = conversation.participants.exclude(
-            pk=self.user.pk
-        ).first()
-        if not other_user or not can_message_between(self.user, other_user):
-            return None
+        other_users = conversation.participants.exclude(pk=self.user.pk)
+        if conversation.conversation_type == Conversation.ConversationType.DIRECT:
+            other_user = other_users.first()
+            if not other_user or not can_message_between(self.user, other_user):
+                return None
+        reply_to = None
+        if reply_to_id is not None:
+            reply_to = Message.objects.filter(
+                pk=reply_to_id,
+                conversation=conversation,
+            ).first()
+            if not reply_to:
+                return None
 
         message = Message.objects.create(
             conversation=conversation,
             sender=self.user,
             content=content,
+            reply_to=reply_to,
         )
 
         conversation.save()
 
-        verification_warning = (
-            not self.user.is_email_verified
-            and other_user.is_email_verified
-        )
+        verification_warning = not self.user.is_verified
         return message, verification_warning
 
     @database_sync_to_async
@@ -285,12 +324,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
         if not conversation:
             return False
-        other_user = conversation.participants.exclude(
-            pk=self.user.pk
-        ).first()
-        return bool(
-            other_user and can_message_between(self.user, other_user)
-        )
+        if conversation.conversation_type == Conversation.ConversationType.GROUP:
+            return True
+        other_user = conversation.participants.exclude(pk=self.user.pk).first()
+        return bool(other_user and can_message_between(self.user, other_user))
 
     @database_sync_to_async
     def set_presence(self, online):
@@ -322,8 +359,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
         if not conversation:
             return {"enabled": False, "message_ids": []}
-        other_user = conversation.participants.exclude(pk=self.user.pk).first()
-        if not other_user or not can_message_between(self.user, other_user):
+        if conversation.conversation_type == Conversation.ConversationType.DIRECT:
+            other_user = conversation.participants.exclude(pk=self.user.pk).first()
+            if not other_user or not can_message_between(self.user, other_user):
+                return {"enabled": False, "message_ids": []}
+        elif not conversation.participants.filter(pk=self.user.pk).exists():
             return {"enabled": False, "message_ids": []}
         privacy = getattr(self.user, "privacy_settings", None)
         if privacy and not privacy.read_receipts:
@@ -331,4 +371,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         unread = conversation.messages.filter(is_read=False).exclude(sender=self.user)
         message_ids = list(unread.values_list("id", flat=True))
         unread.update(is_read=True)
+        from .models import ConversationMember
+        ConversationMember.objects.update_or_create(
+            conversation=conversation,
+            user=self.user,
+            defaults={"last_read_at": timezone.now()},
+        )
         return {"enabled": True, "message_ids": message_ids}

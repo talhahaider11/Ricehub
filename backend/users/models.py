@@ -15,6 +15,28 @@ class ProfileVisibility(models.TextChoices):
 class User(AbstractUser):
     email = models.EmailField(unique=True)
     is_email_verified = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=False)
+    subscription_expires_at = models.DateTimeField(blank=True, null=True)
+    posts_created = models.PositiveIntegerField(default=0)
+    phone_number = models.CharField(max_length=20, blank=True)
+    is_phone_verified = models.BooleanField(default=False)
+    preferred_language = models.CharField(
+        max_length=5,
+        choices=(("en", "English"), ("ur", "Urdu")),
+        default="en",
+    )
+    is_suspended = models.BooleanField(default=False)
+    suspended_until = models.DateTimeField(blank=True, null=True)
+    suspension_reason = models.CharField(max_length=500, blank=True)
+    suspended_at = models.DateTimeField(blank=True, null=True)
+    suspended_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="suspended_users",
+        blank=True,
+        null=True,
+    )
+    suspension_was_active = models.BooleanField(blank=True, null=True)
 
     profile_visibility = models.CharField(
         max_length=20,
@@ -89,6 +111,7 @@ class UserPrivacySettings(models.Model):
         default=MessageAudience.EVERYONE,
     )
     discoverable_by_email = models.BooleanField(default=False)
+    discoverable_by_phone = models.BooleanField(default=False)
     show_activity_status = models.BooleanField(default=True)
     show_last_seen = models.BooleanField(default=True)
     read_receipts = models.BooleanField(default=True)
@@ -174,6 +197,15 @@ class AccountReport(models.Model):
         choices=Status.choices,
         default=Status.OPEN,
     )
+    moderator_notes = models.TextField(blank=True, max_length=2000)
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="account_reports_reviewed",
+        blank=True,
+        null=True,
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -243,3 +275,19 @@ class EmailVerification(models.Model):
             not self.expires_at
             or timezone.now() >= self.expires_at
         )
+
+
+class PhoneVerification(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="phone_verification",
+    )
+    phone_number = models.CharField(max_length=20)
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    last_sent_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+
+
+from .security_models import SecurityEvent  # noqa: E402,F401

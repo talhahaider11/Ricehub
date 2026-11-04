@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.ricehub.app",
-  appName: "RiceHub",
+  appName: "Rice Hub",
   webDir: "dist",
 
   server: {

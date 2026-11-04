@@ -14,6 +14,7 @@ from rest_framework_simplejwt.tokens import (
     AccessToken,
 )
 
+from users.account_status import is_user_suspended
 
 User = get_user_model()
 
@@ -31,9 +32,12 @@ def get_user_from_token(token):
             "user_id"
         ]
 
-        return User.objects.get(
+        user = User.objects.get(
             id=user_id
         )
+        if is_user_suspended(user) or not user.is_active:
+            return None
+        return user
 
     except (
         InvalidToken,

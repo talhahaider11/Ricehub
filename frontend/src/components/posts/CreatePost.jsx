@@ -11,6 +11,9 @@ import postService from "../../services/postService";
 import useAuth from "../../hooks/useAuth";
 import Avatar from "../common/Avatar";
 import Button from "../common/Button";
+import MediaUploader from "../media/MediaUploader";
+import { deleteMedia } from "../../services/mediaService";
+import { MAX_POST_MEDIA_COUNT } from "../../utils/constants";
 
 export default function CreatePost({
   onCreated,
@@ -23,6 +26,7 @@ export default function CreatePost({
   const [postType, setPostType] = useState(initialPostType);
   const [image, setImage] = useState(null);
   const [video, setVideo] = useState(null);
+  const [mediaAssets, setMediaAssets] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
@@ -35,8 +39,8 @@ export default function CreatePost({
   }, []);
 
   const canSubmit = postType === "reel"
-    ? video !== null
-    : content.trim().length > 0 || image !== null || video !== null;
+    ? video !== null || mediaAssets.some((asset) => asset.media_type === "video")
+    : content.trim().length > 0 || image !== null || video !== null || mediaAssets.length > 0;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -48,6 +52,7 @@ export default function CreatePost({
     formData.append("post_type", postType);
     if (image) formData.append("image", image);
     if (video) formData.append("video", video);
+    mediaAssets.forEach((asset) => formData.append("media_ids", asset.id));
 
     try {
       setSubmitting(true);
@@ -56,6 +61,7 @@ export default function CreatePost({
       setContent("");
       setImage(null);
       setVideo(null);
+      setMediaAssets([]);
       setPostType("post");
       onCreated?.(post);
     } catch (createError) {
@@ -65,6 +71,19 @@ export default function CreatePost({
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const removeMedia = async (assetId) => {
+    setError("");
+    try {
+      await deleteMedia(assetId);
+      setMediaAssets((assets) => assets.filter((asset) => asset.id !== assetId));
+    } catch (removeError) {
+      setError(
+        removeError.response?.data?.detail ||
+          "The uploaded media could not be removed."
+      );
     }
   };
 
@@ -130,6 +149,37 @@ export default function CreatePost({
         )}
       </div>
 
+      <MediaUploader
+        maxFiles={MAX_POST_MEDIA_COUNT - mediaAssets.length}
+        onUploaded={(uploaded) =>
+          setMediaAssets((current) => [...current, ...uploaded])
+        }
+      />
+      {mediaAssets.length > 0 && (
+        <div className="media-uploaded-list" aria-label="Uploaded media">
+          {mediaAssets.map((asset) => (
+            <div className="media-uploaded-item" key={asset.id}>
+              {asset.media_type === "video" ? (
+                <video src={asset.url} controls playsInline preload="metadata" />
+              ) : (
+                <img
+                  src={asset.thumbnail_url || asset.url}
+                  alt={asset.original_filename || "Selected media"}
+                />
+              )}
+              <span>{asset.original_filename}</span>
+              <button
+                type="button"
+                onClick={() => void removeMedia(asset.id)}
+                aria-label={`Remove ${asset.original_filename || "uploaded media"}`}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {image && (
         <div className="selected-file">
           <img src={URL.createObjectURL(image)} alt="Selected preview" style={{maxWidth: 100}} />
@@ -161,7 +211,7 @@ export default function CreatePost({
             <VideoIcon size={20} /> {postType === "reel" ? "Reel video" : "Video"}
             <input
               type="file"
-              accept="video/mp4,video/webm"
+              accept="video/mp4,video/webm,video/quicktime"
               hidden
               required={false}
               onChange={(e) => {
@@ -181,7 +231,7 @@ export default function CreatePost({
             <option value="private">🔒 Only me</option>
           </select>
         </div>
-        {video && <p className="selected-file">{video.name} · max 50 MB</p>}
+        {video && <p className="selected-file">{video.name} · max 100 MB</p>}
 
         <Button type="submit" disabled={!canSubmit || submitting}>
           {submitting? "Posting..." : "Post"}

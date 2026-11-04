@@ -5,6 +5,7 @@ import {
 import Avatar from "../common/Avatar";
 import Button from "../common/Button";
 import { getMediaUrl } from "../../utils/constants";
+import VerifiedBadge from "../common/VerifiedBadge";
 
 export default function ProfileHeader({
   profile,
@@ -46,6 +47,7 @@ export default function ProfileHeader({
                   profile.last_name || ""
                 }`.trim()
               : profile.username}
+            <VerifiedBadge verified={profile.is_verified} />
           </h1>
 
           <p className="username">

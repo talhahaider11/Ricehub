@@ -36,17 +36,46 @@ class CommunityFeatureTests(APITestCase):
         self.client.force_authenticate(self.user)
 
     def test_stories_expire_after_twenty_four_hours(self):
-        active_story = Story.objects.create(author=self.user, text="Still here")
+        active_story = Story.objects.create(author=self.other, text="Still here")
         Story.objects.create(
             author=self.other,
             text="Expired",
+            visibility=Story.Visibility.PUBLIC,
             expires_at=timezone.now() - timedelta(seconds=1),
         )
+        active_story.visibility = Story.Visibility.PUBLIC
+        active_story.save(update_fields=["visibility"])
 
         response = self.client.get("/api/community/stories/")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual([item["id"] for item in response.data["results"]], [active_story.id])
+
+    def test_story_list_can_be_filtered_by_any_author(self):
+        own_story = Story.objects.create(author=self.user, text="My story")
+        other_story = Story.objects.create(
+            author=self.other,
+            text="Their story",
+            visibility=Story.Visibility.PUBLIC,
+        )
+
+        response = self.client.get(
+            "/api/community/stories/",
+            {"author": self.other.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in response.data["results"]], [other_story.id])
+        self.assertNotIn(own_story.id, [item["id"] for item in response.data["results"]])
+
+    def test_story_list_rejects_invalid_author_filter(self):
+        response = self.client.get(
+            "/api/community/stories/",
+            {"author": "not-a-user-id"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("author", response.data)
 
     def test_user_can_create_a_story(self):
         response = self.client.post(
@@ -60,7 +89,11 @@ class CommunityFeatureTests(APITestCase):
         self.assertEqual(response.data["author"]["id"], self.user.id)
 
     def test_story_owner_can_see_viewers_and_viewer_is_counted_once(self):
-        story = Story.objects.create(author=self.other, text="Story")
+        story = Story.objects.create(
+            author=self.other,
+            text="Story",
+            visibility=Story.Visibility.PUBLIC,
+        )
         view_url = f"/api/community/stories/{story.id}/views/"
 
         first_view = self.client.post(view_url)

@@ -28,11 +28,11 @@ const userService = {
     return response.data;
   },
 
-  async search(query) {
+  async search(query, page = 1) {
     const response = await api.get(
       "/users/search/",
       {
-        params: { q: query },
+        params: { q: query, page },
       }
     );
 
@@ -51,6 +51,13 @@ const userService = {
       throw new Error("The server returned an invalid username availability response.");
     }
 
+    return response.data;
+  },
+
+  async suggestionsByContacts(phoneNumbers) {
+    const response = await api.post("/users/suggestions/contacts/", {
+      phone_numbers: phoneNumbers,
+    });
     return response.data;
   },
 };

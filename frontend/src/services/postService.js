@@ -2,6 +2,14 @@ import api from "./api";
 
 const postService = {
   async list(page = 1, sort = "recent", authorId) {
+    if (sort === "for_you") {
+      const response = await api.get("/feed/", {
+        params: { page },
+      });
+
+      return response.data;
+    }
+
     const response = await api.get("/posts/", {
       params: {
         page,
@@ -11,6 +19,11 @@ const postService = {
       },
     });
 
+    return response.data;
+  },
+
+  async trackFeedView(postId) {
+    const response = await api.post(`/feed/${postId}/view/`);
     return response.data;
   },
 

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
+import CreateGroupModal from "../components/messages/CreateGroupModal";
 import messageService from "../services/messageService";
 import useMessages from "../hooks/useMessages";
 import useAuth from "../hooks/useAuth";
 import ConversationList from "../components/messages/ConversationList";
 import MessageList from "../components/messages/MessageList";
 import MessageInput from "../components/messages/MessageInput";
+import TypingIndicator from "../components/messages/TypingIndicator";
 import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
 import { getArrayResults } from "../utils/arrayResults";
@@ -17,6 +19,8 @@ export default function Messages() {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [replyTarget, setReplyTarget] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -27,9 +31,16 @@ export default function Messages() {
         const items = getArrayResults(data, "Conversations");
         setConversations(items);
 
-        const requestedId = location.state?.conversationId;
-        if (requestedId && items.some((item) => item.id === requestedId)) {
-          setSelectedConversation(requestedId);
+        const requestedId =
+          location.state?.conversationId ||
+          new URLSearchParams(location.search).get("conversation_id");
+        if (
+          requestedId &&
+          items.some((item) => String(item.id) === String(requestedId))
+        ) {
+          setSelectedConversation(
+            items.find((item) => String(item.id) === String(requestedId)).id
+          );
         }
 
         const requestedUsername = new URLSearchParams(location.search).get("username");
@@ -61,6 +72,7 @@ export default function Messages() {
 
   const {
     messages,
+    setMessages,
     connected,
     typingUser,
     error: messageError,
@@ -68,9 +80,32 @@ export default function Messages() {
     sendTyping,
   } = useMessages(selectedConversation);
 
-  const handleSend = (content) => {
-    sendMessage(content);
+  const handleSend = (content, replyToId) => {
+    sendMessage(content, replyToId);
     sendTyping(false);
+  };
+  const handleGroupCreated = (conversation) => {
+    setConversations((current) => [
+      conversation,
+      ...current.filter((item) => item.id !== conversation.id),
+    ]);
+    setSelectedConversation(conversation.id);
+    setGroupModalOpen(false);
+  };
+  const handleEdit = async (message, content) => {
+    const updated = await messageService.editMessage(message.id, content);
+    setMessages((current) => current.map((item) => (
+      item.id === message.id ? updated : item
+    )));
+  };
+  const handleDelete = async (message) => {
+    if (!window.confirm("Delete this message?")) return;
+    await messageService.deleteMessage(message.id);
+    setMessages((current) => current.map((item) => (
+      item.id === message.id
+        ? { ...item, content: "", is_deleted: true }
+        : item
+    )));
   };
   const activeConversation = conversations.find(
     (conversation) => conversation.id === selectedConversation
@@ -106,6 +141,7 @@ export default function Messages() {
         selectedId={selectedConversation}
         onSelect={setSelectedConversation}
         currentUser={user}
+        onCreateGroup={() => setGroupModalOpen(true)}
       />
 
       <main className="chat-window">
@@ -128,21 +164,36 @@ export default function Messages() {
             {messageError ? (
               <ErrorState message={messageError} />
             ) : (
-              <MessageList messages={messages} currentUser={user} />
+              <MessageList
+                messages={messages}
+                currentUser={user}
+                onReply={setReplyTarget}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
             )}
 
-            {typingUser && (
-              <div className="typing-indicator">Typing...</div>
-            )}
+            <TypingIndicator
+              username={activeConversation?.participants?.find(
+                (participant) => String(participant.id) === String(typingUser)
+              )?.username}
+            />
 
             <MessageInput
               onSend={handleSend}
               onTyping={sendTyping}
               disabled={!connected}
+              replyTarget={replyTarget}
+              onCancelReply={() => setReplyTarget(null)}
             />
           </>
         )}
       </main>
+      <CreateGroupModal
+        open={groupModalOpen}
+        onClose={() => setGroupModalOpen(false)}
+        onCreated={handleGroupCreated}
+      />
     </div>
   );
 }
