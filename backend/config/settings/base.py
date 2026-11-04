@@ -189,13 +189,24 @@ WSGI_APPLICATION = "config.wsgi.application"
 if dj_database_url is None and os.environ.get("DATABASE_URL"):
     raise RuntimeError("Install dj-database-url to use DATABASE_URL.")
 
-DATABASES = {
-    'default': dj_database_url.parse(
-        os.environ.get('DATABASE_URL'),
-        conn_max_age=600,
-        ssl_require=True
-    )
-}
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=False  # Oracle Cloud DB ke liye SSL require False karein
+        )
+    }
+else:
+    # Local fallback settings (agar DATABASE_URL na mile)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 AUTH_USER_MODEL = "users.User"
 
