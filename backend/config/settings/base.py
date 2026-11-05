@@ -191,20 +191,36 @@ if dj_database_url is None and os.environ.get("DATABASE_URL"):
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
+import os
+from urllib.parse import unquote
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
 if DATABASE_URL:
+    # URL string ke bjaye direct dict environment parsing
+import dj_database_url
     DATABASES = {
-        'default': dj_database_url.parse(
-            DATABASE_URL,
+        'default': dj_database_url.prase(
+            default=DATABASE_URL,
             conn_max_age=600,
-            ssl_require=False  # Oracle Cloud DB ke liye SSL require False karein
+            ssl_require=False
         )
     }
+    DATABASES['default'].setdefault('OPTIONS', {})['sslmode'] = 'disable'
 else:
-    # Local fallback settings (agar DATABASE_URL na mile)
+    # Direct explicitly defined Oracle VM database dictionary (Bina URL parser ke)
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'ricehub',
+            'USER': 'ricehubuser',
+            'PASSWORD': 'Ricehub#123',
+            'HOST': '129.213.102.238',
+            'PORT': '5432',
+            'CONN_MAX_AGE': 600,
+            'OPTIONS': {
+                'sslmode': 'disable',
+            },
         }
     }
 
