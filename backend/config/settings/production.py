@@ -219,17 +219,17 @@ wallet_password = os.getenv("WALLET_PASSWORD")
 if wallet_password:
     oracle_options["wallet_password"] = wallet_password
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.oracle",
-        "NAME": "",
-        "USER": os.getenv("DB_USER", "admin"),
-        "PASSWORD": os.getenv("DB_PASSWORD", ""),
-        "OPTIONS": oracle_options,
-        "CONN_MAX_AGE": 600,
-        "CONN_HEALTH_CHECKS": True,
-    }
-}
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.oracle",
+#         "NAME": "",
+#         "USER": os.getenv("DB_USER", "admin"),
+#         "PASSWORD": os.getenv("DB_PASSWORD", ""),
+#         "OPTIONS": oracle_options,
+#         "CONN_MAX_AGE": 600,
+#         "CONN_HEALTH_CHECKS": True,
+#     }
+# }
 
 
 # --------------------------------------------------
