@@ -214,7 +214,7 @@ else:
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': 'ricehub',
             'USER': 'ricehubuser',
-            'PASSWORD': 'Ricehub#123',
+            'PASSWORD': 'RicehubPas123',
             'HOST': '129.213.102.238',
             'PORT': '5432',
             'CONN_MAX_AGE': 600,
