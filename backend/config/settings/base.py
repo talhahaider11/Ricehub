@@ -200,7 +200,7 @@ if DATABASE_URL:
     # URL string ke bjaye direct dict environment parsing
 
     DATABASES = {
-        'default': dj_database_url.prase(
+        'default': dj_database_url.parse(
             default=DATABASE_URL,
             conn_max_age=600,
             ssl_require=False
