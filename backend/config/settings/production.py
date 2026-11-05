@@ -241,7 +241,7 @@ else:
             "ENGINE": "django.db.backends.postgresql",
             "NAME": os.getenv("DB_NAME", "ricehub"),
             "USER": os.getenv("DB_USER", "ricehubuser"),
-            "PASSWORD": os.getenv("DB_PASSWORD", "RicehubPass123"),
+            "PASSWORD": os.getenv("DB_PASSWORD", "RicehubPas123"),
             "HOST": os.getenv("DB_HOST", "129.213.102.238"),
             "PORT": os.getenv("DB_PORT", "5432"),
             "CONN_MAX_AGE": 600,
