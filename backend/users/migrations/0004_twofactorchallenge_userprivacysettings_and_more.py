@@ -53,7 +53,7 @@ class Migration(migrations.Migration):
                 ('blocker', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='blocked_users', to=settings.AUTH_USER_MODEL)),
             ],
             options={
-                'constraints': [models.UniqueConstraint(fields=('blocker', 'blocked'), name='unique_user_block'), models.CheckConstraint(condition=models.Q(('blocker', models.F('blocked')), _negated=True), name='cannot_block_self')],
+                'constraints': [models.UniqueConstraint(fields=('blocker', 'blocked'), name='unique_user_block'), models.CheckConstraint(check=models.Q(('blocker', models.F('blocked')), _negated=True), name='cannot_block_self')],
             },
         ),
     ]

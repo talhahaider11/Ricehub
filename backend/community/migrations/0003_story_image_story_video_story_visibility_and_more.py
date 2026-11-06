@@ -30,6 +30,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='story',
-            constraint=models.CheckConstraint(condition=models.Q(('image__isnull', False), models.Q(('image', ''), _negated=True), ('video__isnull', False), models.Q(('video', ''), _negated=True), _negated=True), name='story_one_media_type'),
+            constraint=models.CheckConstraint(check=models.Q(('image__isnull', False), models.Q(('image', ''), _negated=True), ('video__isnull', False), models.Q(('video', ''), _negated=True), _negated=True), name='story_one_media_type'),
         ),
     ]

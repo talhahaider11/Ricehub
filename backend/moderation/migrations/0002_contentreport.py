@@ -138,7 +138,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="contentreport",
             constraint=models.CheckConstraint(
-                condition=models.Q(post__isnull=True)
+                check=models.Q(post__isnull=True)
                 | models.Q(comment__isnull=True),
                 name="content_report_single_relation",
             ),

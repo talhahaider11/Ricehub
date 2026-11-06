@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name="muteduser",
-            constraint=models.CheckConstraint(condition=~models.Q(("muter", models.F("muted"))), name="cannot_mute_self"),
+            constraint=models.CheckConstraint(check=~models.Q(("muter", models.F("muted"))), name="cannot_mute_self"),
         ),
         migrations.CreateModel(
             name="AccountReport",

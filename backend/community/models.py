@@ -69,7 +69,7 @@ class Meta:
     ]
     constraints = [
         models.CheckConstraint(
-            check=~(models.Q(image__isnull=False) & ~models.Q(image="") & models.Q(video__isnull=False) & ~models.Q(video="")),  # <-- 'condition=' ko 'check=' se replace kar diya hai
+            check=~(models.Q(image__isnull=False) & ~models.Q(image="") & models.Q(video__isnull=False) & ~models.Q(video="")),  # <-- 'check=' ko 'check=' se replace kar diya hai
             name="story_one_media_type",
         ),
     ]
@@ -343,14 +343,14 @@ class MarketplaceOrder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+class Meta:
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
                 fields=["listing", "buyer"],
                 condition=models.Q(
                     status__in=["requested", "accepted"],
-                ),
+                ),  # <-- 'check=' ko 'condition=' se replace kiya
                 name="one_active_order_per_buyer_listing",
             )
         ]

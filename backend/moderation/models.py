@@ -88,7 +88,7 @@ class ContentReport(models.Model):
                 name="unique_reporter_content_target",
             ),
             models.CheckConstraint(
-                condition=Q(post__isnull=True) | Q(comment__isnull=True),
+                check=Q(post__isnull=True) | Q(comment__isnull=True),
                 name="content_report_single_relation",
             ),
         ]
