@@ -55,24 +55,24 @@ class Story(models.Model):
         db_index=True,
     )
 
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(
-                fields=["author", "-created_at"],
-                name="comm_story_author_created_idx",
-            ),
-            models.Index(
-                fields=["visibility", "expires_at"],
-                name="comm_story_visibility_exp_idx",
-            ),
-        ]
-        constraints = [
-            models.CheckConstraint(
-                condition=~(models.Q(image__isnull=False) & ~models.Q(image="") & models.Q(video__isnull=False) & ~models.Q(video="")),
-                name="story_one_media_type",
-            ),
-        ]
+class Meta:
+    ordering = ["-created_at"]
+    indexes = [
+        models.Index(
+            fields=["author", "-created_at"],
+            name="comm_story_author_created_idx",
+        ),
+        models.Index(
+            fields=["visibility", "expires_at"],
+            name="comm_story_visibility_exp_idx",
+        ),
+    ]
+    constraints = [
+        models.CheckConstraint(
+            check=~(models.Q(image__isnull=False) & ~models.Q(image="") & models.Q(video__isnull=False) & ~models.Q(video="")),  # <-- 'condition=' ko 'check=' se replace kar diya hai
+            name="story_one_media_type",
+        ),
+    ]
 
     @property
     def caption(self):

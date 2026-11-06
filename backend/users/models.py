@@ -134,10 +134,10 @@ class BlockedUser(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["blocker", "blocked"],
-                name="unique_users_blocked_user",  # <--- Yahan naam change kar diya hai
+                name="unique_users_blocked_user",
             ),
             models.CheckConstraint(
-                condition=~Q(blocker=F("blocked")),
+                check=~Q(blocker=F("blocked")),  # <-- 'condition' ko 'check' se replace kiya
                 name="cannot_block_self",
             ),
         ]
@@ -160,10 +160,10 @@ class MutedUser(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["muter", "muted"],
-                name="unique_muted_user",
+                name="unique_users_muted_user",
             ),
             models.CheckConstraint(
-                condition=~Q(muter=F("muted")),
+                check=~Q(muter=F("muted")),  # <-- 'check=' use karein
                 name="cannot_mute_self",
             ),
         ]
