@@ -9,7 +9,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 from users.security_views import SecurityTokenRefreshView
-from users.views import LoginView
+from users.views import LoginView, check_username
 from search.views import (
     ExploreView,
     HashtagDetailView,
