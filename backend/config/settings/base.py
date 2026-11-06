@@ -189,16 +189,24 @@ WSGI_APPLICATION = "config.wsgi.application"
 if dj_database_url is None and os.environ.get("DATABASE_URL"):
     raise RuntimeError("Install dj-database-url to use DATABASE_URL.")
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
 import os
-from urllib.parse import unquote
-
-DATABASE_URL = os.environ.get("DATABASE_URL")
 import dj_database_url
-if DATABASE_URL:
-    # URL string ke bjaye direct dict environment parsing
 
+# Load environment variables from .env file (if python-dotenv is installed)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-fallback-key')
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+# Database Configuration
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    # Render / Production deployment using DATABASE_URL environment variable
     DATABASES = {
         'default': dj_database_url.parse(
             DATABASE_URL,
@@ -208,18 +216,19 @@ if DATABASE_URL:
     }
     DATABASES['default'].setdefault('OPTIONS', {})['sslmode'] = 'disable'
 else:
-    # Direct explicitly defined Oracle VM database dictionary (Bina URL parser ke)
+    # Direct PostgreSQL connection reading dynamically from .env
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'ricehub',
-            'USER': 'ricehubuser',
-            'PASSWORD': 'RicehubPass2026',
-            'HOST': '129.213.102.238',
-            'PORT': '5432',
+            'NAME': os.environ.get('DB_NAME', 'ricehub'),
+            'USER': os.environ.get('DB_USER', 'ricehubuser'),
+            'PASSWORD': os.environ.get('DB_PASSWORD'),
+            'HOST': os.environ.get('DB_HOST', '129.213.102.238'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
             'CONN_MAX_AGE': 600,
+            'CONN_HEALTH_CHECKS': True,
             'OPTIONS': {
-                'sslmode': 'disable',
+                'sslmode': os.environ.get('DB_SSLMODE', 'disable'),
             },
         }
     }

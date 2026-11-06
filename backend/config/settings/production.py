@@ -219,38 +219,15 @@ wallet_password = os.getenv("WALLET_PASSWORD")
 if wallet_password:
     oracle_options["wallet_password"] = wallet_password
 
-import os
-import dj_database_url
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+from .base import *  # noqa: F401, F403
 
-if DATABASE_URL:
-    # Production environment (Render / VPS jahan DATABASE_URL set hoga)
-    DATABASES = {
-        'default': dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=600,
-            ssl_require=False
-        )
-    }
-    DATABASES['default'].setdefault('OPTIONS', {})['sslmode'] = 'disable'
-else:
-    # Fallback for Direct Oracle Cloud VM PostgreSQL Connection
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DB_NAME", "ricehub"),
-            "USER": os.getenv("DB_USER", "ricehubuser"),
-            "PASSWORD": os.getenv("DB_PASSWORD", "RicehubPas123"),
-            "HOST": os.getenv("DB_HOST", "129.213.102.238"),
-            "PORT": os.getenv("DB_PORT", "5432"),
-            "CONN_MAX_AGE": 600,
-            "CONN_HEALTH_CHECKS": True,
-            "OPTIONS": {
-                "sslmode": "disable",
-            },
-        }
-    }
+DEBUG = os.environ.get("DEBUG", "False") == "True"
+
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
+
+# Security headers for production
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # --------------------------------------------------

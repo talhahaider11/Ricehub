@@ -15,21 +15,7 @@ if not OCI_PG_USER or not OCI_PG_PASSWORD.strip():
         "to the Oracle Cloud PostgreSQL database."
     )
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("OCI_PG_NAME", "ricehub"),
-        "USER": OCI_PG_USER,
-        "PASSWORD": OCI_PG_PASSWORD,
-        "HOST": os.environ.get("OCI_PG_HOST", "129.213.102.238"),
-        "PORT": os.environ.get("OCI_PG_PORT", "5432"),
-        "CONN_MAX_AGE": 600,
-        "CONN_HEALTH_CHECKS": True,
-        "OPTIONS": {
-            "sslmode": os.environ.get("OCI_PG_SSLMODE", "disable"),
-        },
-    }
-}
+
 
 CHANNEL_LAYERS = {
     "default": {
