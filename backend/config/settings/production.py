@@ -277,11 +277,26 @@ CHANNEL_LAYERS = {
     },
 }
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
-        "KEY_PREFIX": "ricehub",
-        "TIMEOUT": 60 * 60 * 24,
-    },
-}
+REDIS_URL = os.getenv("REDIS_URL")
+
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "IGNORE_EXCEPTIONS": True,  # Redis connection drop hone par API crash (500) nahi hogi
+                "SOCKET_CONNECT_TIMEOUT": 5,  # 5 seconds connection timeout
+                "SOCKET_TIMEOUT": 5,
+            },
+        }
+    }
+else:
+    # Safe Fallback: Agar REDIS_URL environment variable missing ho
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "ricehub-fallback-cache",
+        }
+    }

@@ -120,6 +120,7 @@ urlpatterns = [
     # Health checks
     path("api/health/", health_check, name="api-health"),
     path("health/", health_check, name="health_check"),
+    path('check-username/', check_username, name='check-username'),
 ]
 
 if settings.DEBUG:
