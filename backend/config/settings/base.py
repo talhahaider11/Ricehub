@@ -56,10 +56,15 @@ ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv(
         "DJANGO_ALLOWED_HOSTS",
-        "localhost,127.0.0.1,[::1]"
+        "localhost,127.0.0.1,[::1],.onrender.com"
     ).split(",")
     if host.strip()
 ]
+
+# Render automatically environment variable `RENDER_EXTERNAL_HOST` pass karta hai
+RENDER_EXTERNAL_HOST = os.getenv("RENDER_EXTERNAL_HOST")
+if RENDER_EXTERNAL_HOST:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOST)
 
 render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
 if render_hostname and render_hostname not in ALLOWED_HOSTS:
@@ -325,6 +330,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://localhost",
     "http://localhost",
+    
 ]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -333,3 +339,6 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+
+CORS_ALLOW_ALL_ORIGINS = True
