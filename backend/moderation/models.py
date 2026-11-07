@@ -70,26 +70,23 @@ class ContentReport(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(
-                fields=["status", "-created_at"],
-                name="moderation__status_4b6062_idx",
-            ),
-            models.Index(
-                fields=["target_type", "target_id"],
-                name="moderation__target__9be8fb_idx",
-            ),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["reporter", "target_type", "target_id"],
-                name="unique_reporter_content_target",
-            ),
+class Meta:
+    ordering = ["-created_at"]
+    indexes = [
+        models.Index(
+            fields=["status", "created_at"],
+            name="mod_report_status_created_idx",
+        ),
+    ]
+    constraints = [
             models.CheckConstraint(
-                check=Q(post__isnull=True) | Q(comment__isnull=True),
-                name="content_report_single_relation",
+                condition=~(
+                    models.Q(target_post__isnull=True)
+                    & models.Q(target_comment__isnull=True)
+                    & models.Q(target_story__isnull=True)
+                    & models.Q(target_user__isnull=True)
+                ),  # <-- Class 'models.CheckConstraint' aur kwarg 'condition='
+                name="report_must_have_target",
             ),
         ]
 

@@ -9,7 +9,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 from users.security_views import SecurityTokenRefreshView
-from users.views import LoginView, check_username
+
 from search.views import (
     ExploreView,
     HashtagDetailView,
@@ -18,6 +18,7 @@ from search.views import (
     UserSuggestionsView,
 )
 from .health import health_check
+from users.views import LoginView
 
 
 def api_root(request):
@@ -120,7 +121,7 @@ urlpatterns = [
     # Health checks
     path("api/health/", health_check, name="api-health"),
     path("health/", health_check, name="health_check"),
-    path('check-username/', check_username, name='check-username'),
+    
 ]
 
 if settings.DEBUG:

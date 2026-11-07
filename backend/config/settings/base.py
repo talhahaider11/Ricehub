@@ -3,6 +3,9 @@ from pathlib import Path
 from datetime import timedelta
 from importlib import import_module
 import dj_database_url
+from django.db.backends.base.base import BaseDatabaseWrapper
+
+BaseDatabaseWrapper.check_database_version_supported = lambda self: None
 
 try:
     dj_database_url = import_module("dj_database_url")

@@ -69,7 +69,12 @@ class Meta:
     ]
     constraints = [
         models.CheckConstraint(
-            check=~(models.Q(image__isnull=False) & ~models.Q(image="") & models.Q(video__isnull=False) & ~models.Q(video="")),  # <-- 'check=' ko 'check=' se replace kar diya hai
+            condition=~(
+                models.Q(image__isnull=False)
+                & ~models.Q(image="")
+                & models.Q(video__isnull=False)
+                & ~models.Q(video="")
+            ),  # <-- Class 'models.CheckConstraint' hai aur kwarg 'condition=' hai
             name="story_one_media_type",
         ),
     ]

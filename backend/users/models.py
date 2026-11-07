@@ -141,7 +141,7 @@ class BlockedUser(models.Model):
                 name="unique_users_blocked_user",
             ),
             models.CheckConstraint(
-                condition=~Q(blocker=F("blocked")),  # <-- 'check' ko dobara 'condition' kar diya hai
+                condition=~Q(blocker=F("blocked")),  # <-- Class 'models.CheckConstraint' hai aur kwarg 'condition=' hai
                 name="cannot_block_self",
             ),
         ]
@@ -167,7 +167,7 @@ class MutedUser(models.Model):
                 name="unique_users_muted_user",
             ),
             models.CheckConstraint(
-                check=~Q(muter=F("muted")),  # <-- 'check=' use karein
+                condition=~Q(muter=F("muted")),  # <-- 'models.CheckConstraint(condition=...)' sahi structure hai
                 name="cannot_mute_self",
             ),
         ]

@@ -35,6 +35,13 @@ from .password_views import (
 )
 from .security_views import SecurityTokenRefreshView
 
+from django.core.cache import cache
+from django.contrib.auth import get_user_model
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+
 urlpatterns = [
     # Registration and email verification
 
@@ -131,3 +138,28 @@ urlpatterns = [
         name="password_reset_confirm",
     ),
 ]
+
+User = get_user_model()
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_username(request):
+    username = request.GET.get('username', '').strip()
+    
+    if not username:
+        return Response({"detail": "Username parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    cache_key = f"user_check_{username.lower()}"
+    try:
+        is_taken = cache.get(cache_key)
+    except Exception:
+        is_taken = None
+
+    if is_taken is None:
+        is_taken = User.objects.filter(username__iexact=username).exists()
+        try:
+            cache.set(cache_key, is_taken, 60)
+        except Exception:
+            pass
+
+    return Response({"available": not is_taken}, status=status.HTTP_200_OK)
