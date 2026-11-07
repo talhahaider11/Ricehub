@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 
 from .validators import validate_profile_image
 
@@ -117,6 +118,9 @@ class UserPrivacySettings(models.Model):
     read_receipts = models.BooleanField(default=True)
 
 
+User = get_user_model()
+
+
 class BlockedUser(models.Model):
     blocker = models.ForeignKey(
         User,
@@ -137,7 +141,7 @@ class BlockedUser(models.Model):
                 name="unique_users_blocked_user",
             ),
             models.CheckConstraint(
-                check=~Q(blocker=F("blocked")),  # <-- 'condition' ko 'check' se replace kiya
+                condition=~Q(blocker=F("blocked")),  # <-- 'check' ko dobara 'condition' kar diya hai
                 name="cannot_block_self",
             ),
         ]
