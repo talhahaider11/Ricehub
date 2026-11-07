@@ -30,13 +30,10 @@ export default function Profile() {
   const [error, setError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-  const [requestSent, setRequestSent] = useState(false);
+  const [friendshipStatus, setFriendshipStatus] = useState("none");
+  const [friendRequestId, setFriendRequestId] = useState(null);
   const [friends, setFriends] = useState([]);
   const [friendsOpen, setFriendsOpen] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [reportOpen, setReportOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("spam");
-  const [reportDetails, setReportDetails] = useState("");
 
   const isOwnProfile = String(currentUser?.id) === String(id);
 
@@ -54,6 +51,8 @@ export default function Profile() {
       .then(([profile, postsData]) => {
         if (!active) return;
         setUser(profile);
+        setFriendshipStatus(profile.friendship_status || "none");
+        setFriendRequestId(profile.friend_request_id || null);
         setPosts(getArrayResults(postsData, "Profile posts"));
         setPostsPage(1);
         setHasMorePosts(Boolean(postsData.next));
@@ -73,21 +72,37 @@ export default function Profile() {
   }, [id]);
 
   useEffect(() => {
-    if (isOwnProfile || !user) return;
-    settingsService.isMuted(user.id)
-      .then(setMuted)
-      .catch((loadError) => {
-        console.error("Mute status could not be loaded:", loadError);
-      });
-  }, [isOwnProfile, user]);
+    if (isOwnProfile || !user) return undefined;
+    const refreshFriendship = async () => {
+      try {
+        const profile = await userService.getUser(id);
+        setFriendshipStatus(profile.friendship_status || "none");
+        setFriendRequestId(profile.friend_request_id || null);
+      } catch (refreshError) {
+        console.error("Friendship status could not be refreshed:", refreshError);
+      }
+    };
+    window.addEventListener("focus", refreshFriendship);
+    return () => window.removeEventListener("focus", refreshFriendship);
+  }, [id, isOwnProfile, user]);
 
   const addFriend = async () => {
     try {
       setActionLoading(true);
       setActionMessage("");
-      await friendService.send(user.id);
-      setRequestSent(true);
-      setActionMessage("Friend request sent.");
+      if (friendshipStatus === "incoming_pending" && friendRequestId) {
+        await friendService.accept(friendRequestId);
+        setFriendshipStatus("friends");
+        setFriendRequestId(null);
+        setUser((current) => (
+          current ? { ...current, friends_count: (current.friends_count || 0) + 1 } : current
+        ));
+        setActionMessage("Friend request accepted.");
+      } else {
+        const request = await friendService.send(user.id);
+        setFriendshipStatus(request.status === "accepted" ? "friends" : "outgoing_pending");
+        setActionMessage(request.status === "accepted" ? "You are now friends." : "Friend request sent.");
+      }
     } catch (requestError) {
       setActionMessage(
         requestError.response?.data?.detail || "Friend request could not be sent."
@@ -111,23 +126,12 @@ export default function Profile() {
     }
   };
 
-  const toggleMute = async () => {
-    try {
-      setActionLoading(true);
-      if (muted) {
-        await settingsService.unmuteUser(user.id);
-        setMuted(false);
-        setActionMessage("Account unmuted.");
-      } else {
-        await settingsService.muteUser(user.id);
-        setMuted(true);
-        setActionMessage("Account muted. Their posts and stories are hidden from your feed.");
-      }
-    } catch (muteError) {
-      setActionMessage(muteError.response?.data?.detail || "Mute setting could not be updated.");
-    } finally {
-      setActionLoading(false);
+  const moreActions = async (action) => {
+    if (action === "message") {
+      await startConversation();
+      return;
     }
+    await blockUser();
   };
 
   const blockUser = async () => {
@@ -138,25 +142,6 @@ export default function Profile() {
       navigate("/", { replace: true });
     } catch (blockError) {
       setActionMessage(blockError.response?.data?.detail || "Account could not be blocked.");
-      setActionLoading(false);
-    }
-  };
-
-  const submitReport = async (event) => {
-    event.preventDefault();
-    try {
-      setActionLoading(true);
-      const result = await settingsService.reportAccount({
-        user_id: user.id,
-        reason: reportReason,
-        details: reportDetails,
-      });
-      setActionMessage(result.detail);
-      setReportOpen(false);
-      setReportDetails("");
-    } catch (reportError) {
-      setActionMessage(reportError.response?.data?.detail || "Report could not be submitted.");
-    } finally {
       setActionLoading(false);
     }
   };
@@ -221,23 +206,26 @@ export default function Profile() {
             <Link to="/profile/edit"><Button variant="secondary">Edit Profile</Button></Link>
           ) : (
             <div className="profile-actions">
-              <Button onClick={addFriend} disabled={actionLoading || requestSent}>
-                {requestSent ? "Request Sent" : "Add Friend"}
+              <Button
+                onClick={addFriend}
+                disabled={actionLoading || ["outgoing_pending", "friends"].includes(friendshipStatus)}
+              >
+                {friendshipStatus === "friends"
+                  ? "Friends"
+                  : friendshipStatus === "outgoing_pending"
+                    ? "Requested"
+                    : friendshipStatus === "incoming_pending"
+                      ? "Accept request"
+                      : "Add Friend"}
               </Button>
               <details className="profile-options">
                 <summary aria-label="More profile actions">More</summary>
                 <div role="menu">
-                  <button type="button" role="menuitem" onClick={startConversation}>
-                    Direct Message
+                  <button type="button" role="menuitem" onClick={() => void moreActions("message")}>
+                    Send message
                   </button>
-                  <button type="button" role="menuitem" onClick={() => setReportOpen(true)}>
-                    Report about this account
-                  </button>
-                  <button type="button" role="menuitem" onClick={blockUser} disabled={actionLoading}>
-                    Block this account
-                  </button>
-                  <button type="button" role="menuitem" onClick={toggleMute} disabled={actionLoading}>
-                    {muted ? "Unmute this account" : "Mute this account"}
+                  <button type="button" role="menuitem" onClick={() => void moreActions("block")} disabled={actionLoading}>
+                    Block
                   </button>
                 </div>
               </details>
@@ -282,28 +270,6 @@ export default function Profile() {
         </div>
       )}
 
-      {reportOpen && (
-        <div className="profile-modal-backdrop" role="presentation" onClick={() => setReportOpen(false)}>
-          <form className="profile-modal card" role="dialog" aria-modal="true" aria-label="Report account" onSubmit={submitReport} onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="profile-modal-close" onClick={() => setReportOpen(false)}>Cancel</button>
-            <h2>Report @{user.username}</h2>
-            <label>
-              Reason
-              <select value={reportReason} onChange={(event) => setReportReason(event.target.value)}>
-                <option value="spam">Spam</option>
-                <option value="harassment">Harassment</option>
-                <option value="impersonation">Impersonation</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <label>
-              Details
-              <textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={2000} />
-            </label>
-            <Button type="submit" disabled={actionLoading}>{actionLoading ? "Submitting..." : "Submit report"}</Button>
-          </form>
-        </div>
-      )}
     </div>
   );
 }

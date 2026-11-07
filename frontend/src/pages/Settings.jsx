@@ -2,7 +2,6 @@ import useAuth from "../hooks/useAuth";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
-import authService from "../services/authService";
 import userService from "../services/userService";
 import notificationService from "../services/notificationService";
 import settingsService from "../services/settingsService";
@@ -44,14 +43,9 @@ export default function Settings() {
   const [confirmingTwoFactor, setConfirmingTwoFactor] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
-  const [verificationCodeSent, setVerificationCodeSent] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     notificationService.getPreferences()
@@ -146,34 +140,6 @@ export default function Settings() {
     }
   };
 
-  const changePassword = async (event) => {
-    event.preventDefault();
-    setActionError("");
-    setActionMessage("");
-    if (newPassword !== confirmNewPassword) {
-      setActionError("The new passwords do not match.");
-      return;
-    }
-    setChangingPassword(true);
-    try {
-      const response = await authService.changePassword({
-        current_password: currentPassword,
-        new_password: newPassword,
-      });
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmNewPassword("");
-      setActionMessage(response.detail);
-    } catch (error) {
-      const detail = error.response?.data?.current_password
-        || error.response?.data?.new_password
-        || error.response?.data?.detail;
-      setActionError(Array.isArray(detail) ? detail.join(" ") : detail || "Password could not be changed.");
-    } finally {
-      setChangingPassword(false);
-    }
-  };
-
   const updateTwoFactor = async (action) => {
     setActionError("");
     setActionMessage("");
@@ -247,20 +213,6 @@ export default function Settings() {
     }
   };
 
-  const resendVerification = async () => {
-    setActionError("");
-    setVerificationCodeSent(false);
-    try {
-      const response = await authService.resendVerificationCode(user.email);
-      setActionMessage(response.detail);
-      setVerificationCodeSent(true);
-    } catch (error) {
-      setActionError(
-        error.response?.data?.detail || "Verification email could not be sent. Check email settings."
-      );
-    }
-  };
-
   return (
     <div className="page-container">
 
@@ -303,24 +255,13 @@ export default function Settings() {
               </span>
             </div>
             {!user?.is_email_verified && (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={resendVerification}
-                >
-                  Verify email
-                </button>
-                {verificationCodeSent && (
-                  <Link
-                    className="btn btn-secondary"
-                    to="/verify-email"
-                    state={{ email: user.email }}
-                  >
-                    Enter verification code
-                  </Link>
-                )}
-              </>
+              <Link
+                className="btn btn-secondary"
+                to="/verify-email"
+                state={{ email: user?.email }}
+              >
+                Verify email
+              </Link>
             )}
             <div className="settings-row">
               <div>
@@ -562,41 +503,6 @@ export default function Settings() {
                 </button>
               </div>
             )}
-            <form className="settings-security-form" onSubmit={changePassword}>
-              <h3>Change password</h3>
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                placeholder="Current password"
-                aria-label="Current password to change password"
-                required
-              />
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                placeholder="New password"
-                aria-label="New password"
-                required
-              />
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                value={confirmNewPassword}
-                onChange={(event) => setConfirmNewPassword(event.target.value)}
-                placeholder="Confirm new password"
-                aria-label="Confirm new password"
-                required
-              />
-              <button className="btn btn-primary" type="submit" disabled={changingPassword}>
-                {changingPassword ? "Changing..." : "Change password"}
-              </button>
-            </form>
             <div className="settings-row">
               <div>
                 <strong>Password</strong>

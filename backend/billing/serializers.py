@@ -4,6 +4,12 @@ from .models import PaymentRequest
 
 
 class PaymentRequestSerializer(serializers.ModelSerializer):
+    reference = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=120,
+    )
+
     receipt = serializers.ImageField(
         write_only=True,
         required=False,
@@ -48,8 +54,4 @@ class PaymentRequestSerializer(serializers.ModelSerializer):
 
     def validate_reference(self, value):
         value = value.strip()
-        if not value:
-            raise serializers.ValidationError(
-                "Enter the transfer reference for manual review."
-            )
         return value

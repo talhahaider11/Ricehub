@@ -1,4 +1,5 @@
 import mimetypes
+from uuid import uuid4
 
 from django.conf import settings
 from django.http import FileResponse
@@ -123,6 +124,10 @@ class PaymentRequestListCreateView(APIView):
             if missing:
                 raise ValidationError(missing)
         else:
+            if not serializer.validated_data.get("reference"):
+                raise ValidationError(
+                    {"reference": "Enter the transfer reference for a post boost."}
+                )
             if not post:
                 raise ValidationError({"post": "Select a post to boost."})
             if post.author_id != request.user.pk:
@@ -147,6 +152,10 @@ class PaymentRequestListCreateView(APIView):
                 payment = serializer.save(
                     user=request.user,
                     amount_pkr=PaymentRequest.PRICES[kind],
+                    reference=(
+                        serializer.validated_data.get("reference")
+                        or f"verification-{uuid4().hex}"
+                    ),
                 )
         except IntegrityError as error:
             raise ValidationError(

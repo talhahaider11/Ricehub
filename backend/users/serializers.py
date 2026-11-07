@@ -17,6 +17,7 @@ from rest_framework_simplejwt.token_blacklist.models import (
 )
 
 from friendships.services import get_friend_ids
+from friendships.models import FriendRequest
 from .models import (
     BlockedUser,
     EmailVerification,
@@ -43,6 +44,8 @@ class UserSerializer(serializers.ModelSerializer):
     is_staff = serializers.SerializerMethodField()
     phone_number = serializers.SerializerMethodField()
     subscription_expires_at = serializers.SerializerMethodField()
+    friendship_status = serializers.SerializerMethodField()
+    friend_request_id = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -55,6 +58,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_verified", "subscription_expires_at", "phone_number",
             "is_phone_verified", "preferred_language",
             "friends_count", "posts_count", "is_staff",
+            "friendship_status", "friend_request_id",
         ]
         read_only_fields = [
             "id", "is_online", "last_seen", "created_at",
@@ -111,6 +115,37 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_friends_count(self, obj):
         return len(get_friend_ids(obj))
+
+    def get_friendship_status(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated or request.user.pk == obj.pk:
+            return "self" if request and request.user.is_authenticated else "none"
+        if obj.pk in get_friend_ids(request.user):
+            return "friends"
+        if FriendRequest.objects.filter(
+            sender=request.user,
+            receiver=obj,
+            status=FriendRequest.Status.PENDING,
+        ).exists():
+            return "outgoing_pending"
+        if FriendRequest.objects.filter(
+            sender=obj,
+            receiver=request.user,
+            status=FriendRequest.Status.PENDING,
+        ).exists():
+            return "incoming_pending"
+        return "none"
+
+    def get_friend_request_id(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated or request.user.pk == obj.pk:
+            return None
+        pending = FriendRequest.objects.filter(
+            sender=obj,
+            receiver=request.user,
+            status=FriendRequest.Status.PENDING,
+        ).only("pk").first()
+        return pending.pk if pending else None
 
     def get_posts_count(self, obj):
         return obj.posts.count()

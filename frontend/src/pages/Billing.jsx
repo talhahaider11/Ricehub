@@ -159,7 +159,6 @@ export default function Billing() {
     <div className="page-container">
       <section className="card settings-card billing-card">
         <h1>{isBoost ? t("boostPost") : t("getVerified")}</h1>
-        <p>{t("manualPayments")}</p>
 
         {!isBoost && (
           <section className="settings-section">
@@ -353,16 +352,18 @@ export default function Billing() {
               </label>
             </>
           )}
-          <label>
-            Transfer reference
-            <input
-              value={reference}
-              onChange={(event) => setReference(event.target.value)}
-              maxLength={120}
-              required
-              placeholder="Enter your transfer reference"
-            />
-          </label>
+          {isBoost && (
+            <label>
+              Transfer reference
+              <input
+                value={reference}
+                onChange={(event) => setReference(event.target.value)}
+                maxLength={120}
+                required
+                placeholder="Enter your transfer reference"
+              />
+            </label>
+          )}
           <p className="muted">Never enter your card PIN, password, or one-time banking code here.</p>
           {paymentError && <p className="settings-error" role="alert">{paymentError}</p>}
           {paymentNotice && <p className="settings-status" role="status">{paymentNotice}</p>}

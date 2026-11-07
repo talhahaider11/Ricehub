@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 
 def payment_receipt_upload_path(instance, filename):
@@ -56,7 +57,7 @@ class PaymentRequest(models.Model):
     kind = models.CharField(max_length=20, choices=Kind.choices)
     method = models.CharField(max_length=20, choices=Method.choices)
     amount_pkr = models.DecimalField(max_digits=8, decimal_places=2)
-    reference = models.CharField(max_length=120)
+    reference = models.CharField(max_length=120, blank=True)
     sender_name = models.CharField(max_length=120, blank=True)
     sender_phone = models.CharField(max_length=32, blank=True)
     transfer_app = models.CharField(
@@ -89,6 +90,7 @@ class PaymentRequest(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["method", "reference"],
+                condition=~Q(reference=""),
                 name="unique_payment_transfer_reference",
             ),
         ]

@@ -47,6 +47,7 @@ import Suggestions from "../pages/Suggestions";
 import useAuth from "../hooks/useAuth";
 
 import MainLayout from "../layouts/MainLayout";
+import SearchLayout from "../layouts/SearchLayout";
 import AuthLayout from "../layouts/AuthLayout";
 import AdminLayout from "../layouts/AdminLayout";
 import AdminRoute from "./AdminRoute";
@@ -121,6 +122,12 @@ export default function AppRoutes() {
         </Route>
 
         <Route element={<ProtectedRoute />}>
+          <Route element={<SearchLayout />}>
+            <Route path="/search" element={<Search />} />
+            <Route path="/search/profile/:id" element={<Profile />} />
+            <Route path="/search/posts/:id" element={<PostDetail />} />
+          </Route>
+
           <Route element={<AdminRoute />}>
             <Route element={<AdminLayout />}>
               <Route path="/admin" element={<AdminDashboardPage />} />
@@ -183,11 +190,6 @@ export default function AppRoutes() {
             <Route
               path="/notifications"
               element={<Notifications />}
-            />
-
-            <Route
-              path="/search"
-              element={<Search />}
             />
 
             <Route
