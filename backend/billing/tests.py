@@ -1,7 +1,10 @@
 from datetime import timedelta
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from PIL import Image
 from rest_framework.test import APITestCase
 
 from billing.models import PaymentRequest
@@ -37,6 +40,17 @@ class BillingTests(APITestCase):
         self.assertFalse(response.data["automatic_billing"])
         self.assertEqual(response.data["subscription"]["amount_pkr"], "249.00")
         self.assertEqual(response.data["subscription"]["grace_days"], 5)
+        self.assertIn("account_number", response.data["sadapay"])
+        self.assertEqual(response.data["review_window_hours"], 24)
+
+    def create_receipt(self):
+        image_buffer = BytesIO()
+        Image.new("RGB", (1, 1), color="white").save(image_buffer, format="PNG")
+        return SimpleUploadedFile(
+            "receipt.png",
+            image_buffer.getvalue(),
+            content_type="image/png",
+        )
 
     def test_subscription_payment_is_manual_and_server_priced(self):
         response = self.client.post(
@@ -46,13 +60,20 @@ class BillingTests(APITestCase):
                 "method": PaymentRequest.Method.SADAPAY,
                 "amount_pkr": "1.00",
                 "reference": "transfer-123",
+                "sender_name": "Billing User",
+                "sender_phone": "+923001234567",
+                "transfer_app": PaymentRequest.TransferApp.EASYPAISA,
+                "receipt": self.create_receipt(),
             },
-            format="json",
+            format="multipart",
         )
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["amount_pkr"], "249.00")
         self.assertEqual(response.data["status"], PaymentRequest.Status.PENDING)
+        self.assertEqual(response.data["sender_name"], "Billing User")
+        self.assertEqual(response.data["transfer_app"], "easypaisa")
+        self.assertNotIn("receipt", response.data)
         self.assertFalse(self.user.is_verified)
 
         payment = PaymentRequest.objects.get(pk=response.data["id"])
@@ -63,6 +84,59 @@ class BillingTests(APITestCase):
             self.user.subscription_expires_at,
             timezone.now() + timedelta(days=29),
         )
+
+    def test_subscription_requires_sender_details_and_receipt(self):
+        response = self.client.post(
+            "/api/billing/payment-requests/",
+            {
+                "kind": PaymentRequest.Kind.SUBSCRIPTION,
+                "method": PaymentRequest.Method.SADAPAY,
+                "reference": "missing-receipt",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("receipt", response.data)
+        self.assertFalse(PaymentRequest.objects.exists())
+
+    def test_subscription_rejects_non_sadapay_destination(self):
+        response = self.client.post(
+            "/api/billing/payment-requests/",
+            {
+                "kind": PaymentRequest.Kind.SUBSCRIPTION,
+                "method": PaymentRequest.Method.EASYPAISA,
+                "reference": "wrong-destination",
+                "sender_name": "Billing User",
+                "sender_phone": "+923001234567",
+                "transfer_app": PaymentRequest.TransferApp.EASYPAISA,
+                "receipt": self.create_receipt(),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("method", response.data)
+        self.assertFalse(PaymentRequest.objects.exists())
+
+    def test_receipt_download_is_limited_to_staff(self):
+        payment = PaymentRequest.objects.create(
+            user=self.user,
+            kind=PaymentRequest.Kind.SUBSCRIPTION,
+            method=PaymentRequest.Method.SADAPAY,
+            amount_pkr=PaymentRequest.PRICES[PaymentRequest.Kind.SUBSCRIPTION],
+            reference="private-receipt",
+            receipt=self.create_receipt(),
+        )
+        receipt_url = f"/api/billing/admin/payment-requests/{payment.pk}/receipt/"
+
+        forbidden = self.client.get(receipt_url)
+        self.assertEqual(forbidden.status_code, 403)
+
+        self.client.force_authenticate(self.staff)
+        allowed = self.client.get(receipt_url)
+        self.assertEqual(allowed.status_code, 200)
+        self.assertTrue(allowed["Content-Type"].startswith("image/"))
 
     def test_subscription_requires_email_and_phone_verification(self):
         self.user.is_phone_verified = False

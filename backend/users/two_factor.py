@@ -15,7 +15,7 @@ def send_two_factor_code(user, purpose):
         subject="Your RiceHub sign-in verification code",
         message=(
             f"Your RiceHub verification code is {code}. "
-            "It expires in 10 minutes."
+            "It expires in 30 minutes."
         ),
         from_email=None,
         recipient_list=[user.email],
@@ -29,7 +29,7 @@ def send_two_factor_code(user, purpose):
         defaults={
             "code_hash": make_password(code),
             "purpose": purpose,
-            "expires_at": timezone.now() + timedelta(minutes=10),
+            "expires_at": timezone.now() + timedelta(minutes=30),
             "attempts": 0,
         },
     )

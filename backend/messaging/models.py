@@ -81,6 +81,10 @@ class ConversationMember(models.Model):
 
 
 class Message(models.Model):
+    class AttachmentType(models.TextChoices):
+        FILE = "file", "File"
+        AUDIO = "audio", "Voice note"
+
     conversation = models.ForeignKey(
         "Conversation",
         on_delete=models.CASCADE,
@@ -106,6 +110,11 @@ class Message(models.Model):
         upload_to="messages/%Y/%m/",
         blank=True,
         null=True,
+    )
+    attachment_type = models.CharField(
+        max_length=10,
+        choices=AttachmentType.choices,
+        default=AttachmentType.FILE,
     )
 
     is_read = models.BooleanField(

@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
 
 from friendships.models import FriendRequest
@@ -89,6 +90,30 @@ class MessagingFeatureTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_voice_note_upload_creates_audio_message(self):
+        self.make_friends()
+        voice_note = SimpleUploadedFile(
+            "voice-note.webm",
+            b"voice note payload",
+            content_type="audio/webm",
+        )
+
+        response = self.client.post(
+            f"/api/messages/conversations/{self.conversation.pk}/messages/",
+            {
+                "content": "",
+                "attachment": voice_note,
+                "attachment_type": Message.AttachmentType.AUDIO,
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["attachment_type"], Message.AttachmentType.AUDIO)
+        message = Message.objects.get(pk=response.data["id"])
+        self.assertEqual(message.sender, self.user)
+        self.assertTrue(message.attachment.name.endswith(".webm"))
 
     def test_message_sender_can_edit_and_delete_own_message(self):
         message = Message.objects.create(

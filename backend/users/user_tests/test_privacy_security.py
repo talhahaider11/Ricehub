@@ -372,6 +372,10 @@ class PrivacyAndSecurityTests(APITestCase):
         self.assertNotIn("access", login.data)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, [self.user.email])
+        self.assertGreater(
+            self.user.two_factor_challenge.expires_at,
+            timezone.now() + timedelta(minutes=29),
+        )
 
         code = re.search(r"\b(\d{6})\b", mail.outbox[0].body).group(1)
         verified = self.client.post(
@@ -384,7 +388,13 @@ class PrivacyAndSecurityTests(APITestCase):
         self.assertIn("refresh", verified.data)
 
     def test_two_factor_can_only_be_enabled_after_email_code(self):
+        self.user.is_email_verified = True
+        self.user.save(update_fields=["is_email_verified"])
         self.client.force_authenticate(self.user)
+        status_response = self.client.get("/api/users/security/two-factor/")
+        self.assertEqual(status_response.status_code, 200)
+        self.assertFalse(status_response.data["two_factor_enabled"])
+
         start = self.client.post(
             "/api/users/security/two-factor/",
             {
@@ -407,3 +417,31 @@ class PrivacyAndSecurityTests(APITestCase):
         )
         self.assertEqual(confirm.status_code, 200)
         self.assertTrue(confirm.data["two_factor_enabled"])
+
+        enabled_status = self.client.get("/api/users/security/two-factor/")
+        self.assertEqual(enabled_status.status_code, 200)
+        self.assertTrue(enabled_status.data["two_factor_enabled"])
+
+        disabled = self.client.post(
+            "/api/users/security/two-factor/",
+            {"action": "disable", "password": "StrongPassword123"},
+            format="json",
+        )
+        self.assertEqual(disabled.status_code, 200)
+        self.assertFalse(disabled.data["two_factor_enabled"])
+
+    def test_two_factor_cannot_be_enabled_before_email_verification(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.post(
+            "/api/users/security/two-factor/",
+            {
+                "action": "start_enable",
+                "password": "StrongPassword123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(UserSecuritySettings.objects.filter(user=self.user).exists())
+        self.assertEqual(mail.outbox, [])

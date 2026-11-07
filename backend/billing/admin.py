@@ -1,4 +1,6 @@
 from django.contrib import admin, messages
+from django.urls import reverse
+from django.utils.html import format_html
 
 from .models import PaymentRequest
 from .services import review_payment_request
@@ -13,6 +15,10 @@ class PaymentRequestAdmin(admin.ModelAdmin):
         "amount_pkr",
         "method",
         "reference",
+        "sender_name",
+        "sender_phone",
+        "transfer_app",
+        "receipt_preview",
         "status",
         "created_at",
     )
@@ -25,12 +31,25 @@ class PaymentRequestAdmin(admin.ModelAdmin):
         "method",
         "amount_pkr",
         "reference",
+        "sender_name",
+        "sender_phone",
+        "transfer_app",
+        "receipt_preview",
         "status",
         "created_at",
         "reviewed_by",
         "reviewed_at",
     )
     actions = ("approve_requests", "reject_requests")
+
+    @admin.display(description="Receipt")
+    def receipt_preview(self, obj):
+        if not obj.receipt:
+            return "No receipt uploaded"
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener">View receipt</a>',
+            reverse("admin-payment-receipt", args=[obj.pk]),
+        )
 
     @admin.action(description="Approve selected payment requests")
     def approve_requests(self, request, queryset):

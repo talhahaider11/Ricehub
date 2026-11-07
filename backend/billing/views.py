@@ -1,7 +1,13 @@
+import mimetypes
+
 from django.conf import settings
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAdminUser
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -46,7 +52,36 @@ class PaymentOptionsView(APIView):
                     for value, label in PaymentRequest.Method.choices
                 ],
                 "instructions": getattr(settings, "PAYMENT_INSTRUCTIONS", ""),
+                "sadapay": {
+                    "account_name": getattr(settings, "SADAPAY_ACCOUNT_NAME", ""),
+                    "account_number": getattr(settings, "SADAPAY_ACCOUNT_NUMBER", ""),
+                    "qr_image_url": getattr(settings, "SADAPAY_QR_IMAGE_URL", ""),
+                },
+                "transfer_apps": [
+                    {"value": value, "label": label}
+                    for value, label in PaymentRequest.TransferApp.choices
+                ],
+                "review_window_hours": 24,
             }
+        )
+
+
+class AdminPaymentReceiptView(APIView):
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, payment_id):
+        payment = get_object_or_404(PaymentRequest, pk=payment_id)
+        if not payment.receipt:
+            return Response(
+                {"detail": "No receipt was uploaded for this payment request."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return FileResponse(
+            payment.receipt.open("rb"),
+            content_type=mimetypes.guess_type(payment.receipt.name)[0] or "application/octet-stream",
+            as_attachment=False,
+            filename="payment-receipt",
         )
 
 
@@ -70,6 +105,23 @@ class PaymentRequestListCreateView(APIView):
                 raise ValidationError(
                     {"detail": "Verify your email and phone before requesting verification."}
                 )
+            if serializer.validated_data["method"] != PaymentRequest.Method.SADAPAY:
+                raise ValidationError(
+                    {"method": "Verification payments must be sent to the SadaPay account."}
+                )
+            required_fields = {
+                "sender_name": "Enter the name on the sending account.",
+                "sender_phone": "Enter the sender phone number.",
+                "transfer_app": "Select the app used to send the transfer.",
+                "receipt": "Upload the payment receipt image.",
+            }
+            missing = {
+                field: message
+                for field, message in required_fields.items()
+                if not serializer.validated_data.get(field)
+            }
+            if missing:
+                raise ValidationError(missing)
         else:
             if not post:
                 raise ValidationError({"post": "Select a post to boost."})

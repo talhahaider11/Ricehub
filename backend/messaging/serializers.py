@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from pathlib import PurePath
 from rest_framework import serializers
 
 from .models import Conversation, Message
@@ -51,7 +52,7 @@ class MessageSerializer(
     conversation = serializers.PrimaryKeyRelatedField(
         read_only=True
     )
-    attachment = serializers.SerializerMethodField()
+    attachment = serializers.FileField(required=False, allow_null=True)
     verification_warning = serializers.SerializerMethodField()
     reply_to = serializers.SerializerMethodField()
     reply_to_id = serializers.PrimaryKeyRelatedField(
@@ -71,6 +72,7 @@ class MessageSerializer(
             "sender",
             "content",
             "attachment",
+            "attachment_type",
             "verification_warning",
             "is_read",
             "is_deleted",
@@ -92,19 +94,10 @@ class MessageSerializer(
             "updated_at",
         ]
 
-    def get_attachment(self, obj):
-
-        request = self.context.get("request")
-
-        if not obj.attachment:
-            return None
-
-        url = obj.attachment.url
-
-        if request:
-            return request.build_absolute_uri(url)
-
-        return url
+    def validate_attachment(self, value):
+        if value and value.size > 10 * 1024 * 1024:
+            raise serializers.ValidationError("Attachments must be 10 MB or smaller.")
+        return value
 
     def get_verification_warning(self, obj):
         return not obj.sender.is_verified
@@ -147,6 +140,18 @@ class MessageSerializer(
         attachment = attrs.get(
             "attachment"
         )
+        attachment_type = attrs.get(
+            "attachment_type",
+            Message.AttachmentType.FILE,
+        )
+        if attachment and attachment_type == Message.AttachmentType.AUDIO:
+            allowed_extensions = {".m4a", ".mp3", ".ogg", ".wav", ".webm"}
+            extension = PurePath(attachment.name).suffix.lower()
+            content_type = getattr(attachment, "content_type", "") or ""
+            if extension not in allowed_extensions or not content_type.startswith("audio/"):
+                raise serializers.ValidationError(
+                    {"attachment": "Voice notes must be a supported audio file."}
+                )
         reply_to = attrs.get("reply_to")
         conversation_id = self.context.get("conversation_id")
         if (

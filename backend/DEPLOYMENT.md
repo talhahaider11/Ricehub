@@ -35,6 +35,7 @@ protected environment values; never commit them to this repository.
 | `ricehub-frontend` | `VITE_WS_URL` | `wss://ricehub-umfd.onrender.com/ws` |
 | `ricehub-backend` | `SMS_PROVIDER`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | Optional Twilio credentials for phone verification OTP delivery; leave unset until configured |
 | `ricehub-backend` | `PAYMENT_INSTRUCTIONS` | Optional safe transfer instructions shown in-app; automatic billing is disabled and payment requests require staff review |
+| `ricehub-backend` | `SADAPAY_ACCOUNT_NAME`, `SADAPAY_ACCOUNT_NUMBER`, `SADAPAY_QR_IMAGE_URL` | Real SadaPay destination details and an HTTPS-hosted QR image URL shown during verification payment; leave unset until verified |
 
 The backend uses Redis for API throttling, caching, and WebSocket notifications.
 Redis connections are pinned to RESP2 for compatibility with hosted Redis
@@ -78,12 +79,19 @@ they become public in the browser bundle.
    the Render service's outbound IP addresses, or use an approved private
    network connection. The app cannot connect if ATP blocks Render's egress.
 
-Verification payments are not automatically charged. Users submit a transfer
-reference for SadaPay, card transfer, EasyPaisa, or JazzCash, and staff approve
-the request in Django admin after independently confirming receipt. Configure
-`PAYMENT_INSTRUCTIONS` only with the intended receiver information. Phone OTP
-delivery returns unavailable until the SMS provider and credentials are set.
-The hourly Celery Beat task applies the five-day subscription grace period.
+Verification payments are not automatically charged. Users send funds only to
+the configured SadaPay destination, choose the app used to send the transfer,
+and upload the receipt for staff review. Receipt downloads are available only
+to staff through the authenticated admin endpoint. Configure
+`SADAPAY_ACCOUNT_NAME`, `SADAPAY_ACCOUNT_NUMBER`, and
+`SADAPAY_QR_IMAGE_URL` with the verified destination details; leave them unset
+until those details are confirmed. Phone OTP delivery returns unavailable
+until the SMS provider and credentials are set. The hourly Celery Beat task
+applies the five-day subscription grace period.
+
+Voice recording and WebRTC audio calls require HTTPS and microphone
+permission. Calls use a public STUN service; configure a trusted TURN relay for
+reliable connections across restrictive networks.
 
 The local `frontend/.env` and `frontend/.env.local` files are not Render
 configuration. Their values are intentionally not copied here.

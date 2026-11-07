@@ -127,6 +127,47 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 )
             return
 
+        elif event_type == "call_signal":
+            signal_type = data.get("signal_type")
+            target_user_id = data.get("to_user_id")
+            signal = data.get("signal", {})
+            valid_target_id = (
+                isinstance(target_user_id, int)
+                and not isinstance(target_user_id, bool)
+            )
+            if (
+                not isinstance(signal_type, str)
+                or signal_type not in {"offer", "answer", "ice_candidate", "hangup"}
+                or not valid_target_id
+                or not isinstance(signal, dict)
+                or len(json.dumps(signal)) > 20_000
+            ):
+                await self.send_json({
+                    "type": "error",
+                    "message": "Call signal is invalid.",
+                })
+                return
+            if (
+                not await self.can_send_message()
+                or not await self.is_direct_call_peer(target_user_id)
+            ):
+                await self.send_json({
+                    "type": "error",
+                    "message": "This conversation is not available for audio calls.",
+                })
+                return
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "call_signal_event",
+                    "from_user_id": self.user.id,
+                    "to_user_id": target_user_id,
+                    "signal_type": signal_type,
+                    "signal": signal,
+                },
+            )
+            return
+
 
         # -----------------------------------------
         # MESSAGE
@@ -255,6 +296,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
             "reader_id": event["reader_id"],
         })
 
+    async def call_signal_event(self, event):
+        if event["to_user_id"] != self.user.id:
+            return
+        await self.send_json({
+            "type": "call_signal",
+            "from_user_id": event["from_user_id"],
+            "signal_type": event["signal_type"],
+            "signal": event["signal"],
+        })
+
     @database_sync_to_async
     def user_in_conversation(self):
         conversation = (
@@ -272,6 +323,27 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return True
         other_user = conversation.participants.exclude(pk=self.user.pk).first()
         return bool(other_user and can_message_between(self.user, other_user))
+
+    @database_sync_to_async
+    def is_direct_call_peer(self, target_user_id):
+        conversation = (
+            Conversation.objects
+            .filter(
+                id=self.conversation_id,
+                conversation_type=Conversation.ConversationType.DIRECT,
+                participants=self.user,
+            )
+            .prefetch_related("participants")
+            .first()
+        )
+        if not conversation:
+            return False
+        other_user = conversation.participants.exclude(pk=self.user.pk).first()
+        return bool(
+            other_user
+            and other_user.pk == target_user_id
+            and can_message_between(self.user, other_user)
+        )
 
     @database_sync_to_async
     def create_message(self, content, reply_to_id=None):

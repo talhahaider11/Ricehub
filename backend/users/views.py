@@ -628,12 +628,43 @@ class TwoFactorSettingsView(APIView):
     permission_classes = [IsActiveAndNotSuspended]
     throttle_classes = [PasswordRateThrottle]
 
+    def get(self, request):
+        settings_obj, _ = UserSecuritySettings.objects.get_or_create(
+            user=request.user
+        )
+        return Response(
+            {
+                "two_factor_enabled": settings_obj.two_factor_enabled,
+                "email_verified": request.user.is_email_verified,
+                "email": mask_email(request.user.email),
+            },
+            status=status.HTTP_200_OK,
+        )
+
     def post(self, request):
         action = request.data.get("action")
-        if not request.user.check_password(request.data.get("password", "")):
+        password = request.data.get("password", "")
+        if not isinstance(password, str) or not request.user.check_password(password):
             return Response(
                 {"detail": "The password is incorrect."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if action == "disable":
+            settings_obj, _ = UserSecuritySettings.objects.get_or_create(
+                user=request.user
+            )
+            if not settings_obj.two_factor_enabled:
+                return Response(
+                    {"detail": "Two-factor authentication is already disabled."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            settings_obj.two_factor_enabled = False
+            settings_obj.save(update_fields=["two_factor_enabled"])
+            TwoFactorChallenge.objects.filter(user=request.user).delete()
+            return Response(
+                {"two_factor_enabled": False},
+                status=status.HTTP_200_OK,
             )
 
         if action == "start_enable":
@@ -643,6 +674,11 @@ class TwoFactorSettingsView(APIView):
             if settings_obj.two_factor_enabled:
                 return Response(
                     {"detail": "Two-factor authentication is already enabled."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not request.user.is_email_verified:
+                return Response(
+                    {"detail": "Verify your email before enabling two-step verification."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             send_two_factor_code(

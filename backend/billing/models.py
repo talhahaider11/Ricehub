@@ -1,7 +1,14 @@
 from decimal import Decimal
+from pathlib import PurePath
+from uuid import uuid4
 
 from django.conf import settings
 from django.db import models
+
+
+def payment_receipt_upload_path(instance, filename):
+    extension = PurePath(filename).suffix.lower()
+    return f"payment-receipts/{instance.user_id}/{uuid4().hex}{extension}"
 
 
 class PaymentRequest(models.Model):
@@ -20,6 +27,13 @@ class PaymentRequest(models.Model):
         PENDING = "pending", "Pending review"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
+
+    class TransferApp(models.TextChoices):
+        SADAPAY = "sadapay", "SadaPay"
+        EASYPAISA = "easypaisa", "EasyPaisa"
+        JAZZCASH = "jazzcash", "JazzCash"
+        BANK = "bank", "Bank transfer"
+        OTHER = "other", "Other"
 
     PRICES = {
         Kind.SUBSCRIPTION: Decimal("249.00"),
@@ -43,6 +57,18 @@ class PaymentRequest(models.Model):
     method = models.CharField(max_length=20, choices=Method.choices)
     amount_pkr = models.DecimalField(max_digits=8, decimal_places=2)
     reference = models.CharField(max_length=120)
+    sender_name = models.CharField(max_length=120, blank=True)
+    sender_phone = models.CharField(max_length=32, blank=True)
+    transfer_app = models.CharField(
+        max_length=20,
+        choices=TransferApp.choices,
+        blank=True,
+    )
+    receipt = models.ImageField(
+        upload_to=payment_receipt_upload_path,
+        blank=True,
+        null=True,
+    )
     status = models.CharField(
         max_length=10,
         choices=Status.choices,

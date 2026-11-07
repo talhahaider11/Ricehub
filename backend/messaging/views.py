@@ -348,6 +348,15 @@ class MessageListCreateView(
         )
 
         conversation.save()
+        message_data = MessageSerializer(
+            serializer.instance,
+            context=self.get_serializer_context(),
+        ).data
+        broadcast_message_event(
+            conversation.pk,
+            "chat_message",
+            {"message": message_data},
+        )
 
 
 class MarkConversationReadView(APIView):
