@@ -53,10 +53,14 @@ class RenderDeploymentConfigTests(unittest.TestCase):
 
         for key in (
             "DJANGO_SECRET_KEY",
-            "DATABASE_URL",
+            "DB_PASSWORD",
+            "DB_SERVICE_NAME",
             "REDIS_URL",
-            "AWS_ACCESS_KEY_ID",
-            "AWS_SECRET_ACCESS_KEY",
+            "OCI_OBJECT_STORAGE_NAMESPACE",
+            "OCI_OBJECT_STORAGE_BUCKET",
+            "OCI_OBJECT_STORAGE_REGION",
+            "OCI_OBJECT_STORAGE_ACCESS_KEY",
+            "OCI_OBJECT_STORAGE_SECRET_KEY",
             "EMAIL_HOST_USER",
             "EMAIL_HOST_PASSWORD",
         ):

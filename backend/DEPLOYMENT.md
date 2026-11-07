@@ -36,6 +36,10 @@ protected environment values; never commit them to this repository.
 | `ricehub-backend` | `SMS_PROVIDER`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | Optional Twilio credentials for phone verification OTP delivery; leave unset until configured |
 | `ricehub-backend` | `PAYMENT_INSTRUCTIONS` | Optional safe transfer instructions shown in-app; automatic billing is disabled and payment requests require staff review |
 
+The backend uses Redis for API throttling, caching, and WebSocket notifications.
+Redis connections are pinned to RESP2 for compatibility with hosted Redis
+endpoints that do not support the RESP3 `HELLO` handshake.
+
 The Blueprint supplies the non-secret frontend URLs and frontend origin. Verify
 that the `ricehub-umfd.onrender.com` hostname is attached to the backend service
 that serves this deployment; if the actual backend hostname differs, update

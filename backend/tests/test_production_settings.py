@@ -8,13 +8,14 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 BASE_ENV = {
     "DJANGO_SECRET_KEY": "test-production-settings-secret",
+    "DJANGO_DEBUG": "False",
     "DATABASE_URL": "postgres://test:test@localhost:5432/test",
     "REDIS_URL": "rediss://test.example:6379/0",
-    "AWS_STORAGE_BUCKET_NAME": "test-bucket",
-    "AWS_S3_ENDPOINT_URL": "https://objects.example.test",
-    "AWS_S3_REGION_NAME": "test-region",
-    "AWS_ACCESS_KEY_ID": "test-access-key",
-    "AWS_SECRET_ACCESS_KEY": "test-secret-key",
+    "OCI_OBJECT_STORAGE_NAMESPACE": "test-namespace",
+    "OCI_OBJECT_STORAGE_BUCKET": "test-bucket",
+    "OCI_OBJECT_STORAGE_REGION": "test-region",
+    "OCI_OBJECT_STORAGE_ACCESS_KEY": "test-access-key",
+    "OCI_OBJECT_STORAGE_SECRET_KEY": "test-secret-key",
 }
 
 
@@ -33,24 +34,28 @@ def run_production_settings(script, **overrides):
 
 
 class ProductionSettingsTests(unittest.TestCase):
-    def test_s3_media_storage_keeps_whitenoise_for_static_files(self):
+    def test_oci_media_storage_keeps_whitenoise_for_static_files(self):
         result = run_production_settings(
             """
 from config.settings import production as settings
 assert settings.STORAGES["default"]["BACKEND"] == "storages.backends.s3.S3Storage"
 assert settings.STORAGES["default"]["OPTIONS"]["bucket_name"] == "test-bucket"
+assert settings.STORAGES["default"]["OPTIONS"]["endpoint_url"] == (
+    "https://test-namespace.compat.objectstorage.test-region.oraclecloud.com"
+)
 assert settings.STORAGES["default"]["OPTIONS"]["querystring_auth"] is True
 assert settings.STORAGES["default"]["OPTIONS"]["querystring_expire"] == 3600
 assert settings.STORAGES["staticfiles"]["BACKEND"] == (
     "whitenoise.storage.CompressedManifestStaticFilesStorage"
 )
 assert settings.CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] == [
-    "rediss://test.example:6379/0"
+    {"address": "rediss://test.example:6379/0", "protocol": 2}
 ]
-assert settings.CACHES["default"]["BACKEND"] == (
-    "django.core.cache.backends.redis.RedisCache"
-)
+assert settings.CACHES["default"]["BACKEND"] == "django_redis.cache.RedisCache"
 assert settings.CACHES["default"]["LOCATION"] == "rediss://test.example:6379/0"
+assert settings.CACHES["default"]["OPTIONS"]["CONNECTION_POOL_KWARGS"] == {
+    "protocol": 2
+}
 assert settings.SECURE_SSL_REDIRECT is True
 assert settings.SESSION_COOKIE_SECURE is True
 assert settings.CSRF_COOKIE_SECURE is True
@@ -71,14 +76,18 @@ assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["post_create"] == "10/h
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_missing_s3_configuration_fails_clearly(self):
+    def test_missing_oci_configuration_uses_local_media_storage_with_warning(self):
         result = run_production_settings(
-            "from config.settings import production",
-            AWS_SECRET_ACCESS_KEY="",
+            """
+from config.settings import production as settings
+assert settings.STORAGES["default"]["BACKEND"] == (
+    "django.core.files.storage.FileSystemStorage"
+)
+""",
+            OCI_OBJECT_STORAGE_SECRET_KEY="",
         )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("AWS_SECRET_ACCESS_KEY", result.stderr)
-        self.assertIn("uploaded-media storage requires", result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("OCI Object Storage is not fully configured", result.stderr)
 
     def test_missing_redis_url_fails_clearly(self):
         result = run_production_settings(
@@ -87,6 +96,22 @@ assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["post_create"] == "10/h
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("REDIS_URL is missing", result.stderr)
+
+    def test_production_settings_cannot_be_overridden_by_legacy_environment(self):
+        result = run_production_settings(
+            """
+from config.settings import production as settings
+assert settings.DEBUG is False
+assert settings.SECRET_KEY == "test-production-settings-secret"
+assert "*" not in settings.ALLOWED_HOSTS
+assert settings.CORS_ALLOW_ALL_ORIGINS is False
+assert settings.SECURE_SSL_REDIRECT is True
+""",
+            DEBUG="True",
+            ALLOWED_HOSTS="*",
+            CORS_ALLOW_ALL_ORIGINS="True",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

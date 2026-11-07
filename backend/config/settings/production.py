@@ -220,16 +220,6 @@ if wallet_password:
     oracle_options["wallet_password"] = wallet_password
 
 
-from .base import *  # noqa: F401, F403
-
-DEBUG = os.environ.get("DEBUG", "False") == "True"
-
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
-
-# Security headers for production
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
-
 # --------------------------------------------------
 # Gmail SMTP email settings
 # --------------------------------------------------
@@ -272,7 +262,12 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [REDIS_URL],
+            "hosts": [
+                {
+                    "address": REDIS_URL,
+                    "protocol": 2,
+                }
+            ],
         },
     },
 }
@@ -286,6 +281,7 @@ if REDIS_URL:
             "LOCATION": REDIS_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "CONNECTION_POOL_KWARGS": {"protocol": 2},
                 "IGNORE_EXCEPTIONS": True,  # Redis connection drop hone par API crash (500) nahi hogi
                 "SOCKET_CONNECT_TIMEOUT": 5,  # 5 seconds connection timeout
                 "SOCKET_TIMEOUT": 5,

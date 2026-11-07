@@ -111,7 +111,12 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [REDIS_URL],
+            "hosts": [
+                {
+                    "address": REDIS_URL,
+                    "protocol": 2,
+                }
+            ],
         },
     },
 }
@@ -219,10 +224,13 @@ if DATABASE_URL:
         'default': dj_database_url.parse(
             DATABASE_URL,
             conn_max_age=600,
-            ssl_require=False
+            ssl_require=True
         )
     }
-    DATABASES['default'].setdefault('OPTIONS', {})['sslmode'] = 'disable'
+    DATABASES['default'].setdefault('OPTIONS', {}).setdefault(
+        'sslmode',
+        'require',
+    )
 else:
     # Direct PostgreSQL connection reading dynamically from .env
     DATABASES = {
