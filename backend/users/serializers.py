@@ -182,11 +182,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        password = validated_data.pop("password")
-        user = User(**validated_data)
+        # set_password automatic hash apply karta hai aur is_active=True karta hai
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data.get('email', ''),
+            password=validated_data['password']
+        )
         user.is_active = True
-        user.is_email_verified = False
-        user.set_password(password)
         user.save()
         return user
 
