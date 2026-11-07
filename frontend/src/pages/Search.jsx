@@ -11,13 +11,13 @@ import { getArrayResults } from "../utils/arrayResults";
 import useDebounce from "../hooks/useDebounce";
 
 export default function Search() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const query = params.get("q") || "";
   const debouncedQuery = useDebounce(query, 400);
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState("people");
+  const [activeTab, setActiveTab] = useState(params.get("type") || "people");
   const [users, setUsers] = useState([]);
   const [posts, setPosts] = useState([]);
   const [hashtags, setHashtags] = useState([]);
@@ -27,6 +27,20 @@ export default function Search() {
   const [retryCount, setRetryCount] = useState(0);
   const [nextPage, setNextPage] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    const requestedTab = params.get("type");
+    if (["people", "posts", "groups", "hashtags"].includes(requestedTab)) {
+      setActiveTab(requestedTab);
+    }
+  }, [params]);
+
+  const selectTab = (tab) => {
+    setActiveTab(tab);
+    const nextParams = new URLSearchParams(params);
+    nextParams.set("type", tab);
+    setParams(nextParams, { replace: true });
+  };
 
   useEffect(() => {
     const normalizedQuery = debouncedQuery.trim().replace(/^#/, "");
@@ -124,25 +138,25 @@ export default function Search() {
       <div className="search-tabs">
         <button
           className={activeTab === "people"? "active" : ""}
-          onClick={() => setActiveTab("people")}
+          onClick={() => selectTab("people")}
         >
           People
         </button>
         <button
           className={activeTab === "groups" ? "active" : ""}
-          onClick={() => setActiveTab("groups")}
+          onClick={() => selectTab("groups")}
         >
           Groups
         </button>
         <button
           className={activeTab === "posts"? "active" : ""}
-          onClick={() => setActiveTab("posts")}
+          onClick={() => selectTab("posts")}
         >
           Posts
         </button>
         <button
           className={activeTab === "hashtags"? "active" : ""}
-          onClick={() => setActiveTab("hashtags")}
+          onClick={() => selectTab("hashtags")}
         >
           Hashtags
         </button>

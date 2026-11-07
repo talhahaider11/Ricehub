@@ -76,3 +76,8 @@ dist/
 .vscode/
 .idea/
 .DS_Store
+
+
+# Firebase Private Key
+*firebase*.json
+firebasekey.json

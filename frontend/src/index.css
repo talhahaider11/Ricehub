@@ -325,6 +325,13 @@ textarea:focus-visible {
   gap: 16px;
 }
 
+.navbar-search {
+  position: relative;
+  flex: 1 1 300px;
+  min-width: 180px;
+  max-width: 360px;
+}
+
 .navbar-links a {
   display: flex;
   align-items: center;
@@ -1275,6 +1282,32 @@ textarea:focus-visible {
   color: var(--success);
   font-size: 12px;
   font-weight: 700;
+}
+
+.settings-badge-verified {
+  background: rgba(20, 128, 74, 0.1);
+  color: var(--success);
+}
+
+.settings-badge-unverified {
+  background: rgba(220, 38, 38, 0.1);
+  color: #b42318;
+}
+
+.settings-section-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
 }
 
 .settings-option {
@@ -3273,6 +3306,42 @@ select {
   color: var(--primary);
 }
 
+.billing-sadapay-details {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-secondary);
+}
+
+.billing-sadapay-details h3,
+.billing-sadapay-details p {
+  margin: 0;
+}
+
+.billing-sadapay-qr {
+  width: min(220px, 100%);
+  max-height: 260px;
+  justify-self: center;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.audio-call-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.audio-call-controls audio {
+  display: none;
+}
+
 .post-author-link {
   display: inline-flex;
   align-items: center;
@@ -3908,15 +3977,20 @@ select {
   }
 
   .navbar-search {
-    display: none;
+    display: block;
+    flex: 1;
+    min-width: 0;
+    max-width: none;
   }
 
   .navbar-links {
     margin-left: auto;
+    flex: 1;
+    min-width: 0;
+    gap: 7px;
   }
 
-  .navbar-links > a[aria-label="Search"],
-  .navbar-links > button.navbar-upload {
+  .navbar-create-menu .navbar-upload {
     display: inline-flex;
     width: 36px;
     min-width: 36px;
@@ -3928,9 +4002,42 @@ select {
     background: var(--surface-secondary);
   }
 
-  .navbar-links > a[aria-label="Search"] span,
   .navbar-upload span {
     display: none;
+  }
+
+  .navbar-links > a:not([aria-label="Notifications"]),
+  .navbar-links > button,
+  .navbar-links > .theme-toggle {
+    display: none;
+  }
+
+  .navbar-links > .navbar-search {
+    display: block;
+  }
+
+  .navbar-search .search-bar {
+    width: 100%;
+    min-width: 0;
+    padding: 7px 8px;
+  }
+
+  .navbar-create-menu {
+    flex: 0 0 36px;
+  }
+
+  .navbar-create-menu .navbar-upload {
+    margin: 0;
+  }
+
+  .search-dropdown {
+    position: fixed;
+    top: 60px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: min(60vh, 420px);
+    overflow-y: auto;
   }
 
   .create-menu-wrap {
@@ -3978,10 +4085,15 @@ select {
     gap: 8px;
   }
 
-  .navbar-links > a:not([aria-label="Search"]),
+  .navbar-links > a,
   .navbar-links > button:not(.navbar-upload),
   .navbar-links > .theme-toggle {
     display: none;
+  }
+
+  .navbar-links > .navbar-search,
+  .navbar-links > .navbar-create-menu {
+    display: block;
   }
 
   .post-content {

@@ -37,6 +37,7 @@ export default function Settings() {
   const [preferencesError, setPreferencesError] = useState("");
   const [privacy, setPrivacy] = useState(null);
   const [blockedUsers, setBlockedUsers] = useState([]);
+  const [blockedUsersExpanded, setBlockedUsersExpanded] = useState(false);
   const [security, setSecurity] = useState(null);
   const [twoFactorPassword, setTwoFactorPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
@@ -297,7 +298,7 @@ export default function Settings() {
                 <strong>Email address</strong>
                 <p>{user?.email}</p>
               </div>
-              <span className="settings-badge">
+              <span className={`settings-badge ${user?.is_email_verified ? "settings-badge-verified" : "settings-badge-unverified"}`}>
                 {user?.is_email_verified ? "Verified" : "Not verified"}
               </span>
             </div>
@@ -330,6 +331,9 @@ export default function Settings() {
                     : "Unverified account · up to 3 posts"}
                 </p>
               </div>
+              <span className={`settings-badge ${user?.is_verified ? "settings-badge-verified" : "settings-badge-unverified"}`}>
+                {user?.is_verified ? "Verified" : "Not verified"}
+              </span>
               <Link className="btn btn-secondary" to="/billing">
                 {user?.is_verified ? "Manage verification" : "Get verified"}
               </Link>
@@ -428,23 +432,36 @@ export default function Settings() {
           </section>
 
           <section className="settings-section" id="blocking">
-            <h2>Blocking</h2>
-            <p className="settings-description">
-              Block accounts from the options menu on their profile. You can unblock accounts here.
-            </p>
-            {blockedUsers.length === 0 ? (
-              <p className="settings-description">You haven’t blocked anyone.</p>
-            ) : blockedUsers.map((blocked) => (
-              <div className="settings-row" key={blocked.id}>
-                <div>
-                  <strong>{blocked.first_name || blocked.username}</strong>
-                  <p>@{blocked.username}</p>
-                </div>
-                <button className="btn btn-secondary" onClick={() => unblockUser(blocked)}>
-                  Unblock
-                </button>
+            <button
+              type="button"
+              className="settings-section-toggle"
+              aria-expanded={blockedUsersExpanded}
+              aria-controls="blocked-users-list"
+              onClick={() => setBlockedUsersExpanded((expanded) => !expanded)}
+            >
+              <span>Blocked users ({blockedUsers.length})</span>
+              <span aria-hidden="true">{blockedUsersExpanded ? "−" : "+"}</span>
+            </button>
+            {blockedUsersExpanded && (
+              <div id="blocked-users-list">
+                <p className="settings-description">
+                  Block accounts from the options menu on their profile. You can unblock accounts here.
+                </p>
+                {blockedUsers.length === 0 ? (
+                  <p className="settings-description">You haven’t blocked anyone.</p>
+                ) : blockedUsers.map((blocked) => (
+                  <div className="settings-row" key={blocked.id}>
+                    <div>
+                      <strong>{blocked.first_name || blocked.username}</strong>
+                      <p>@{blocked.username}</p>
+                    </div>
+                    <button className="btn btn-secondary" onClick={() => unblockUser(blocked)}>
+                      Unblock
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </section>
 
           <section className="settings-section" id="notifications">

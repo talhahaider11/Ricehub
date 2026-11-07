@@ -1,16 +1,31 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function MessageInput({
   onSend,
+  onSendAttachment,
   onTyping,
   disabled = false,
   replyTarget,
   onCancelReply,
 }) {
+  const { t } = useLanguage();
   const [message, setMessage] =
     useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef(null);
+  const streamRef = useRef(null);
+  const recordingTimeoutRef = useRef(null);
+
+  useEffect(() => () => {
+    if (recordingTimeoutRef.current) {
+      window.clearTimeout(recordingTimeoutRef.current);
+    }
+    recorderRef.current?.stream?.getTracks().forEach((track) => track.stop());
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -33,6 +48,80 @@ export default function MessageInput({
     }
   };
 
+  const stopRecording = () => {
+    if (recordingTimeoutRef.current) {
+      window.clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+    if (recorderRef.current?.state === "recording") {
+      recorderRef.current.stop();
+    }
+  };
+
+  const startRecording = async () => {
+    setError("");
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      setError(t("voiceUnsupported"));
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) chunks.push(event.data);
+      };
+      recorder.onerror = () => {
+        setError(t("recordingFailed"));
+        stopRecording();
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        recorderRef.current = null;
+        setRecording(false);
+        const blob = new Blob(chunks, {
+          type: recorder.mimeType || chunks[0]?.type || "audio/webm",
+        });
+        if (!blob.size) return;
+        if (blob.size > 10 * 1024 * 1024) {
+          setError(t("voiceSizeError"));
+          return;
+        }
+        const extension = blob.type.includes("ogg")
+          ? "ogg"
+          : blob.type.includes("mp4")
+            ? "m4a"
+            : blob.type.includes("mpeg")
+              ? "mp3"
+              : blob.type.includes("wav")
+                ? "wav"
+                : "webm";
+        const file = new File([blob], `voice-note.${extension}`, { type: blob.type });
+        try {
+          setSending(true);
+          await onSendAttachment?.(file, replyTarget?.id);
+          onCancelReply?.();
+        } catch (sendError) {
+          setError(sendError.message || t("voiceSendFailed"));
+        } finally {
+          setSending(false);
+        }
+      };
+      recorder.start();
+      setRecording(true);
+      recordingTimeoutRef.current = window.setTimeout(stopRecording, 120_000);
+    } catch (recordError) {
+      console.error("Microphone access could not be started:", recordError);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      setError(t("microphoneDenied"));
+    }
+  };
+
   return (
     <>
       {replyTarget && (
@@ -50,12 +139,27 @@ export default function MessageInput({
           }}
           placeholder="Write a message..."
           maxLength={5000}
-          disabled={disabled || sending}
+          disabled={disabled || sending || recording}
           aria-label="Write a message"
         />
-        <button type="submit" disabled={disabled || sending || !message.trim()}>
+        <button type="submit" disabled={disabled || sending || recording || !message.trim()}>
           {sending ? "Sending..." : "Send"}
         </button>
+        {onSendAttachment && !recording && (
+          <button
+            type="button"
+            disabled={disabled || sending}
+            onClick={() => void startRecording()}
+            aria-label="Record voice note"
+          >
+            {t("voiceNote")}
+          </button>
+        )}
+        {recording && (
+          <button type="button" onClick={stopRecording} aria-label="Stop voice recording">
+            {t("stopRecording")}
+          </button>
+        )}
         {error && <span className="error" role="alert">{error}</span>}
       </form>
     </>

@@ -82,6 +82,27 @@ describe("Login", () => {
     expect(screen.queryByRole("heading", { name: "RiceHub home" })).not.toBeInTheDocument();
   });
 
+  it("reports a server error instead of mislabeling it as invalid credentials", async () => {
+    login.mockRejectedValue({
+      response: { status: 500, data: {} },
+    });
+    renderLogin();
+
+    fireEvent.change(screen.getByPlaceholderText("Username"), {
+      target: { value: "test-user" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "any-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Login" }));
+
+    expect(
+      await screen.findByText(
+        "The sign-in server encountered an error (500). Your credentials were not confirmed. Please try again later."
+      )
+    ).toBeInTheDocument();
+  });
+
   it("offers account creation when the username is not registered", async () => {
     login.mockRejectedValue({
       response: { data: { code: "user_not_found" } },

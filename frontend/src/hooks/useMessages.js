@@ -23,6 +23,7 @@ export default function useMessages(conversationId) {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [typingUser, setTypingUser] = useState(false);
+  const [callSignal, setCallSignal] = useState(null);
   const [error, setError] = useState("");
 
   const loadMessages = useCallback(async () => {
@@ -52,6 +53,7 @@ export default function useMessages(conversationId) {
     setMessages([]);
     setError("");
     setTypingUser(false);
+    setCallSignal(null);
     loadMessages();
 
     if (!conversationId) return () => { active = false; };
@@ -89,6 +91,10 @@ export default function useMessages(conversationId) {
           if (data.type === "heartbeat_ack") return;
           if (data.type === "typing") {
             setTypingUser(data.is_typing ? data.user_id : false);
+            return;
+          }
+          if (data.type === "call_signal") {
+            setCallSignal(data);
             return;
           }
           if (data.type === "error") {
@@ -202,6 +208,20 @@ export default function useMessages(conversationId) {
     }
   }, []);
 
+  const sendCallSignal = useCallback((toUserId, signalType, signal = {}) => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      throw new Error("Chat is not connected.");
+    }
+    socket.send(JSON.stringify({
+      type: "call_signal",
+      to_user_id: Number(toUserId),
+      signal_type: signalType,
+      signal,
+    }));
+  }, []);
+  const clearCallSignal = useCallback(() => setCallSignal(null), []);
+
   return {
     messages,
     setMessages,
@@ -209,6 +229,9 @@ export default function useMessages(conversationId) {
     connected,
     sendMessage,
     sendTyping,
+    sendCallSignal,
+    callSignal,
+    clearCallSignal,
     typingUser,
     error,
     reload: loadMessages,

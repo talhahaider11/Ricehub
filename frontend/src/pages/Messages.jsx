@@ -7,6 +7,7 @@ import useAuth from "../hooks/useAuth";
 import ConversationList from "../components/messages/ConversationList";
 import MessageList from "../components/messages/MessageList";
 import MessageInput from "../components/messages/MessageInput";
+import AudioCallControls from "../components/messages/AudioCallControls";
 import TypingIndicator from "../components/messages/TypingIndicator";
 import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
@@ -78,11 +79,27 @@ export default function Messages() {
     error: messageError,
     sendMessage,
     sendTyping,
+    sendCallSignal,
+    callSignal,
+    clearCallSignal,
   } = useMessages(selectedConversation);
 
   const handleSend = (content, replyToId) => {
     sendMessage(content, replyToId);
     sendTyping(false);
+  };
+  const handleSendAttachment = async (file, replyToId) => {
+    const message = await messageService.sendAttachment(
+      selectedConversation,
+      file,
+      replyToId
+    );
+    setMessages((current) => (
+      current.some((item) => item.id === message.id)
+        ? current
+        : [...current, message]
+    ));
+    setReplyTarget(null);
   };
   const handleGroupCreated = (conversation) => {
     setConversations((current) => [
@@ -155,6 +172,19 @@ export default function Messages() {
             <div className="chat-status">
               {connected ? "Connected 🟢" : "Connecting... 🔴"}
             </div>
+            {activeConversation
+              && !activeConversation.is_group
+              && activeConversation.conversation_type !== "group"
+              && otherUser && (
+                <AudioCallControls
+                  peerId={otherUser.id}
+                  peerName={otherUser.username}
+                  disabled={!connected}
+                  callSignal={callSignal}
+                  sendCallSignal={sendCallSignal}
+                  clearCallSignal={clearCallSignal}
+                />
+              )}
             {showVerificationWarning && (
               <p className="message-verification-warning" role="alert">
                 This is not a verified member. Trust this member at your own risk.
@@ -181,6 +211,7 @@ export default function Messages() {
 
             <MessageInput
               onSend={handleSend}
+              onSendAttachment={handleSendAttachment}
               onTyping={sendTyping}
               disabled={!connected}
               replyTarget={replyTarget}

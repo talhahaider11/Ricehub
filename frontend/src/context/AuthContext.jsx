@@ -60,7 +60,16 @@ export function AuthProvider({ children }) {
     const result = await authService.login(credentials);
     if (result && result.two_factor_required) return result;
 
-    const currentUser = await authService.getMe();
+    let currentUser;
+    try {
+      currentUser = await authService.getMe();
+    } catch (error) {
+      authService.logout();
+      throw new Error(
+        "Your credentials were accepted, but your profile could not be loaded.",
+        { cause: error }
+      );
+    }
 
     setUser(currentUser);
     void setupNotifications();

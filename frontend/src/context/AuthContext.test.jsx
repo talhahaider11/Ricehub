@@ -134,4 +134,24 @@ describe("AuthProvider login", () => {
       expect(initializePushNotifications).toHaveBeenCalledTimes(2);
     });
   });
+
+  it("clears tokens when loading the profile fails after credentials are accepted", async () => {
+    authService.login.mockResolvedValue({ access: "access", refresh: "refresh" });
+    authService.getMe
+      .mockResolvedValueOnce({ id: 1, username: "previous-user" })
+      .mockRejectedValueOnce(new Error("Profile request failed"));
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>
+    );
+
+    await screen.findByText("Signed in as previous-user");
+    fireEvent.click(screen.getByRole("button", { name: "Login successfully" }));
+
+    await waitFor(() => {
+      expect(authService.logout).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("Signed out")).toBeInTheDocument();
+    });
+  });
 });

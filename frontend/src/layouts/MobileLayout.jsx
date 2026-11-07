@@ -2,7 +2,6 @@ import {
   Home,
   MessageCircle,
   Bell,
-  Compass,
   UserPlus,
   Store,
 } from "lucide-react";
@@ -14,7 +13,6 @@ import useAuth from "../hooks/useAuth";
 export default function MobileLayout() {
   const links = [
     { path: "/", icon: Home },
-    { path: "/search", icon: Compass },
     { path: "/discover", icon: Store },
     { path: "/friend-requests", icon: UserPlus },
     { path: "/messages", icon: MessageCircle },

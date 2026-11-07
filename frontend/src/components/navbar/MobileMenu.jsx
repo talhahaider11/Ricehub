@@ -9,7 +9,6 @@ import {
   LogOut,
   MessageCircle,
   Moon,
-  Search,
   Settings,
   Shield,
   Sun,
@@ -34,9 +33,7 @@ const additionalLinks = [
   { label: "Explore", path: "/explore", icon: TrendingUp },
   { label: "Friend requests", path: "/friend-requests", icon: UserPlus },
   { label: "Notifications", path: "/notifications", icon: Bell },
-  { label: "Search", path: "/search", icon: Search },
   { label: "Get verified", path: "/billing", icon: Shield },
-  { label: "Help and support", path: "/help-support", icon: HelpCircle },
 ];
 
 function displayName(user) {
@@ -227,9 +224,8 @@ export default function MobileMenu({ onClose }) {
           </button>
           {expandedSections.support && (
             <div className="mobile-menu-help">
-              <p>Browse answers, report a problem, or change your password.</p>
+              <p>Browse answers or report a problem.</p>
               <Link to="/help-support" onClick={onClose}>Open Help and support</Link>
-              <Link to="/settings" onClick={onClose}>Open settings</Link>
             </div>
           )}
         </section>

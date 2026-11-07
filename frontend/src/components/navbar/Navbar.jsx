@@ -4,7 +4,6 @@ import {
   LogOut,
   Menu,
   Plus,
-  Search,
   Settings,
   Shield,
 } from "lucide-react";
@@ -58,8 +57,6 @@ export default function Navbar() {
           <span>Rice Hub</span>
         </Link>
 
-        <SearchBar />
-
         <nav className="navbar-links">
           <Link to="/" aria-label="Home">
             <Home size={20} />
@@ -73,10 +70,7 @@ export default function Navbar() {
 
           <NotificationBell count={unreadCount} />
 
-          <Link to="/search" aria-label="Search" title="Search">
-            <Search size={20} />
-            <span>Search</span>
-          </Link>
+          <SearchBar />
 
           <div className="navbar-create-menu">
             <button

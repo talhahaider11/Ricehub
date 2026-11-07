@@ -47,7 +47,16 @@ export default function MessageList({
               )}
               {message.is_deleted
                 ? "This message was deleted."
-                : message.content}
+                : (
+                  <>
+                    {message.content && <p>{message.content}</p>}
+                    {message.attachment_type === "audio" && message.attachment && (
+                      <audio controls preload="metadata" src={message.attachment}>
+                        Audio playback is not supported by this browser.
+                      </audio>
+                    )}
+                  </>
+                )}
             </div>
             {message.edited_at && !message.is_deleted && (
               <small className="message-edited-label">Edited</small>

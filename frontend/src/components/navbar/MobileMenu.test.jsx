@@ -49,4 +49,13 @@ describe("MobileMenu", () => {
       "/settings#privacy"
     );
   });
+
+  it("keeps search and help support out of the expandable drawer", () => {
+    renderMenu();
+
+    expect(screen.queryByRole("link", { name: /search/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /see more/i }));
+    expect(screen.queryByRole("link", { name: /help and support/i })).not.toBeInTheDocument();
+  });
 });

@@ -12,7 +12,10 @@ const billingService = {
   },
 
   async requestPayment(payload) {
-    const response = await api.post("/billing/payment-requests/", payload);
+    const config = payload instanceof FormData
+      ? { headers: { "Content-Type": "multipart/form-data" } }
+      : undefined;
+    const response = await api.post("/billing/payment-requests/", payload, config);
     return response.data;
   },
 };

@@ -40,6 +40,20 @@ const messageService = {
     return response.data;
   },
 
+  async sendAttachment(conversationId, file, replyToId) {
+    const formData = new FormData();
+    formData.append("attachment", file);
+    formData.append("attachment_type", "audio");
+    formData.append("content", "");
+    if (replyToId) formData.append("reply_to_id", String(replyToId));
+    const response = await api.post(
+      `/messages/conversations/${conversationId}/messages/`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+    return response.data;
+  },
+
   async markRead(conversationId) {
     const response = await api.post(
       `/messages/conversations/${conversationId}/read/`

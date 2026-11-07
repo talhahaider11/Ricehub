@@ -70,11 +70,22 @@ export default function Login() {
       const response = err.response?.data;
       if (err.message === "The server did not return valid authentication tokens.") {
         setError("The server returned an invalid sign-in response. Please try again.");
+      } else if (
+        err.message ===
+        "Your credentials were accepted, but your profile could not be loaded."
+      ) {
+        setError(
+          "Your credentials were accepted, but the server could not load your profile. Please try again later."
+        );
       } else if (!err.response) {
         setError("Unable to reach the server. Please try again.");
       } else if (response?.code === "user_not_found") {
         setAccountNotFound(true);
         setError("No account was found with this username. Create a new account.");
+      } else if (err.response.status >= 500) {
+        setError(
+          `The sign-in server encountered an error (${err.response.status}). Your credentials were not confirmed. Please try again later.`
+        );
       } else {
         setError(
           response?.detail ||
