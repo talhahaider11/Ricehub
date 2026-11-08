@@ -14,14 +14,6 @@ OTP_MAX_ATTEMPTS = 5
 
 
 def send_verification_code(user, verification):
-    # Invalidate the previous code before attempting a resend.
-    verification.code_hash = ""
-    verification.expires_at = None
-    verification.attempts = 0
-    verification.save(
-        update_fields=["code_hash", "expires_at", "attempts"]
-    )
-
     code = f"{secrets.randbelow(1_000_000):06d}"
 
     sent = send_mail(

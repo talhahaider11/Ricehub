@@ -361,6 +361,28 @@ class ResendVerificationCodeView(APIView):
     throttle_classes = [RegisterRateThrottle]
 
     def post(self, request):
+        if settings.EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend" and not all(
+            (
+                settings.EMAIL_HOST,
+                settings.EMAIL_HOST_USER,
+                settings.EMAIL_HOST_PASSWORD,
+                settings.DEFAULT_FROM_EMAIL,
+            )
+        ):
+            logger.error(
+                "Email verification resend requested, but SMTP sender "
+                "configuration is incomplete."
+            )
+            return Response(
+                {
+                    "detail": (
+                        "Email verification is temporarily unavailable. "
+                        "Please try again later."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         email = request.data.get("email") or ""
         email = email.strip()
         user = User.objects.filter(
@@ -381,7 +403,22 @@ class ResendVerificationCodeView(APIView):
                     {"detail": "Please wait before requesting another code."},
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
-            send_verification_code(user, verification)
+            try:
+                send_verification_code(user, verification)
+            except (OSError, smtplib.SMTPException):
+                logger.exception(
+                    "Email verification code could not be sent for user %s.",
+                    user.pk,
+                )
+                return Response(
+                    {
+                        "detail": (
+                            "Email verification is temporarily unavailable. "
+                            "Please try again later."
+                        )
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
         return Response(
             {
                 "message": "If the account can be verified, a code has been sent.",

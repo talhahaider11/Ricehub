@@ -1,9 +1,13 @@
 import re
+import smtplib
+from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core import mail
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from users.models import EmailVerification
@@ -65,6 +69,63 @@ class EmailVerificationTests(APITestCase):
         self.assertTrue(user.is_email_verified)
         self.assertTrue(user.is_active)
         self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        EMAIL_HOST="smtp.gmail.com",
+        EMAIL_HOST_USER="",
+        EMAIL_HOST_PASSWORD="",
+        DEFAULT_FROM_EMAIL="",
+    )
+    def test_resend_returns_service_unavailable_if_smtp_is_unconfigured(self):
+        user = User.objects.create_user(
+            username="smtp-unconfigured",
+            email="smtp-unconfigured@example.com",
+            ******,
+            is_active=True,
+            is_email_verified=False,
+        )
+
+        response = self.client.post(
+            "/api/users/resend-verification/",
+            {"email": user.email},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+    def test_resend_handles_smtp_authentication_failure_without_losing_old_code(self):
+        user = User.objects.create_user(
+            username="smtp-failure",
+            email="smtp-failure@example.com",
+            ******,
+            is_active=True,
+            is_email_verified=False,
+        )
+        old_expiry = timezone.now() + timedelta(minutes=5)
+        verification = EmailVerification.objects.create(
+            user=user,
+            code_hash="existing-code-hash",
+            expires_at=old_expiry,
+        )
+
+        with patch(
+            "users.views.send_verification_code",
+            side_effect=smtplib.SMTPAuthenticationError(
+                535, b"Authentication failed"
+            ),
+        ):
+            response = self.client.post(
+                "/api/users/resend-verification/",
+                {"email": user.email},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 503)
+        verification.refresh_from_db()
+        self.assertEqual(verification.code_hash, "existing-code-hash")
+        self.assertEqual(verification.expires_at, old_expiry)
 
     def test_invalid_code_is_rejected_and_counted(self):
         user = self.create_unverified_user()
