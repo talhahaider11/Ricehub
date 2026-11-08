@@ -8,23 +8,6 @@ from django.core.mail.backends.base import BaseEmailBackend
 class BrevoEmailBackend(BaseEmailBackend):
     api_url = "https://api.brevo.com/v3/smtp/email"
 
-    def send_messages(self, email_messages):
-        if not email_messages:
-            return 0
-        if not settings.BREVO_API_KEY:
-            raise OSError("Brevo email delivery is not configured.")
-
-        sent_count = 0
-        for message in email_messages:
-            try:
-                self._send_message(message)
-            except OSError:
-                if not self.fail_silently:
-                    raise
-            else:
-                sent_count += 1
-        return sent_count
-
     def _send_message(self, message):
         sender_email = (
             settings.BREVO_SENDER_EMAIL
