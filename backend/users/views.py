@@ -4,6 +4,7 @@ import secrets
 import smtplib
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -361,12 +362,16 @@ class ResendVerificationCodeView(APIView):
     throttle_classes = [RegisterRateThrottle]
 
     def post(self, request):
-        if settings.EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend" and not all(
-            (
-                settings.EMAIL_HOST,
-                settings.EMAIL_HOST_USER,
-                settings.EMAIL_HOST_PASSWORD,
-                settings.DEFAULT_FROM_EMAIL,
+        if (
+            settings.EMAIL_BACKEND
+            == "django.core.mail.backends.smtp.EmailBackend"
+            and not all(
+                (
+                    settings.EMAIL_HOST,
+                    settings.EMAIL_HOST_USER,
+                    settings.EMAIL_HOST_PASSWORD,
+                    settings.DEFAULT_FROM_EMAIL,
+                )
             )
         ):
             logger.error(

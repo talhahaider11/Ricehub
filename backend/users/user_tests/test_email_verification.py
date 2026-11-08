@@ -81,7 +81,7 @@ class EmailVerificationTests(APITestCase):
         user = User.objects.create_user(
             username="smtp-unconfigured",
             email="smtp-unconfigured@example.com",
-            ******,
+            password="Email-Test-Password-123!",
             is_active=True,
             is_email_verified=False,
         )
@@ -99,7 +99,7 @@ class EmailVerificationTests(APITestCase):
         user = User.objects.create_user(
             username="smtp-failure",
             email="smtp-failure@example.com",
-            ******,
+            password="Email-Test-Password-123!",
             is_active=True,
             is_email_verified=False,
         )
