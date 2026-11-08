@@ -1,42 +1,66 @@
 from email.utils import parseaddr
-
+import logging
 import requests
 from django.conf import settings
 from django.core.mail.backends.base import BaseEmailBackend
+
+logger = logging.getLogger(__name__)
 
 
 class BrevoEmailBackend(BaseEmailBackend):
     api_url = "https://api.brevo.com/v3/smtp/email"
 
+    def send_messages(self, email_messages):
+        """
+        Django's send_mail() executes this method automatically.
+        """
+        if not email_messages:
+            return 0
+
+        num_sent = 0
+        for message in email_messages:
+            if self._send_message(message):
+                num_sent += 1
+        return num_sent
+
     def _send_message(self, message):
         sender_email = (
-            settings.BREVO_SENDER_EMAIL
-            or parseaddr(message.from_email or settings.DEFAULT_FROM_EMAIL)[1]
+            getattr(settings, "BREVO_SENDER_EMAIL", "")
+            or parseaddr(message.from_email or getattr(settings, "DEFAULT_FROM_EMAIL", ""))[1]
         )
         if not sender_email:
-            raise OSError("Brevo sender email is not configured.")
+            logger.error("Brevo sender email is not configured in settings/env.")
+            if not self.fail_silently:
+                return False
+            return False
 
         sender_name = (
-            settings.BREVO_SENDER_NAME
-            or parseaddr(message.from_email or settings.DEFAULT_FROM_EMAIL)[0]
+            getattr(settings, "BREVO_SENDER_NAME", "")
+            or parseaddr(message.from_email or getattr(settings, "DEFAULT_FROM_EMAIL", ""))[0]
             or "RiceHub"
         )
+
         payload = {
             "sender": {"name": sender_name, "email": sender_email},
-            "to": [self._format_address(address) for address in message.to],
+            "to": [self._format_address(address) for address in message.to if address],
             "subject": message.subject,
         }
 
-        html_body = next(
-            (
-                content
-                for content, mimetype in reversed(message.alternatives)
-                if mimetype == "text/html"
-            ),
-            None,
-        )
+        # HTML / Text Body Handling
+        html_body = None
+        if hasattr(message, "alternatives") and message.alternatives:
+            html_body = next(
+                (
+                    content
+                    for content, mimetype in reversed(message.alternatives)
+                    if mimetype == "text/html"
+                ),
+                None,
+            )
+
         if message.content_subtype == "html":
             html_body = message.body
+
         if html_body is not None:
             payload["htmlContent"] = html_body
         else:
@@ -44,39 +68,48 @@ class BrevoEmailBackend(BaseEmailBackend):
 
         if message.cc:
             payload["cc"] = [
-                self._format_address(address) for address in message.cc
+                self._format_address(address) for address in message.cc if address
             ]
         if message.bcc:
             payload["bcc"] = [
-                self._format_address(address) for address in message.bcc
+                self._format_address(address) for address in message.bcc if address
             ]
         if message.reply_to:
             payload["replyTo"] = self._format_address(message.reply_to[0])
+
+        api_key = getattr(settings, "BREVO_API_KEY", "").strip()
+        timeout = getattr(settings, "EMAIL_TIMEOUT", 15)
 
         try:
             response = requests.post(
                 self.api_url,
                 headers={
-                    "api-key": settings.BREVO_API_KEY,
+                    "api-key": api_key,
                     "accept": "application/json",
                     "content-type": "application/json",
                 },
                 json=payload,
-                timeout=settings.EMAIL_TIMEOUT,
+                timeout=timeout,
             )
-        except requests.RequestException as error:
-            raise OSError("Could not connect to Brevo email API.") from error
+            if response.status_code in [200, 201, 202]:
+                return True
+            else:
+                logger.error(f"Brevo email API error ({response.status_code}): {response.text}")
+                if not self.fail_silently:
+                    return False
+                return False
 
-        if not response.ok:
-            raise OSError(
-                f"Brevo email API returned HTTP {response.status_code}."
-            )
+        except requests.RequestException as error:
+            logger.error(f"Could not connect to Brevo email API: {str(error)}")
+            if not self.fail_silently:
+                return False
+            return False
 
     @staticmethod
     def _format_address(address):
         name, email = parseaddr(address)
         if not email:
-            raise OSError("An email recipient address is invalid.")
+            email = address
         result = {"email": email}
         if name:
             result["name"] = name
