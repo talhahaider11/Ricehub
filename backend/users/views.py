@@ -180,9 +180,24 @@ class ResendVerificationCodeView(APIView):
     throttle_classes = [RegisterRateThrottle]
 
     def post(self, request):
-        if (
+        brevo_backend = (
+            settings.EMAIL_BACKEND
+            == "users.email_backends.BrevoEmailBackend"
+        )
+        smtp_backend = (
             settings.EMAIL_BACKEND
             == "django.core.mail.backends.smtp.EmailBackend"
+        )
+        email_is_unconfigured = (
+            brevo_backend
+            and not all(
+                (
+                    settings.BREVO_API_KEY,
+                    settings.BREVO_SENDER_EMAIL,
+                )
+            )
+        ) or (
+            smtp_backend
             and not all(
                 (
                     settings.EMAIL_HOST,
@@ -190,10 +205,13 @@ class ResendVerificationCodeView(APIView):
                     settings.EMAIL_HOST_PASSWORD,
                 )
             )
-        ):
+        )
+        if email_is_unconfigured:
+            provider = "Brevo" if brevo_backend else "SMTP"
             logger.error(
-                "Email verification resend requested, but SMTP sender "
-                "configuration is incomplete."
+                "Email verification resend requested, but %s sender "
+                "configuration is incomplete.",
+                provider,
             )
             return Response(
                 {

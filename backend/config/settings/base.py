@@ -31,7 +31,9 @@ DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND",
     (
-        "django.core.mail.backends.smtp.EmailBackend"
+        "users.email_backends.BrevoEmailBackend"
+        if os.getenv("BREVO_API_KEY")
+        else "django.core.mail.backends.smtp.EmailBackend"
         if os.getenv("EMAIL_HOST") and os.getenv("EMAIL_HOST_USER") and os.getenv("EMAIL_HOST_PASSWORD")
         else "django.core.mail.backends.console.EmailBackend"
         if DEBUG
@@ -39,18 +41,24 @@ EMAIL_BACKEND = os.getenv(
     ),
 )
 
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() == "true"
-EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "True").lower() == "true"
+# Brevo API Configurations
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "").strip()
+BREVO_SENDER_EMAIL = os.getenv("BREVO_SENDER_EMAIL", "").strip()
+BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "RiceHub").strip()
+
+DEFAULT_FROM_EMAIL = (
+    os.getenv("DEFAULT_FROM_EMAIL", "").strip()
+    or BREVO_SENDER_EMAIL
+    or "noreply@localhost"
+)
+
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "15"))
 
-DEFAULT_FROM_EMAIL = os.getenv(
-    "DEFAULT_FROM_EMAIL",
-    ""
-) or EMAIL_HOST_USER or "noreply@localhost"
+# Default Backend (Agar Environment specify na ho)
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND", 
+    "users.email_backends.BrevoEmailBackend"
+)
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://ricehub-frontend.onrender.com")
 

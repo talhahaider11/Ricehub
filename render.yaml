@@ -34,18 +34,16 @@ services:
         sync: false
       - key: FRONTEND_URL
         value: https://ricehub-frontend.onrender.com
-      - key: EMAIL_HOST
-        value: smtp.gmail.com
-      - key: EMAIL_PORT
-        value: "587"
-      - key: EMAIL_HOST_USER
+      - key: BREVO_API_KEY
         sync: false
-      - key: EMAIL_HOST_PASSWORD
+      - key: BREVO_SENDER_EMAIL
         sync: false
-      - key: EMAIL_USE_TLS
-        value: "True"
-      - key: EMAIL_USE_SSL
-        value: "False"
+      - key: BREVO_SENDER_NAME
+        value: RiceHub
+      - key: SADAPAY_ACCOUNT_NAME
+        value: Talha Haider
+      - key: SADAPAY_ACCOUNT_NUMBER
+        value: 0329-9047283
       - key: SECURITY_EVENT_RETENTION_DAYS
         value: "90"
   - type: worker

@@ -1,11 +1,12 @@
 import re
 import smtplib
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core import mail
+from django.core.mail import send_mail
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -94,6 +95,69 @@ class EmailVerificationTests(APITestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+    @override_settings(
+        EMAIL_BACKEND="users.email_backends.BrevoEmailBackend",
+        BREVO_API_KEY="",
+        BREVO_SENDER_EMAIL="",
+    )
+    def test_resend_returns_service_unavailable_if_brevo_is_unconfigured(self):
+        user = User.objects.create_user(
+            username="brevo-unconfigured",
+            email="brevo-unconfigured@example.com",
+            password="StrongPassword123!",
+            is_active=True,
+            is_email_verified=False,
+        )
+
+        response = self.client.post(
+            "/api/users/resend-verification/",
+            {"email": user.email},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+    @override_settings(
+        EMAIL_BACKEND="users.email_backends.BrevoEmailBackend",
+        BREVO_API_KEY="test-api-key",
+        BREVO_SENDER_EMAIL="verified@ricehub.test",
+        BREVO_SENDER_NAME="RiceHub",
+        DEFAULT_FROM_EMAIL="verified@ricehub.test",
+    )
+    @patch("users.email_backends.requests.post")
+    def test_brevo_backend_sends_email_using_https_api(self, post):
+        post.return_value = Mock(ok=True, status_code=201)
+
+        sent = send_mail(
+            "Verify your email",
+            "Your code is 123456.",
+            None,
+            ["person@example.com"],
+        )
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(
+            post.call_args.args[0],
+            "https://api.brevo.com/v3/smtp/email",
+        )
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["api-key"],
+            "test-api-key",
+        )
+        self.assertEqual(
+            post.call_args.kwargs["json"],
+            {
+                "sender": {
+                    "name": "RiceHub",
+                    "email": "verified@ricehub.test",
+                },
+                "to": [{"email": "person@example.com"}],
+                "subject": "Verify your email",
+                "textContent": "Your code is 123456.",
+            },
+        )
 
     def test_resend_handles_smtp_authentication_failure_without_losing_old_code(self):
         user = User.objects.create_user(

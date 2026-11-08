@@ -61,8 +61,8 @@ class RenderDeploymentConfigTests(unittest.TestCase):
             "OCI_OBJECT_STORAGE_REGION",
             "OCI_OBJECT_STORAGE_ACCESS_KEY",
             "OCI_OBJECT_STORAGE_SECRET_KEY",
-            "EMAIL_HOST_USER",
-            "EMAIL_HOST_PASSWORD",
+            "BREVO_API_KEY",
+            "BREVO_SENDER_EMAIL",
         ):
             self.assertIs(web_env[key]["sync"], False, key)
 
