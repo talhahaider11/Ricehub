@@ -46,8 +46,6 @@ services:
         value: "True"
       - key: EMAIL_USE_SSL
         value: "False"
-      - key: DEFAULT_FROM_EMAIL
-        sync: false
       - key: SECURITY_EVENT_RETENTION_DAYS
         value: "90"
   - type: worker

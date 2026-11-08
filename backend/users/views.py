@@ -370,7 +370,6 @@ class ResendVerificationCodeView(APIView):
                     settings.EMAIL_HOST,
                     settings.EMAIL_HOST_USER,
                     settings.EMAIL_HOST_PASSWORD,
-                    settings.DEFAULT_FROM_EMAIL,
                 )
             )
         ):

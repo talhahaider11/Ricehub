@@ -66,6 +66,7 @@ class RenderDeploymentConfigTests(unittest.TestCase):
         ):
             self.assertIs(web_env[key]["sync"], False, key)
 
+        self.assertNotIn("DEFAULT_FROM_EMAIL", web_env)
         self.assertIs(worker_env["FIREBASE_CREDENTIALS_JSON"]["sync"], False)
         self.assertIn("ricehub-celery-worker", worker_service["name"])
 

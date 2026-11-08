@@ -28,7 +28,7 @@ protected environment values; never commit them to this repository.
 | Both backend services | `WALLET_PASSWORD` | Optional protected variable if the downloaded wallet requires a password |
 | Both backend services | `OCI_OBJECT_STORAGE_NAMESPACE`, `OCI_OBJECT_STORAGE_BUCKET`, `OCI_OBJECT_STORAGE_REGION`, `OCI_OBJECT_STORAGE_ACCESS_KEY`, `OCI_OBJECT_STORAGE_SECRET_KEY` | OCI Object Storage namespace, bucket, region, and S3-compatibility customer secret key pair |
 | Both backend services | `REDIS_URL` | The Render Redis connection string reachable by both services |
-| `ricehub-backend` | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | Valid SMTP sender credentials and address |
+| `ricehub-backend` | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | For Gmail: the sender's full Gmail address and its 16-character Google App Password (not the normal account password). Enable 2-Step Verification before creating the App Password. |
 | `ricehub-celery-worker` | `FIREBASE_CREDENTIALS_JSON` | Firebase service-account JSON, only if push delivery is enabled |
 | `ricehub-backend` | `FRONTEND_URL` | `https://ricehub-frontend.onrender.com` |
 | `ricehub-frontend` | `VITE_API_URL` | `https://ricehub-umfd.onrender.com/api` |
@@ -40,6 +40,14 @@ protected environment values; never commit them to this repository.
 The backend uses Redis for API throttling, caching, and WebSocket notifications.
 Redis connections are pinned to RESP2 for compatibility with hosted Redis
 endpoints that do not support the RESP3 `HELLO` handshake.
+
+Email verification uses Gmail SMTP on port 587 with TLS. In the Render
+`ricehub-backend` Environment page, set `EMAIL_HOST_USER` to the sender's Gmail
+address and `EMAIL_HOST_PASSWORD` to a Google App Password; paste the App
+Password without its display spaces. `DEFAULT_FROM_EMAIL` is optional and
+defaults to `EMAIL_HOST_USER`. Save the environment changes and redeploy the
+backend. Do not use the Gmail account's regular password or commit SMTP
+credentials to the repository.
 
 The Blueprint supplies the non-secret frontend URLs and frontend origin. Verify
 that the `ricehub-umfd.onrender.com` hostname is attached to the backend service
