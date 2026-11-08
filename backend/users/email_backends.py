@@ -24,15 +24,13 @@ class BrevoEmailBackend(BaseEmailBackend):
         return num_sent
 
     def _send_message(self, message):
+        # users/email_backends.py ke _send_message method mein:
+
         sender_email = (
-            getattr(settings, "BREVO_SENDER_EMAIL", "")
-            or parseaddr(message.from_email or getattr(settings, "DEFAULT_FROM_EMAIL", ""))[1]
+            getattr(settings, "BREVO_SENDER_EMAIL", "").strip()
+            or getattr(settings, "DEFAULT_FROM_EMAIL", "").strip()
+            or "ricehub32@gmail.com"  # Hardcode fallback so it never defaults to wrong email
         )
-        if not sender_email:
-            logger.error("Brevo sender email is not configured in settings/env.")
-            if not self.fail_silently:
-                return False
-            return False
 
         sender_name = (
             getattr(settings, "BREVO_SENDER_NAME", "")
