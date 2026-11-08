@@ -254,13 +254,9 @@ export default function MobileMenu({ onClose }) {
                 <LockKeyhole size={19} />
                 <span>Security and login</span>
               </Link>
-              <Link to="/settings#appearance" onClick={onClose}>
-                {theme === "light" ? <Moon size={19} /> : <Sun size={19} />}
-                <span>Appearance</span>
-              </Link>
               <button type="button" onClick={toggleTheme}>
                 {theme === "light" ? <Moon size={19} /> : <Sun size={19} />}
-                <span>Turn {theme === "light" ? "dark" : "light"} mode on</span>
+                <span>Appearance · turn {theme === "light" ? "dark" : "light"} mode on</span>
               </button>
             </div>
           )}

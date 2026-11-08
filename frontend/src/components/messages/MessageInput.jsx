@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Mic, Square } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 
 export default function MessageInput({
@@ -152,11 +153,13 @@ export default function MessageInput({
             onClick={() => void startRecording()}
             aria-label="Record voice note"
           >
+            <Mic size={16} aria-hidden="true" />
             {t("voiceNote")}
           </button>
         )}
         {recording && (
           <button type="button" onClick={stopRecording} aria-label="Stop voice recording">
+            <Square size={15} aria-hidden="true" />
             {t("stopRecording")}
           </button>
         )}

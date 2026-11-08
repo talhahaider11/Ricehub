@@ -1,5 +1,3 @@
-import re
-
 from django.contrib.auth import get_user_model
 from feed.cache import invalidate_feed
 
@@ -57,20 +55,6 @@ class PostAuthorSerializer(serializers.ModelSerializer):
 
 
 class PostSerializer(serializers.ModelSerializer):
-    RICE_CONTENT_TERMS = (
-        "rice",
-        "paddy",
-        "basmati",
-        "sella",
-        "parboiled",
-        "rice mill",
-        "rice farming",
-        "rice harvest",
-        "چاول",
-        "دھان",
-        "باسمتی",
-    )
-
     author = PostAuthorSerializer(
         read_only=True
     )
@@ -249,9 +233,7 @@ class PostSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop("hashtags", None)
         media_ids = validated_data.pop("media_ids", None)
-        validated_data["moderation_status"] = self.get_moderation_status(
-            validated_data.get("content", "")
-        )
+        validated_data["moderation_status"] = Post.ModerationStatus.APPROVED
         post = super().create(validated_data)
         if media_ids is not None:
             post.media_assets.set(self._requested_media_assets)
@@ -264,9 +246,7 @@ class PostSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data.pop("hashtags", None)
         media_ids = validated_data.pop("media_ids", None)
-        validated_data["moderation_status"] = self.get_moderation_status(
-            validated_data.get("content", instance.content)
-        )
+        validated_data["moderation_status"] = Post.ModerationStatus.APPROVED
         post = super().update(instance, validated_data)
         if media_ids is not None:
             post.media_assets.set(self._requested_media_assets)
@@ -275,22 +255,6 @@ class PostSerializer(serializers.ModelSerializer):
         invalidate_feed(post.author_id)
 
         return post
-
-    @classmethod
-    def get_moderation_status(cls, content):
-        normalized = (content or "").casefold()
-        has_rice_topic = any(
-            term in normalized
-            if any(ord(char) > 127 for char in term)
-            else re.search(rf"\b{re.escape(term)}\b", normalized)
-            for term in cls.RICE_CONTENT_TERMS
-        )
-        return (
-            Post.ModerationStatus.APPROVED
-            if has_rice_topic
-            else Post.ModerationStatus.PENDING
-        )
-
 
 class HashtagSerializer(
     serializers.ModelSerializer

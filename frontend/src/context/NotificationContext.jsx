@@ -10,6 +10,19 @@ import { getArrayResults } from "../utils/arrayResults";
 
 export const NotificationContext = createContext(null);
 
+function getNotificationErrorMessage(error, fallback) {
+  const detail = error.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+
+  const status = error.response?.status;
+  if (status) return `${fallback} (HTTP ${status}).`;
+
+  if (error.request) {
+    return `${fallback} Check your connection and try again.`;
+  }
+  return fallback;
+}
+
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [totalUnreadCount, setTotalUnreadCount] = useState(null);
@@ -35,7 +48,12 @@ export function NotificationProvider({ children }) {
       }
     } catch (loadError) {
       console.error("Notifications could not be loaded:", loadError);
-      setError("Notifications could not be loaded. Please try again.");
+      setError(
+        getNotificationErrorMessage(
+          loadError,
+          "Notifications could not be loaded. Please try again."
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -73,7 +91,12 @@ export function NotificationProvider({ children }) {
     try {
       await notificationService.markRead(id);
     } catch (markError) {
-      setError("Notification could not be marked as read.");
+      setError(
+        getNotificationErrorMessage(
+          markError,
+          "Notification could not be marked as read."
+        )
+      );
       throw markError;
     }
 
@@ -96,7 +119,12 @@ export function NotificationProvider({ children }) {
     try {
       await notificationService.markAllRead();
     } catch (markError) {
-      setError("Notifications could not be marked as read.");
+      setError(
+        getNotificationErrorMessage(
+          markError,
+          "Notifications could not be marked as read."
+        )
+      );
       throw markError;
     }
 

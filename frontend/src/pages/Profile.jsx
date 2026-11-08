@@ -112,6 +112,28 @@ export default function Profile() {
     }
   };
 
+  const cancelFriendRequest = async () => {
+    if (!friendRequestId) {
+      setActionMessage("Friend request could not be found. Refresh the profile and try again.");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setActionMessage("");
+      await friendService.cancel(friendRequestId);
+      setFriendshipStatus("none");
+      setFriendRequestId(null);
+      setActionMessage("Friend request cancelled.");
+    } catch (requestError) {
+      setActionMessage(
+        requestError.response?.data?.detail || "Friend request could not be cancelled."
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const startConversation = async () => {
     try {
       setActionLoading(true);
@@ -207,13 +229,13 @@ export default function Profile() {
           ) : (
             <div className="profile-actions">
               <Button
-                onClick={addFriend}
-                disabled={actionLoading || ["outgoing_pending", "friends"].includes(friendshipStatus)}
+                onClick={friendshipStatus === "outgoing_pending" ? cancelFriendRequest : addFriend}
+                disabled={actionLoading || friendshipStatus === "friends"}
               >
                 {friendshipStatus === "friends"
                   ? "Friends"
                   : friendshipStatus === "outgoing_pending"
-                    ? "Requested"
+                    ? "Cancel request"
                     : friendshipStatus === "incoming_pending"
                       ? "Accept request"
                       : "Add Friend"}

@@ -141,10 +141,16 @@ class UserSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated or request.user.pk == obj.pk:
             return None
         pending = FriendRequest.objects.filter(
-            sender=obj,
-            receiver=request.user,
+            sender=request.user,
+            receiver=obj,
             status=FriendRequest.Status.PENDING,
         ).only("pk").first()
+        if not pending:
+            pending = FriendRequest.objects.filter(
+                sender=obj,
+                receiver=request.user,
+                status=FriendRequest.Status.PENDING,
+            ).only("pk").first()
         return pending.pk if pending else None
 
     def get_posts_count(self, obj):

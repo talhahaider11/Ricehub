@@ -45,6 +45,15 @@ const friendService = {
 
     return response.data;
   },
+
+  async cancel(requestId) {
+    const response = await api.post(
+      `/friends/requests/${requestId}/respond/`,
+      { action: "cancel" }
+    );
+
+    return response.data;
+  },
 };
 
 export default friendService;

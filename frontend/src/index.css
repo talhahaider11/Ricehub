@@ -11,14 +11,14 @@
     "Segoe UI",
     sans-serif;
 
-  color: #172033;
+  color: #000;
   background: #f4f6f9;
 
   --primary: #1877f2;
   --background: #f4f6f9;
   --surface: #ffffff;
   --border: #dfe3e8;
-  --text: #172033;
+  --text: #000;
   --muted: #697386;
   --danger: #dc2626;
   --success: #14804a;
@@ -214,7 +214,7 @@ select:focus-visible {
   --surface: #ffffff;
   --surface-secondary: #f0f2f5;
 
-  --text: #172033;
+  --text: #000;
   --text-secondary: #667085;
   --muted: #697386;
   --border: #dfe3e8;
@@ -699,10 +699,29 @@ textarea:focus-visible {
 /* PROFILE */
 
 .profile-header {
+  position: relative;
   background: var(--surface);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
+  overflow: visible;
+}
+
+.profile-header > .cover-image {
   overflow: hidden;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.profile-page {
+  width: min(100%, 980px);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .profile-cover,
@@ -966,6 +985,10 @@ textarea:focus-visible {
 }
 
 .message-input button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: 0;
   border-radius: 22px;
   background: var(--primary);
@@ -1929,7 +1952,7 @@ textarea:focus-visible {
   --background: #f4f8fd;
   --surface: #ffffff;
   --surface-secondary: #f1f6fc;
-  --text: #172b4d;
+  --text: #000;
   --text-secondary: #61738d;
   --muted: #71839b;
   --border: #dce7f4;
@@ -1979,6 +2002,11 @@ input,
 textarea,
 select {
   color: inherit;
+}
+
+option {
+  color: #000;
+  background: #fff;
 }
 
 button,
@@ -3054,7 +3082,7 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 4px;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -3473,6 +3501,13 @@ select {
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
+}
+
+.audio-call-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .audio-call-controls audio {

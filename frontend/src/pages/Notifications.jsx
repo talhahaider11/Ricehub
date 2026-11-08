@@ -30,7 +30,7 @@ export default function Notifications() {
     try {
       await markRead(notification.id);
     } catch {
-      // The context exposes the action error in the page.
+      return;
     }
     navigate(getNotificationPath(notification));
   };

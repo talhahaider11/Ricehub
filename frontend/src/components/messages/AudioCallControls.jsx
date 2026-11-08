@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Mic, MicOff, Phone, PhoneOff } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 
 const ICE_SERVERS = [
@@ -189,6 +190,7 @@ export default function AudioCallControls({
     <section className="audio-call-controls" aria-label="Audio call">
       {callState === "idle" && (
         <button type="button" disabled={disabled} onClick={() => void startCall()}>
+          <Phone size={16} aria-hidden="true" />
           {t("call")} {peerName || "user"}
         </button>
       )}
@@ -200,7 +202,10 @@ export default function AudioCallControls({
               : `${t("incomingCall")} ${peerName || "user"}`}
           </span>
           <button type="button" disabled={disabled} onClick={() => void acceptCall()}>{t("answerCall")}</button>
-          <button type="button" onClick={endCall}>{t("declineCall")}</button>
+          <button type="button" onClick={endCall}>
+            <PhoneOff size={16} aria-hidden="true" />
+            {t("declineCall")}
+          </button>
         </>
       )}
       {["calling", "connecting", "connected"].includes(callState) && (
@@ -208,10 +213,16 @@ export default function AudioCallControls({
           <span>{callState === "connected" ? t("callConnected") : t("calling")}</span>
           {callState === "connected" && (
             <button type="button" onClick={toggleMute}>
+              {muted
+                ? <MicOff size={16} aria-hidden="true" />
+                : <Mic size={16} aria-hidden="true" />}
               {muted ? t("unmute") : t("mute")}
             </button>
           )}
-          <button type="button" onClick={endCall}>{t("endCall")}</button>
+          <button type="button" onClick={endCall}>
+            <PhoneOff size={16} aria-hidden="true" />
+            {t("endCall")}
+          </button>
         </>
       )}
       <audio ref={remoteAudioRef} autoPlay aria-label="Remote call audio" />

@@ -48,6 +48,11 @@ describe("MobileMenu", () => {
       "href",
       "/settings#privacy"
     );
+    expect(screen.queryByRole("link", { name: /appearance/i })).not.toBeInTheDocument();
+
+    const appearance = screen.getByRole("button", { name: /appearance.*turn dark mode on/i });
+    fireEvent.click(appearance);
+    expect(screen.getByRole("button", { name: /appearance.*turn light mode on/i })).toBeInTheDocument();
   });
 
   it("keeps search and help support out of the expandable drawer", () => {

@@ -208,7 +208,7 @@ class PostVerificationAndModerationTests(APITestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.posts_created, 3)
 
-    def test_non_rice_content_is_held_for_review(self):
+    def test_non_rice_content_is_approved_and_visible_to_other_users(self):
         response = self.client.post(
             "/api/posts/",
             {"content": "A general update"},
@@ -218,9 +218,22 @@ class PostVerificationAndModerationTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(
             response.data["moderation_status"],
-            Post.ModerationStatus.PENDING,
+            Post.ModerationStatus.APPROVED,
         )
         self.assertEqual(self.client.get("/api/posts/").data["count"], 1)
 
         self.client.force_authenticate(self.viewer)
-        self.assertEqual(self.client.get("/api/posts/").data["count"], 0)
+        viewer_response = self.client.get("/api/posts/")
+        self.assertEqual(viewer_response.data["count"], 1)
+
+    def test_verified_users_can_create_more_than_three_posts(self):
+        self.user.is_verified = True
+        self.user.save(update_fields=["is_verified"])
+
+        for index in range(4):
+            response = self.client.post(
+                "/api/posts/",
+                {"content": f"Verified account update {index}"},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 201)

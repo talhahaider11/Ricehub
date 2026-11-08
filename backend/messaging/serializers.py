@@ -52,6 +52,7 @@ class MessageSerializer(
     conversation = serializers.PrimaryKeyRelatedField(
         read_only=True
     )
+    content = serializers.CharField(required=False, allow_blank=True)
     attachment = serializers.FileField(required=False, allow_null=True)
     verification_warning = serializers.SerializerMethodField()
     reply_to = serializers.SerializerMethodField()

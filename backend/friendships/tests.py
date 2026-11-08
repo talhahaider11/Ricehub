@@ -102,6 +102,53 @@ class FriendRequestApiTests(APITestCase):
         friend_request.refresh_from_db()
         self.assertEqual(friend_request.status, FriendRequest.Status.REJECTED)
 
+    def test_sender_can_cancel_a_pending_friend_request(self):
+        friend_request = FriendRequest.objects.create(
+            sender=self.sender,
+            receiver=self.receiver,
+        )
+        self.client.force_authenticate(user=self.sender)
+
+        response = self.client.post(
+            f"/api/friends/requests/{friend_request.id}/respond/",
+            {"action": "cancel"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        friend_request.refresh_from_db()
+        self.assertEqual(friend_request.status, FriendRequest.Status.CANCELLED)
+
+    def test_receiver_cannot_cancel_a_friend_request(self):
+        friend_request = FriendRequest.objects.create(
+            sender=self.sender,
+            receiver=self.receiver,
+        )
+        self.client.force_authenticate(user=self.receiver)
+
+        response = self.client.post(
+            f"/api/friends/requests/{friend_request.id}/respond/",
+            {"action": "cancel"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        friend_request.refresh_from_db()
+        self.assertEqual(friend_request.status, FriendRequest.Status.PENDING)
+
+    def test_profile_includes_outgoing_pending_request_id(self):
+        friend_request = FriendRequest.objects.create(
+            sender=self.sender,
+            receiver=self.receiver,
+        )
+        self.client.force_authenticate(user=self.sender)
+
+        response = self.client.get(f"/api/users/{self.receiver.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["friendship_status"], "outgoing_pending")
+        self.assertEqual(response.data["friend_request_id"], friend_request.id)
+
     def test_friend_profile_lookup_uses_the_friend_id_from_the_list(self):
         FriendRequest.objects.create(
             sender=self.sender,

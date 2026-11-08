@@ -170,10 +170,13 @@ class FriendRequestActionView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if (
-            friend_request.receiver
-            != request.user
-        ):
+        if action == "cancel":
+            if friend_request.sender_id != request.user.pk:
+                return Response(
+                    {"detail": "You cannot cancel this request."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif friend_request.receiver_id != request.user.pk:
             return Response(
                 {
                     "detail": "You cannot modify this request."
@@ -220,6 +223,10 @@ class FriendRequestActionView(APIView):
             friend_request.status = (
                 FriendRequest.Status.REJECTED
             )
+            friend_request.save(update_fields=["status", "updated_at"])
+
+        elif action == "cancel":
+            friend_request.status = FriendRequest.Status.CANCELLED
             friend_request.save(update_fields=["status", "updated_at"])
 
         else:

@@ -23,6 +23,11 @@ function NotificationCount() {
   return <span>Unread: {unreadCount}</span>;
 }
 
+function NotificationError() {
+  const { error } = useContext(NotificationContext);
+  return error ? <span role="alert">{error}</span> : null;
+}
+
 describe("NotificationProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -62,5 +67,24 @@ describe("NotificationProvider", () => {
       );
     });
     consoleError.mockRestore();
+  });
+
+  it("shows the backend's notification error to the user", async () => {
+    notificationService.list.mockRejectedValue({
+      response: {
+        status: 503,
+        data: { detail: "Notification service is unavailable." },
+      },
+    });
+
+    render(
+      <NotificationProvider>
+        <NotificationError />
+      </NotificationProvider>
+    );
+
+    expect(
+      await screen.findByText("Notification service is unavailable.")
+    ).toHaveAttribute("role", "alert");
   });
 });

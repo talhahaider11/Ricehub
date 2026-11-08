@@ -82,7 +82,7 @@ const messageService = {
       localStorage.getItem(ACCESS_TOKEN_KEY);
 
     return new WebSocket(
-      `${WS_URL}/${conversationId}/?token=${encodeURIComponent(token)}`
+      `${WS_URL}/chat/${conversationId}/?token=${encodeURIComponent(token)}`
     );
   },
 };
