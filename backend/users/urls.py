@@ -11,8 +11,6 @@ from .views import (
     BlockedUsersView,
     LoginView,
     MeView,
-    ContactSuggestionsView,
-    PhoneVerificationView,
     MutedUserView,
     PasswordResetRequestView,
     ProfileUpdateView,
@@ -52,16 +50,6 @@ urlpatterns = [
         name="username_availability",
     ),
     path("verify-email/", VerifyEmailView.as_view(), name="verify-email"),
-    path(
-        "phone/verification/",
-        PhoneVerificationView.as_view(),
-        name="phone-verification",
-    ),
-    path(
-        "suggestions/contacts/",
-        ContactSuggestionsView.as_view(),
-        name="contact-suggestions",
-    ),
     path(
         "resend-verification/",
         ResendVerificationCodeView.as_view(),

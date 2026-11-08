@@ -33,7 +33,6 @@ protected environment values; never commit them to this repository.
 | `ricehub-backend` | `FRONTEND_URL` | `https://ricehub-frontend.onrender.com` |
 | `ricehub-frontend` | `VITE_API_URL` | `https://ricehub-umfd.onrender.com/api` |
 | `ricehub-frontend` | `VITE_WS_URL` | `wss://ricehub-umfd.onrender.com/ws` |
-| `ricehub-backend` | `SMS_PROVIDER`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | Optional Twilio credentials for phone verification OTP delivery; leave unset until configured |
 | `ricehub-backend` | `PAYMENT_INSTRUCTIONS` | Optional safe transfer instructions shown in-app; automatic billing is disabled and payment requests require staff review |
 | `ricehub-backend` | `SADAPAY_ACCOUNT_NAME`, `SADAPAY_ACCOUNT_NUMBER`, `SADAPAY_QR_IMAGE_URL` | Real SadaPay destination details and an HTTPS-hosted QR image URL shown during verification payment; leave unset until verified |
 

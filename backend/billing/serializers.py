@@ -25,7 +25,6 @@ class PaymentRequestSerializer(serializers.ModelSerializer):
             "amount_pkr",
             "reference",
             "sender_name",
-            "sender_phone",
             "transfer_app",
             "receipt",
             "status",
@@ -35,9 +34,6 @@ class PaymentRequestSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "amount_pkr", "status", "created_at")
 
     def validate_sender_name(self, value):
-        return value.strip()
-
-    def validate_sender_phone(self, value):
         return value.strip()
 
     def validate_receipt(self, value):

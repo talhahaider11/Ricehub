@@ -1,12 +1,8 @@
 import logging
-import re
-import secrets
 import smtplib
-from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
@@ -37,18 +33,12 @@ from .models import (
     AccountReport,
     BlockedUser,
     EmailVerification,
-    PhoneVerification,
     MutedUser,
     SecurityEvent,
     SupportRequest,
     TwoFactorChallenge,
     UserPrivacySettings,
     UserSecuritySettings,
-)
-from .phone_verification import (
-    SMSConfigurationError,
-    SMSDeliveryError,
-    send_sms,
 )
 from .account_status import is_user_suspended
 from .privacy import are_friends, is_blocked_between
@@ -182,178 +172,6 @@ class VerifyEmailView(APIView):
                 "detail": "Email verified successfully.",
             },
             status=status.HTTP_200_OK,
-        )
-
-
-class PhoneVerificationView(APIView):
-    permission_classes = [IsActiveAndNotSuspended]
-    throttle_classes = [RegisterRateThrottle]
-    phone_pattern = re.compile(r"^\+[1-9]\d{7,14}$")
-
-    def post(self, request):
-        phone_number = request.data.get("phone_number")
-        if not isinstance(phone_number, str):
-            return Response(
-                {"phone_number": "Enter a phone number in international format."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        phone_number = phone_number.strip()
-        if not self.phone_pattern.fullmatch(phone_number):
-            return Response(
-                {"phone_number": "Use E.164 format, for example +923001234567."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if request.data.get("action") == "verify":
-            return self.verify_code(request, phone_number)
-        if request.data.get("action") != "send":
-            return Response(
-                {"action": "Choose send or verify."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            verification = request.user.phone_verification
-        except PhoneVerification.DoesNotExist:
-            verification = None
-        if (
-            request.user.is_phone_verified
-            and request.user.phone_number == phone_number
-        ):
-            return Response({"detail": "Phone number is already verified."})
-        if (
-            verification
-            and verification.phone_number == phone_number
-            and (timezone.now() - verification.last_sent_at).total_seconds() < 60
-        ):
-            return Response(
-                {"detail": "Please wait before requesting another code."},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
-
-        code = f"{secrets.randbelow(1_000_000):06d}"
-        old_phone_number = request.user.phone_number
-        old_is_phone_verified = request.user.is_phone_verified
-        request.user.phone_number = phone_number
-        request.user.is_phone_verified = False
-        request.user.save(update_fields=("phone_number", "is_phone_verified"))
-        verification, _ = PhoneVerification.objects.update_or_create(
-            user=request.user,
-            defaults={
-                "phone_number": phone_number,
-                "code_hash": make_password(code),
-                "expires_at": timezone.now() + timedelta(minutes=10),
-                "last_sent_at": timezone.now(),
-                "attempts": 0,
-            },
-        )
-        try:
-            send_sms(phone_number, f"Your RiceHub verification code is {code}.")
-        except SMSConfigurationError:
-            verification.delete()
-            request.user.phone_number = old_phone_number
-            request.user.is_phone_verified = old_is_phone_verified
-            request.user.save(
-                update_fields=("phone_number", "is_phone_verified")
-            )
-            return Response(
-                {"detail": "Phone verification is temporarily unavailable."},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        except SMSDeliveryError:
-            verification.delete()
-            request.user.phone_number = old_phone_number
-            request.user.is_phone_verified = old_is_phone_verified
-            request.user.save(
-                update_fields=("phone_number", "is_phone_verified")
-            )
-            return Response(
-                {"detail": "The verification code could not be sent. Try again later."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-        return Response(
-            {"detail": "A verification code has been sent."},
-            status=status.HTTP_200_OK,
-        )
-
-    def verify_code(self, request, phone_number):
-        code = request.data.get("code")
-        if not isinstance(code, str) or not re.fullmatch(r"\d{6}", code):
-            return Response(
-                {"code": "Enter the 6-digit code."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            verification = request.user.phone_verification
-        except PhoneVerification.DoesNotExist:
-            return Response(
-                {"detail": "Request a new verification code."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if (
-            verification.phone_number != phone_number
-            or timezone.now() >= verification.expires_at
-            or verification.attempts >= 5
-        ):
-            return Response(
-                {"detail": "The verification code is invalid or expired."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not check_password(code, verification.code_hash):
-            verification.attempts += 1
-            verification.save(update_fields=("attempts",))
-            return Response(
-                {"detail": "The verification code is invalid or expired."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        request.user.phone_number = phone_number
-        request.user.is_phone_verified = True
-        request.user.save(update_fields=("phone_number", "is_phone_verified"))
-        verification.delete()
-        return Response({"detail": "Phone number verified."})
-
-
-class ContactSuggestionsView(APIView):
-    permission_classes = [IsActiveAndNotSuspended]
-
-    def post(self, request):
-        from friendships.services import get_friend_ids
-
-        phone_numbers = request.data.get("phone_numbers")
-        if not isinstance(phone_numbers, list) or len(phone_numbers) > 500:
-            return Response(
-                {"phone_numbers": "Provide at most 500 phone numbers."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        normalized_numbers = set()
-        for phone_number in phone_numbers:
-            if (
-                not isinstance(phone_number, str)
-                or not PhoneVerificationView.phone_pattern.fullmatch(
-                    phone_number.strip()
-                )
-            ):
-                return Response(
-                    {"phone_numbers": "All numbers must use international format."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            normalized_numbers.add(phone_number.strip())
-
-        users = User.objects.filter(
-            phone_number__in=normalized_numbers,
-            is_phone_verified=True,
-            is_active=True,
-            is_suspended=False,
-            privacy_settings__discoverable_by_phone=True,
-        ).exclude(pk=request.user.pk).exclude(
-            pk__in=get_friend_ids(request.user)
-        ).order_by("username")[:50]
-        return Response(
-            UserSerializer(
-                users,
-                many=True,
-                context={"request": request},
-            ).data
         )
 
 
@@ -631,8 +449,6 @@ class MeView(APIView):
                 "is_email_verified": user.is_email_verified,
                 "is_verified": user.is_verified,
                 "subscription_expires_at": user.subscription_expires_at,
-                "phone_number": user.phone_number,
-                "is_phone_verified": user.is_phone_verified,
                 "preferred_language": user.preferred_language,
             },
             status=status.HTTP_200_OK,

@@ -36,7 +36,6 @@ class RegistrationTests(APITestCase):
         self.assertTrue(user.is_active)
         self.assertFalse(user.is_email_verified)
         self.assertFalse(user.is_verified)
-        self.assertFalse(user.is_phone_verified)
         self.assertFalse(EmailVerification.objects.filter(user=user).exists())
 
         login = self.client.post(

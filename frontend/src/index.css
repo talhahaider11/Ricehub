@@ -3355,31 +3355,9 @@ select {
   gap: 14px;
 }
 
-.billing-card label,
-.suggestions-contact-actions label {
+.billing-card label {
   display: grid;
   gap: 6px;
-}
-
-.billing-phone,
-.billing-phone-code,
-.suggestions-contact-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 12px;
-}
-
-.billing-phone > label:first-child {
-  flex: 2 1 260px;
-}
-
-.billing-phone > label:last-child {
-  flex: 3 1 200px;
-}
-
-.billing-phone-code label {
-  flex: 1 1 160px;
 }
 
 .billing-plans {
@@ -3416,10 +3394,6 @@ select {
   background: #e7f8ed;
   color: #16733b;
   font-size: 0.78rem;
-}
-
-.suggestions-contact-actions label {
-  flex: 1 1 260px;
 }
 
 .suggestion {

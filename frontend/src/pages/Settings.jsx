@@ -346,7 +346,6 @@ export default function Settings() {
                 </label>
                 {[
                   ["discoverable_by_email", "Allow people to find me by email"],
-                  ["discoverable_by_phone", "Allow account suggestions by phone number"],
                   ["show_activity_status", "Show when I’m active"],
                   ["show_last_seen", "Show my last active time"],
                   ["read_receipts", "Send read receipts in chats"],

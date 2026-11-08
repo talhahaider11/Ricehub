@@ -23,7 +23,6 @@ class BillingTests(APITestCase):
             email="billing@example.com",
             password="billing-test-password",
             is_email_verified=True,
-            is_phone_verified=True,
         )
         self.staff = User.objects.create_user(
             username="billing-staff",
@@ -61,7 +60,6 @@ class BillingTests(APITestCase):
                 "amount_pkr": "1.00",
                 "reference": "transfer-123",
                 "sender_name": "Billing User",
-                "sender_phone": "+923001234567",
                 "transfer_app": PaymentRequest.TransferApp.EASYPAISA,
                 "receipt": self.create_receipt(),
             },
@@ -108,7 +106,6 @@ class BillingTests(APITestCase):
                 "method": PaymentRequest.Method.EASYPAISA,
                 "reference": "wrong-destination",
                 "sender_name": "Billing User",
-                "sender_phone": "+923001234567",
                 "transfer_app": PaymentRequest.TransferApp.EASYPAISA,
                 "receipt": self.create_receipt(),
             },
@@ -138,9 +135,9 @@ class BillingTests(APITestCase):
         self.assertEqual(allowed.status_code, 200)
         self.assertTrue(allowed["Content-Type"].startswith("image/"))
 
-    def test_subscription_requires_email_and_phone_verification(self):
-        self.user.is_phone_verified = False
-        self.user.save(update_fields=("is_phone_verified",))
+    def test_subscription_requires_email_verification(self):
+        self.user.is_email_verified = False
+        self.user.save(update_fields=("is_email_verified",))
 
         response = self.client.post(
             "/api/billing/payment-requests/",

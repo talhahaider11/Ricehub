@@ -102,9 +102,9 @@ class PaymentRequestListCreateView(APIView):
         if kind == PaymentRequest.Kind.SUBSCRIPTION:
             if post:
                 raise ValidationError({"post": "Subscription requests do not use a post."})
-            if not request.user.is_email_verified or not request.user.is_phone_verified:
+            if not request.user.is_email_verified:
                 raise ValidationError(
-                    {"detail": "Verify your email and phone before requesting verification."}
+                    {"detail": "Verify your email before requesting verification."}
                 )
             if serializer.validated_data["method"] != PaymentRequest.Method.SADAPAY:
                 raise ValidationError(
@@ -112,7 +112,6 @@ class PaymentRequestListCreateView(APIView):
                 )
             required_fields = {
                 "sender_name": "Enter the name on the sending account.",
-                "sender_phone": "Enter the sender phone number.",
                 "transfer_app": "Select the app used to send the transfer.",
                 "receipt": "Upload the payment receipt image.",
             }

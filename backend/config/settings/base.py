@@ -40,11 +40,11 @@ EMAIL_BACKEND = os.getenv(
 )
 
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
-EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() == "true"
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() == "true"
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "True").lower() == "true"
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "15"))
 
 DEFAULT_FROM_EMAIL = os.getenv(
@@ -101,10 +101,6 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 3600.0,
     },
 }
-SMS_PROVIDER = os.getenv("SMS_PROVIDER", "")
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER", "")
 PAYMENT_INSTRUCTIONS = os.getenv("PAYMENT_INSTRUCTIONS", "")
 SADAPAY_ACCOUNT_NAME = os.getenv("SADAPAY_ACCOUNT_NAME", "").strip()
 SADAPAY_ACCOUNT_NUMBER = os.getenv("SADAPAY_ACCOUNT_NUMBER", "").strip()

@@ -42,7 +42,6 @@ class UserSerializer(serializers.ModelSerializer):
     friends_count = serializers.SerializerMethodField()
     posts_count = serializers.SerializerMethodField()
     is_staff = serializers.SerializerMethodField()
-    phone_number = serializers.SerializerMethodField()
     subscription_expires_at = serializers.SerializerMethodField()
     friendship_status = serializers.SerializerMethodField()
     friend_request_id = serializers.SerializerMethodField()
@@ -55,8 +54,7 @@ class UserSerializer(serializers.ModelSerializer):
             "website", "date_of_birth", "profile_visibility",
             "is_online", "last_seen", "created_at",
             "is_email_verified",
-            "is_verified", "subscription_expires_at", "phone_number",
-            "is_phone_verified", "preferred_language",
+            "is_verified", "subscription_expires_at", "preferred_language",
             "friends_count", "posts_count", "is_staff",
             "friendship_status", "friend_request_id",
         ]
@@ -89,12 +87,6 @@ class UserSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request and request.user.is_authenticated and request.user.pk == obj.pk:
             return obj.email
-        return None
-
-    def get_phone_number(self, obj):
-        request = self.context.get("request")
-        if request and request.user.is_authenticated and request.user.pk == obj.pk:
-            return obj.phone_number
         return None
 
     def get_subscription_expires_at(self, obj):

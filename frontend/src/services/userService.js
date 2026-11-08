@@ -53,13 +53,6 @@ const userService = {
 
     return response.data;
   },
-
-  async suggestionsByContacts(phoneNumbers) {
-    const response = await api.post("/users/suggestions/contacts/", {
-      phone_numbers: phoneNumbers,
-    });
-    return response.data;
-  },
 };
 
 export default userService;

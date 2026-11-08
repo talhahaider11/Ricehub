@@ -2,43 +2,18 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import useAuth from "../hooks/useAuth";
-import api from "../services/api";
 import billingService from "../services/billingService";
-import {
-  countryOptions,
-  defaultCountry,
-  getCountryFromPhone,
-  toInternationalPhone,
-} from "../utils/countryCallingCodes";
 
 export default function Billing() {
-  const { user, setUser } = useAuth();
+  const { user } = useAuth();
   const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const postId = searchParams.get("postId");
   const [options, setOptions] = useState(null);
   const [requests, setRequests] = useState([]);
-  const [country, setCountry] = useState(
-    () => user?.phone_number
-      ? getCountryFromPhone(user.phone_number)
-      : defaultCountry
-  );
-  const [localNumber, setLocalNumber] = useState(() => {
-    const callingCode = countryOptions.find(
-      (option) => option.country === getCountryFromPhone(user?.phone_number)
-    )?.callingCode;
-    return callingCode && user?.phone_number?.startsWith(callingCode)
-      ? user.phone_number.slice(callingCode.length)
-      : user?.phone_number || "";
-  });
-  const [code, setCode] = useState("");
-  const [phoneNotice, setPhoneNotice] = useState("");
-  const [phoneError, setPhoneError] = useState("");
-  const [phoneBusy, setPhoneBusy] = useState(false);
   const [kind, setKind] = useState(postId ? "boost_week" : "subscription");
   const [method, setMethod] = useState("sadapay");
   const [senderName, setSenderName] = useState("");
-  const [senderPhone, setSenderPhone] = useState("");
   const [transferApp, setTransferApp] = useState("");
   const [receipt, setReceipt] = useState(null);
   const [reference, setReference] = useState("");
@@ -64,7 +39,6 @@ export default function Billing() {
       });
   }, []);
 
-  const phoneNumber = toInternationalPhone(localNumber, country);
   const isBoost = Boolean(postId);
   const boostPlans = options?.boosts || [];
   const expiryTime = user?.subscription_expires_at
@@ -78,33 +52,6 @@ export default function Billing() {
     && now < graceEndsAt
     ? Math.ceil((graceEndsAt - now) / (60 * 60 * 1000))
     : 0;
-  const verifyPhone = async (action) => {
-    setPhoneError("");
-    setPhoneNotice("");
-    setPhoneBusy(true);
-    try {
-      const response = await api.post("/users/phone/verification/", {
-        action,
-        phone_number: phoneNumber,
-        ...(action === "verify" ? { code } : {}),
-      });
-      setPhoneNotice(response.data.detail);
-      if (action === "verify") {
-        setUser((current) => ({
-          ...current,
-          phone_number: phoneNumber,
-          is_phone_verified: true,
-        }));
-        setCode("");
-      }
-    } catch (error) {
-      const detail = error.response?.data?.detail || error.response?.data?.phone_number;
-      setPhoneError(Array.isArray(detail) ? detail.join(" ") : detail || "Phone verification failed.");
-    } finally {
-      setPhoneBusy(false);
-    }
-  };
-
   const submitPayment = async (event) => {
     event.preventDefault();
     setPaymentError("");
@@ -124,7 +71,6 @@ export default function Billing() {
         payload.append("method", "sadapay");
         payload.append("reference", reference);
         payload.append("sender_name", senderName);
-        payload.append("sender_phone", senderPhone);
         payload.append("transfer_app", transferApp);
         payload.append("receipt", receipt);
       }
@@ -136,7 +82,6 @@ export default function Billing() {
       setPaymentNotice("Your transfer request was submitted for manual review. No automatic charge was made.");
       setReference("");
       setSenderName("");
-      setSenderPhone("");
       setTransferApp("");
       setReceipt(null);
       event.target.reset();
@@ -162,73 +107,13 @@ export default function Billing() {
 
         {!isBoost && (
           <section className="settings-section">
-            <h2>{t("verifyEmailPhone")}</h2>
+            <h2>{t("verifyEmailOnly")}</h2>
             <p>
               Email: {user?.is_email_verified ? "Verified" : "Not verified"}
               {!user?.is_email_verified && (
                 <> · <Link to="/verify-email" state={{ email: user?.email }}>Verify by email OTP</Link></>
               )}
             </p>
-            <p>Phone: {user?.is_phone_verified ? "Verified" : "Not verified"}</p>
-            {!user?.is_phone_verified && (
-              <>
-                <div className="billing-phone">
-                  <label>
-                    Country code
-                    <select
-                      value={country}
-                      onChange={(event) => setCountry(event.target.value)}
-                    >
-                      {countryOptions.map(({ country: countryCode, callingCode, name }) => (
-                        <option key={countryCode} value={countryCode}>
-                          {name} ({callingCode})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Phone number
-                    <input
-                      type="tel"
-                      autoComplete="tel-national"
-                      value={localNumber}
-                      onChange={(event) => setLocalNumber(event.target.value)}
-                      placeholder="3001234567"
-                    />
-                  </label>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={phoneBusy || localNumber.replace(/\D/g, "").length < 7}
-                  onClick={() => void verifyPhone("send")}
-                >
-                  {phoneBusy ? "Sending..." : t("sendSmsCode")}
-                </button>
-                <div className="billing-phone-code">
-                  <label>
-                    SMS code
-                    <input
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      value={code}
-                      onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={phoneBusy || code.length !== 6}
-                    onClick={() => void verifyPhone("verify")}
-                  >
-                    {t("verifyPhone")}
-                  </button>
-                </div>
-              </>
-            )}
-            {phoneNotice && <p className="settings-status" role="status">{phoneNotice}</p>}
-            {phoneError && <p className="settings-error" role="alert">{phoneError}</p>}
           </section>
         )}
 
@@ -320,17 +205,6 @@ export default function Billing() {
                 />
               </label>
               <label>
-                {t("senderPhone")}
-                <input
-                  type="tel"
-                  value={senderPhone}
-                  onChange={(event) => setSenderPhone(event.target.value)}
-                  maxLength={32}
-                  autoComplete="tel"
-                  required
-                />
-              </label>
-              <label>
                 {t("receiptImage")}
                 <input
                   type="file"
@@ -372,7 +246,6 @@ export default function Billing() {
             type="submit"
             disabled={busy || (!isBoost && (
               !user?.is_email_verified
-              || !user?.is_phone_verified
               || !options?.sadapay?.account_number
               || !options?.sadapay?.qr_image_url
             ))}

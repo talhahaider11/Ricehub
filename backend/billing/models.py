@@ -59,7 +59,6 @@ class PaymentRequest(models.Model):
     amount_pkr = models.DecimalField(max_digits=8, decimal_places=2)
     reference = models.CharField(max_length=120, blank=True)
     sender_name = models.CharField(max_length=120, blank=True)
-    sender_phone = models.CharField(max_length=32, blank=True)
     transfer_app = models.CharField(
         max_length=20,
         choices=TransferApp.choices,
