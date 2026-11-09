@@ -1,5 +1,6 @@
 from datetime import timedelta
 from io import BytesIO
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -10,6 +11,7 @@ from rest_framework.test import APITestCase
 from billing.models import PaymentRequest
 from billing.services import review_payment_request
 from billing.tasks import expire_verification_subscriptions
+from notifications.models import Notification
 from posts.models import Post
 
 
@@ -51,7 +53,14 @@ class BillingTests(APITestCase):
             content_type="image/png",
         )
 
-    def test_subscription_payment_is_manual_and_server_priced(self):
+    @patch(
+        "notifications.services.async_to_sync",
+        return_value=Mock(side_effect=RuntimeError("channel unavailable")),
+    )
+    def test_subscription_payment_is_manual_and_server_priced(
+        self,
+        async_to_sync,
+    ):
         response = self.client.post(
             "/api/billing/payment-requests/",
             {
@@ -78,6 +87,12 @@ class BillingTests(APITestCase):
         review_payment_request(payment.pk, self.staff, approved=True)
         self.user.refresh_from_db()
         self.assertTrue(self.user.is_verified)
+        notification = Notification.objects.get(
+            recipient=self.user,
+            notification_type=Notification.NotificationType.VERIFICATION,
+        )
+        self.assertEqual(notification.message, "You are verified.")
+        async_to_sync.assert_called_once()
         self.assertGreater(
             self.user.subscription_expires_at,
             timezone.now() + timedelta(days=29),

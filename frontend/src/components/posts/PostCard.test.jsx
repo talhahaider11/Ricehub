@@ -58,4 +58,16 @@ describe("PostCard", () => {
       expect(postService.react).toHaveBeenCalledWith(17, "haha");
     });
   });
+
+  it("sends the care reaction type to the API", () => {
+    postService.react.mockResolvedValue({});
+    renderPostCard();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose a reaction" }));
+    fireEvent.click(screen.getByRole("button", { name: "Care" }));
+
+    return waitFor(() => {
+      expect(postService.react).toHaveBeenCalledWith(17, "care");
+    });
+  });
 });

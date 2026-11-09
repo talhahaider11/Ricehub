@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Avatar from "../common/Avatar";
 import StoryAvatar from "./StoryAvatar";
@@ -63,7 +62,6 @@ export default function StoryStrip({
             aria-label="Create a story"
           >
             <Avatar user={currentUser} size={48} />
-            <span className="story-add-icon"><Plus size={18} /></span>
             <strong>Create story</strong>
           </button>
         )}

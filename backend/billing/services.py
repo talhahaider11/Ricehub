@@ -35,6 +35,7 @@ def review_payment_request(payment_request_id, reviewer, approved):
 
     if payment.kind == PaymentRequest.Kind.SUBSCRIPTION:
         user = payment.user
+        was_verified = user.is_verified
         current_expiry = user.subscription_expires_at
         starts_at = current_expiry if current_expiry and current_expiry > now else now
         user.subscription_expires_at = starts_at + timedelta(
@@ -42,6 +43,16 @@ def review_payment_request(payment_request_id, reviewer, approved):
         )
         user.is_verified = True
         user.save(update_fields=("subscription_expires_at", "is_verified"))
+        if not was_verified:
+            from notifications.models import Notification
+            from notifications.services import create_notification
+
+            create_notification(
+                recipient=user,
+                sender=reviewer,
+                notification_type=Notification.NotificationType.VERIFICATION,
+                message="You are verified.",
+            )
     else:
         from feed.cache import invalidate_feed
 

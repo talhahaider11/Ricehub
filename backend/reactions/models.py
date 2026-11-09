@@ -7,6 +7,7 @@ class Reaction(models.Model):
     class ReactionType(models.TextChoices):
         LIKE = "like", "Like"
         LOVE = "love", "Love"
+        CARE = "care", "Care"
         HAHA = "haha", "Haha"
         WOW = "wow", "Wow"
         SAD = "sad", "Sad"

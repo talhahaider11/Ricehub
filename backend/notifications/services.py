@@ -24,7 +24,10 @@ def create_notification(
     preferences = NotificationPreference.objects.filter(
         user=recipient
     ).first()
-    if preferences and not preferences.all_notifications:
+    is_mandatory = (
+        notification_type == Notification.NotificationType.VERIFICATION
+    )
+    if preferences and not preferences.all_notifications and not is_mandatory:
         return None
 
     preference_field = {
@@ -54,34 +57,37 @@ def create_notification(
     )
 
     # Send real-time notification through WebSocket
-    channel_layer = get_channel_layer()
-
-    async_to_sync(
-        channel_layer.group_send
-    )(
-        f"notifications_{recipient.id}",
-        {
-            "type": "notification",
-            "notification": {
-                "id": notification.id,
-                "type": notification.notification_type,
-                "message": notification.message,
-                "sender_id": (
-                    sender.id
-                    if sender
-                    else None
-                ),
-                "post_id": notification.post_id,
-                "comment_id": notification.comment_id,
-                "conversation_id": (
-                    notification.conversation_id
-                ),
-                "created_at": (
-                    notification.created_at.isoformat()
-                ),
+    try:
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"notifications_{recipient.id}",
+            {
+                "type": "notification",
+                "notification": {
+                    "id": notification.id,
+                    "type": notification.notification_type,
+                    "message": notification.message,
+                    "sender_id": (
+                        sender.id
+                        if sender
+                        else None
+                    ),
+                    "post_id": notification.post_id,
+                    "comment_id": notification.comment_id,
+                    "conversation_id": (
+                        notification.conversation_id
+                    ),
+                    "created_at": (
+                        notification.created_at.isoformat()
+                    ),
+                },
             },
-        },
-    )
+        )
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Could not send real-time notification %s.",
+            notification.pk,
+        )
 
     def enqueue_push():
         from .tasks import send_push_notification

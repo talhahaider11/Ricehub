@@ -4020,21 +4020,6 @@ select {
   text-shadow: none;
 }
 
-.story-add-icon {
-  position: absolute;
-  top: 52px;
-  left: 50%;
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  transform: translateX(-50%);
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  background: var(--primary);
-  color: #fff;
-}
-
 .story-text-preview {
   position: absolute;
   inset: 0;

@@ -29,6 +29,10 @@ class Notification(models.Model):
             "event_invitation",
             "Event Invitation"
         )
+        VERIFICATION = (
+            "verification",
+            "Verification"
+        )
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
