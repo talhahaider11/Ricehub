@@ -1,5 +1,6 @@
-import { Link, Outlet } from "react-router-dom";
+import { Link } from "react-router-dom";
 import SearchBar from "../components/navbar/SearchBar";
+import PageTransition from "../components/common/PageTransition";
 
 export default function SearchLayout() {
   return (
@@ -12,7 +13,7 @@ export default function SearchLayout() {
         <SearchBar />
       </header>
       <main className="search-experience-content">
-        <Outlet />
+        <PageTransition />
       </main>
       <footer className="search-experience-footer">
         <span>RiceHub · Connect · Share · Belong</span>

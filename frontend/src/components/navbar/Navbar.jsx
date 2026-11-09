@@ -8,6 +8,7 @@ import {
   Shield,
 } from "lucide-react";
 import { useCallback, useContext, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import SearchBar from "./SearchBar";
 import NotificationBell from "./NotificationBell";
@@ -20,6 +21,7 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const { unreadCount } = useContext(NotificationContext);
   const navigate = useNavigate();
+  const prefersReducedMotion = useReducedMotion();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
 
@@ -85,20 +87,31 @@ export default function Navbar() {
               <Plus size={20} />
               <span>Upload</span>
             </button>
-            {createMenuOpen && (
-              <div className="navbar-create-dropdown" role="menu">
-                {["post", "story", "reel"].map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => openCreate(type)}
-                  >
-                    {type[0].toUpperCase() + type.slice(1)}
-                  </button>
-                ))}
-              </div>
-            )}
+            <AnimatePresence>
+              {createMenuOpen && (
+                <motion.div
+                  className="navbar-create-dropdown"
+                  role="menu"
+                  initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 8, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: prefersReducedMotion ? 0.01 : 0.18 }}
+                >
+                  {["post", "story", "reel"].map((type) => (
+                    <motion.button
+                      key={type}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => openCreate(type)}
+                      whileHover={prefersReducedMotion ? undefined : { x: 3 }}
+                      whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
+                    >
+                      {type[0].toUpperCase() + type.slice(1)}
+                    </motion.button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <Link to="/settings" aria-label="Open settings">

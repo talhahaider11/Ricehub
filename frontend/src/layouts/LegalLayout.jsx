@@ -1,4 +1,5 @@
-import { Link, Outlet } from "react-router-dom";
+import { Link } from "react-router-dom";
+import PageTransition from "../components/common/PageTransition";
 
 export default function LegalLayout() {
   return (
@@ -14,7 +15,7 @@ export default function LegalLayout() {
           <Link to="/login">Sign in</Link>
         </nav>
       </header>
-      <Outlet />
+      <PageTransition />
       <footer className="legal-footer">
         <span>RiceHub</span>
         <Link to="/help-support">Help &amp; Support</Link>

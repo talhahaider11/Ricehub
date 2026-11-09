@@ -1,7 +1,6 @@
-import { Outlet } from "react-router-dom";
-
 import Navbar from "../components/navbar/Navbar.jsx";
 import Sidebar from "../components/sidebar/Sidebar.jsx";
+import PageTransition from "../components/common/PageTransition.jsx";
 import MobileLayout from "./MobileLayout.jsx";
 
 export default function MainLayout() {
@@ -14,7 +13,7 @@ export default function MainLayout() {
         <Sidebar />
 
         <main className="main-content">
-          <Outlet />
+          <PageTransition />
         </main>
       </div>
 

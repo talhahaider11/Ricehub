@@ -1,4 +1,5 @@
-import { Link, Outlet } from "react-router-dom";
+import { Link } from "react-router-dom";
+import PageTransition from "../components/common/PageTransition";
 
 export default function AuthLayout() {
   return (
@@ -30,7 +31,7 @@ export default function AuthLayout() {
           <img className="auth-logo-image" src="/ricehub-logo.jpg" alt="" />
           <strong>RiceHub</strong>
         </div>
-        <Outlet />
+        <PageTransition />
         <nav className="auth-legal-links" aria-label="Legal">
           <Link to="/privacy">Privacy Policy</Link>
           <Link to="/terms">Terms of Service</Link>

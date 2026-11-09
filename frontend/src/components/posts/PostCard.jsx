@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   MessageCircle,
   Share2,
@@ -37,6 +38,7 @@ export default function PostCard({
 }) {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const prefersReducedMotion = useReducedMotion();
   const [reactionType, setReactionType] = useState(post.my_reaction || null);
   const [reactionCount, setReactionCount] = useState(post.reactions_count || 0);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -146,10 +148,15 @@ export default function PostCard({
   );
 
   return (
-    <article
+    <motion.article
       ref={articleRef}
       className="card post-card"
       id={`post-${post.id}`}
+      variants={{
+        hidden: { opacity: 0, y: prefersReducedMotion ? 0 : 14 },
+        visible: { opacity: 1, y: 0 },
+      }}
+      transition={{ duration: prefersReducedMotion ? 0.01 : 0.3, ease: "easeOut" }}
     >
       <div className="post-header">
         <div className="post-author">
@@ -263,23 +270,35 @@ export default function PostCard({
           >
             <SmilePlus size={18} aria-hidden="true" />
           </button>
-          {showReactionPicker && (
-            <div className="reaction-picker" role="group" aria-label="Reactions">
-              {reactions.map((reaction) => (
-                <button
-                  key={reaction.type}
-                  type="button"
-                  onClick={() => chooseReaction(reaction.type)}
-                  disabled={reactionSaving}
-                  aria-label={reaction.label}
-                  title={reaction.label}
-                  aria-pressed={reactionType === reaction.type}
-                >
-                  {reaction.emoji}
-                </button>
-              ))}
-            </div>
-          )}
+          <AnimatePresence>
+            {showReactionPicker && (
+              <motion.div
+                className="reaction-picker"
+                role="group"
+                aria-label="Reactions"
+                initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 6, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: prefersReducedMotion ? 0.01 : 0.16 }}
+              >
+                {reactions.map((reaction) => (
+                  <motion.button
+                    key={reaction.type}
+                    type="button"
+                    onClick={() => chooseReaction(reaction.type)}
+                    disabled={reactionSaving}
+                    aria-label={reaction.label}
+                    title={reaction.label}
+                    aria-pressed={reactionType === reaction.type}
+                    whileHover={prefersReducedMotion ? undefined : { scale: 1.15, y: -3 }}
+                    whileTap={prefersReducedMotion ? undefined : { scale: 0.92 }}
+                  >
+                    {reaction.emoji}
+                  </motion.button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <button
@@ -326,6 +345,6 @@ export default function PostCard({
           />
         </>
       )}
-    </article>
+    </motion.article>
   );
 }

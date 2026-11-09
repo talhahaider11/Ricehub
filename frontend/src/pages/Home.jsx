@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 import StoryTray from "../components/stories/StoryTray";
 import PostCard from "../components/posts/PostCard";
@@ -12,6 +13,7 @@ import useAuth from "../hooks/useAuth";
 
 export default function Home() {
   const { user } = useAuth();
+  const prefersReducedMotion = useReducedMotion();
   const [feedSort, setFeedSort] = useState("recent");
 
   const {
@@ -24,6 +26,14 @@ export default function Home() {
     removePost,
     updatePost,
   } = usePosts(feedSort);
+  const postListVariants = {
+    hidden: {},
+    visible: {
+      transition: prefersReducedMotion
+        ? { duration: 0 }
+        : { delayChildren: 0.04, staggerChildren: 0.075 },
+    },
+  };
 
   return (
     <div className="page-container">
@@ -57,16 +67,23 @@ export default function Home() {
             message="Your feed is waiting for something new."
           />
         ) : (
-          posts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              currentUser={user}
-              trackView={false}
-              onDeleted={removePost}
-              onUpdated={updatePost}
-            />
-          ))
+          <motion.div
+            className="feed-post-list"
+            variants={postListVariants}
+            initial={prefersReducedMotion ? false : "hidden"}
+            animate={prefersReducedMotion ? undefined : "visible"}
+          >
+            {posts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                currentUser={user}
+                trackView={false}
+                onDeleted={removePost}
+                onUpdated={updatePost}
+              />
+            ))}
+          </motion.div>
         )}
 
         <InfiniteLoader
