@@ -1,42 +1,96 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
   body {
-    @apply antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 @layer components {
   .app-card {
-    @apply rounded-2xl border shadow-sm transition-all duration-200;
+    border: 1px solid;
+    border-radius: 1rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
     border-color: var(--border);
     background: var(--surface);
   }
 
   .app-card-interactive {
-    @apply rounded-2xl border shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.99];
+    border: 1px solid;
+    border-radius: 1rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    transition: all 200ms;
     border-color: var(--border);
     background: var(--surface);
   }
 
+  .app-card-interactive:hover {
+    transform: translateY(-0.125rem);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1);
+  }
+
+  .app-card-interactive:active {
+    transform: scale(0.99);
+  }
+
   .btn-primary {
-    @apply rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 font-semibold text-white shadow-lg shadow-indigo-600/20 transition-all duration-200 hover:from-indigo-500 hover:to-violet-500 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50;
+    border: 0;
+    border-radius: 0.75rem;
+    padding: 0.625rem 1.25rem;
+    font-weight: 600;
+    color: #fff;
+    background-image: linear-gradient(to right, #4f46e5, #7c3aed);
+    box-shadow: 0 10px 15px -3px rgb(79 70 229 / 0.2),
+      0 4px 6px -4px rgb(79 70 229 / 0.2);
+    transition: all 200ms;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-image: linear-gradient(to right, #6366f1, #8b5cf6);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  .btn-primary:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
 
   .btn-secondary {
-    @apply rounded-xl border border-slate-200 px-5 py-2.5 font-semibold transition-all duration-200 active:scale-95;
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 0.625rem 1.25rem;
+    font-weight: 600;
+    transition: all 200ms;
     border-color: var(--border);
     background: var(--surface-secondary);
     color: var(--text);
   }
 
+  .btn-secondary:active {
+    transform: scale(0.95);
+  }
+
   .app-input {
-    @apply w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30;
+    width: 100%;
+    border: 1px solid;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    transition: all 200ms;
     border-color: var(--border);
     background: var(--surface);
     color: var(--text);
+  }
+
+  .app-input:focus {
+    border-color: #6366f1;
+    outline: none;
+    box-shadow: 0 0 0 2px rgb(99 102 241 / 0.3);
   }
 }
 * {
