@@ -3,7 +3,6 @@ import logging
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
-from kombu.exceptions import OperationalError
 
 from .models import Notification, NotificationPreference
 
@@ -94,7 +93,7 @@ def create_notification(
 
         try:
             send_push_notification.delay(notification.pk)
-        except OperationalError:
+        except Exception:
             logging.getLogger(__name__).exception(
                 "Could not enqueue push delivery for notification %s.",
                 notification.pk,

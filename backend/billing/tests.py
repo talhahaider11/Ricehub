@@ -3,7 +3,9 @@ from io import BytesIO
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APITestCase
@@ -20,6 +22,7 @@ User = get_user_model()
 
 class BillingTests(APITestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(
             username="billing-user",
             email="billing@example.com",
@@ -53,14 +56,7 @@ class BillingTests(APITestCase):
             content_type="image/png",
         )
 
-    @patch(
-        "notifications.services.async_to_sync",
-        return_value=Mock(side_effect=RuntimeError("channel unavailable")),
-    )
-    def test_subscription_payment_is_manual_and_server_priced(
-        self,
-        async_to_sync,
-    ):
+    def test_subscription_payment_is_manual_and_server_priced(self):
         response = self.client.post(
             "/api/billing/payment-requests/",
             {
@@ -84,7 +80,8 @@ class BillingTests(APITestCase):
         self.assertFalse(self.user.is_verified)
 
         payment = PaymentRequest.objects.get(pk=response.data["id"])
-        review_payment_request(payment.pk, self.staff, approved=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            review_payment_request(payment.pk, self.staff, approved=True)
         self.user.refresh_from_db()
         self.assertTrue(self.user.is_verified)
         notification = Notification.objects.get(
@@ -92,11 +89,63 @@ class BillingTests(APITestCase):
             notification_type=Notification.NotificationType.VERIFICATION,
         )
         self.assertEqual(notification.message, "You are verified.")
-        async_to_sync.assert_called_once()
         self.assertGreater(
             self.user.subscription_expires_at,
             timezone.now() + timedelta(days=29),
         )
+
+    @patch(
+        "notifications.services.async_to_sync",
+        return_value=Mock(side_effect=RuntimeError("channel unavailable")),
+    )
+    @patch(
+        "notifications.tasks.send_push_notification.delay",
+        side_effect=RuntimeError("push queue unavailable"),
+    )
+    def test_admin_can_confirm_payment_even_when_notifications_fail(
+        self,
+        push_delay,
+        async_to_sync,
+    ):
+        admin_user = User.objects.create_superuser(
+            username="payment-admin",
+            email="payment-admin@example.com",
+            password="test-password",
+        )
+        payment = PaymentRequest.objects.create(
+            user=self.user,
+            kind=PaymentRequest.Kind.SUBSCRIPTION,
+            method=PaymentRequest.Method.SADAPAY,
+            amount_pkr=PaymentRequest.PRICES[PaymentRequest.Kind.SUBSCRIPTION],
+            reference="admin-confirmation",
+        )
+        self.client.force_authenticate(user=None)
+        self.client.force_login(admin_user)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("admin:billing_paymentrequest_changelist"),
+                {
+                    "action": "approve_requests",
+                    "_selected_action": [str(payment.pk)],
+                    "index": "0",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        payment.refresh_from_db()
+        self.user.refresh_from_db()
+        self.assertEqual(payment.status, PaymentRequest.Status.APPROVED)
+        self.assertTrue(self.user.is_verified)
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.user,
+                notification_type=Notification.NotificationType.VERIFICATION,
+                message="You are verified.",
+            ).exists()
+        )
+        async_to_sync.assert_called_once()
+        push_delay.assert_called_once()
 
     def test_subscription_requires_sender_details_and_receipt(self):
         response = self.client.post(

@@ -107,6 +107,10 @@ api.interceptors.response.use(
         localStorage.setItem(ACCESS_TOKEN_KEY, newAccessToken);
       }
       localStorage.setItem("access_token", newAccessToken);
+      if (response.data.refresh) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, response.data.refresh);
+        localStorage.setItem("refresh_token", response.data.refresh);
+      }
 
       // Process pending queued requests
       processQueue(null, newAccessToken);
@@ -117,14 +121,20 @@ api.interceptors.response.use(
     } catch (refreshError) {
       processQueue(refreshError, null);
 
-      // Clear tokens and redirect user to login on auth failure
-      if (ACCESS_TOKEN_KEY) localStorage.removeItem(ACCESS_TOKEN_KEY);
-      if (REFRESH_TOKEN_KEY) localStorage.removeItem(REFRESH_TOKEN_KEY);
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
+      const refreshStatus = refreshError.response?.status;
+      if (
+        refreshStatus === 400
+        || refreshStatus === 401
+        || refreshError.message === "No refresh token available"
+      ) {
+        if (ACCESS_TOKEN_KEY) localStorage.removeItem(ACCESS_TOKEN_KEY);
+        if (REFRESH_TOKEN_KEY) localStorage.removeItem(REFRESH_TOKEN_KEY);
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
 
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
       }
 
       return Promise.reject(refreshError);

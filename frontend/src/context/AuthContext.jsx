@@ -1,6 +1,8 @@
 import {
   createContext,
   useEffect,
+  useCallback,
+  useRef,
   useState,
 } from "react";
 
@@ -18,6 +20,7 @@ export const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const loadingUser = useRef(false);
 
   // Helper function: Jab user authenticated ho tab Push Notifications setup honge
   const setupNotifications = async () => {
@@ -29,7 +32,8 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const loadUser = async () => {
+  const loadUser = useCallback(async () => {
+    if (loadingUser.current) return;
     const token = localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem("access_token");
 
     if (!token) {
@@ -37,21 +41,30 @@ export function AuthProvider({ children }) {
       return;
     }
 
+    loadingUser.current = true;
     try {
       const currentUser = await authService.getMe();
       setUser(currentUser);
       void setupNotifications();
-    } catch {
-      authService.logout();
+    } catch (error) {
+      console.error("Could not restore the saved login session:", error);
       setUser(null);
     } finally {
       setLoading(false);
+      loadingUser.current = false;
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadUser();
-  }, []);
+    void loadUser();
+    window.addEventListener("online", loadUser);
+    window.addEventListener("focus", loadUser);
+
+    return () => {
+      window.removeEventListener("online", loadUser);
+      window.removeEventListener("focus", loadUser);
+    };
+  }, [loadUser]);
 
   const login = async (credentials) => {
     authService.logout();
@@ -64,7 +77,6 @@ export function AuthProvider({ children }) {
     try {
       currentUser = await authService.getMe();
     } catch (error) {
-      authService.logout();
       throw new Error(
         "Your credentials were accepted, but your profile could not be loaded.",
         { cause: error }

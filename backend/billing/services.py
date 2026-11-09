@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.db import transaction
@@ -8,6 +9,7 @@ from .models import PaymentRequest
 
 SUBSCRIPTION_LENGTH_DAYS = 30
 SUBSCRIPTION_GRACE_DAYS = 5
+logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
@@ -44,15 +46,25 @@ def review_payment_request(payment_request_id, reviewer, approved):
         user.is_verified = True
         user.save(update_fields=("subscription_expires_at", "is_verified"))
         if not was_verified:
-            from notifications.models import Notification
-            from notifications.services import create_notification
+            def notify_verified_user():
+                try:
+                    from notifications.models import Notification
+                    from notifications.services import create_notification
 
-            create_notification(
-                recipient=user,
-                sender=reviewer,
-                notification_type=Notification.NotificationType.VERIFICATION,
-                message="You are verified.",
-            )
+                    create_notification(
+                        recipient=user,
+                        sender=reviewer,
+                        notification_type=Notification.NotificationType.VERIFICATION,
+                        message="You are verified.",
+                    )
+                except Exception:
+                    logger.exception(
+                        "Could not notify user %s after approving payment %s.",
+                        user.pk,
+                        payment.pk,
+                    )
+
+            transaction.on_commit(notify_verified_user)
     else:
         from feed.cache import invalidate_feed
 

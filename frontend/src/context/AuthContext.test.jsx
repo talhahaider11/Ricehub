@@ -135,8 +135,12 @@ describe("AuthProvider login", () => {
     });
   });
 
-  it("clears tokens when loading the profile fails after credentials are accepted", async () => {
-    authService.login.mockResolvedValue({ access: "access", refresh: "refresh" });
+  it("keeps the saved login when the profile temporarily cannot be loaded", async () => {
+    authService.login.mockImplementation(async () => {
+      localStorage.setItem("ricemarket_access_token", "new-access");
+      localStorage.setItem("ricemarket_refresh_token", "new-refresh");
+      return { access: "new-access", refresh: "new-refresh" };
+    });
     authService.getMe
       .mockResolvedValueOnce({ id: 1, username: "previous-user" })
       .mockRejectedValueOnce(new Error("Profile request failed"));
@@ -150,8 +154,32 @@ describe("AuthProvider login", () => {
     fireEvent.click(screen.getByRole("button", { name: "Login successfully" }));
 
     await waitFor(() => {
-      expect(authService.logout).toHaveBeenCalledTimes(2);
+      expect(authService.logout).toHaveBeenCalledOnce();
       expect(screen.getByText("Signed out")).toBeInTheDocument();
     });
+    expect(localStorage.getItem("ricemarket_access_token")).toBe("new-access");
+    expect(localStorage.getItem("ricemarket_refresh_token")).toBe("new-refresh");
+  });
+
+  it("restores the saved login after a temporary network failure", async () => {
+    authService.getMe
+      .mockRejectedValueOnce(new Error("Network unavailable"))
+      .mockResolvedValueOnce({ id: 2, username: "restored-user" });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>
+    );
+
+    await screen.findByText("Signed out");
+    expect(authService.logout).not.toHaveBeenCalled();
+    expect(localStorage.getItem("ricemarket_refresh_token")).toBe("old-refresh-token");
+
+    window.dispatchEvent(new Event("online"));
+
+    expect(await screen.findByText("Signed in as restored-user")).toBeInTheDocument();
+    consoleError.mockRestore();
   });
 });

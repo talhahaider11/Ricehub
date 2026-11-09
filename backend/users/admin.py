@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
+from config.admin import NumberedAdminMixin
 from .models import AccountReport, SecurityEvent, SupportRequest, User
 
 
@@ -21,10 +22,10 @@ class SupportRequestAdmin(admin.ModelAdmin):
 
 
 @admin.register(User)
-class CustomUserAdmin(UserAdmin):
+class CustomUserAdmin(NumberedAdminMixin, UserAdmin):
 
     list_display = (
-        "id",
+        "row_number",
         "username",
         "email",
         "first_name",
@@ -43,9 +44,7 @@ class CustomUserAdmin(UserAdmin):
         "last_name",
     )
 
-    ordering = (
-        "-created_at",
-    )
+    ordering = ("created_at", "pk")
     list_filter = ("is_active", "is_verified", "is_staff", "is_suspended")
 
 

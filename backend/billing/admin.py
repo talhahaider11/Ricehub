@@ -2,14 +2,15 @@ from django.contrib import admin, messages
 from django.urls import reverse
 from django.utils.html import format_html
 
+from config.admin import NumberedAdminMixin
 from .models import PaymentRequest
 from .services import review_payment_request
 
 
 @admin.register(PaymentRequest)
-class PaymentRequestAdmin(admin.ModelAdmin):
+class PaymentRequestAdmin(NumberedAdminMixin, admin.ModelAdmin):
     list_display = (
-        "id",
+        "row_number",
         "user",
         "kind",
         "amount_pkr",
@@ -39,6 +40,7 @@ class PaymentRequestAdmin(admin.ModelAdmin):
         "reviewed_at",
     )
     actions = ("approve_requests", "reject_requests")
+    ordering = ("created_at", "pk")
 
     @admin.display(description="Receipt")
     def receipt_preview(self, obj):
