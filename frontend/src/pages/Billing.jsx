@@ -158,8 +158,8 @@ export default function Billing() {
                   alt="SadaPay payment QR code"
                 />
               )}
-              {(!options?.sadapay?.account_number || !options?.sadapay?.qr_image_url) && (
-                <p className="settings-error" role="alert">
+              {!options?.sadapay?.account_number && (
+                <p className="muted billing-details-unavailable">
                   {t("sadapayUnavailable")}
                 </p>
               )}
@@ -247,7 +247,6 @@ export default function Billing() {
             disabled={busy || (!isBoost && (
               !user?.is_email_verified
               || !options?.sadapay?.account_number
-              || !options?.sadapay?.qr_image_url
             ))}
           >
             {busy ? "Submitting..." : t("submitReview")}

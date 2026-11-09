@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { MoreVertical } from "lucide-react";
 
 export default function MessageActions({
   message,
@@ -10,6 +11,28 @@ export default function MessageActions({
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(message.content || "");
   const [error, setError] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const actionsRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!actionsRef.current?.contains(event.target)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
 
   const save = async (event) => {
     event.preventDefault();
@@ -39,18 +62,63 @@ export default function MessageActions({
   const startEditing = () => {
     setContent(message.content || "");
     setEditing(true);
+    setMenuOpen(false);
     setError("");
   };
 
   if (message.is_deleted) return null;
 
   return (
-    <div className="message-actions">
-      <button type="button" onClick={() => onReply(message)}>Reply</button>
-      {own && !editing && (
+    <div className="message-actions" ref={actionsRef}>
+      {!editing && (
         <>
-          <button type="button" onClick={startEditing}>Edit</button>
-          <button type="button" onClick={remove}>Delete</button>
+          <button
+            className="message-actions-trigger"
+            type="button"
+            aria-label="Message options"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-controls={`message-options-${message.id}`}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <MoreVertical size={18} aria-hidden="true" />
+          </button>
+          {menuOpen && (
+            <div
+              className="message-actions-menu"
+              id={`message-options-${message.id}`}
+              role="menu"
+              aria-label="Message options"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onReply(message);
+                }}
+              >
+                Reply
+              </button>
+              {own && (
+                <>
+                  <button type="button" role="menuitem" onClick={startEditing}>
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      void remove();
+                    }}
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </>
       )}
       {editing && (
