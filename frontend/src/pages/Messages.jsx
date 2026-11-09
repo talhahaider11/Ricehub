@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import CreateGroupModal from "../components/messages/CreateGroupModal";
 import messageService from "../services/messageService";
@@ -196,24 +197,20 @@ export default function Messages() {
   }
 
   return (
-    <div className="messages-page">
-      <ConversationList
-        conversations={conversations}
-        selectedId={selectedConversation}
-        onSelect={setSelectedConversation}
-        currentUser={user}
-        onCreateGroup={() => setGroupModalOpen(true)}
-      />
-
-      <main className="chat-window">
-        {!selectedConversation ? (
-          <div className="empty-state">
-            <h2>Select a conversation</h2>
-            <p>Choose a conversation to start chatting.</p>
-          </div>
-        ) : (
+    <div className={`messages-page${selectedConversation ? " has-selected-conversation" : ""}`}>
+      {selectedConversation ? (
+        <main className="chat-window">
           <>
             <header className="chat-header">
+              <button
+                className="chat-back-button"
+                type="button"
+                aria-label="Back to conversations"
+                title="Back to conversations"
+                onClick={() => setSelectedConversation(null)}
+              >
+                <ArrowLeft size={20} aria-hidden="true" />
+              </button>
               <div className="chat-header-identity">
                 <strong>
                   {activeConversation?.is_group
@@ -280,8 +277,16 @@ export default function Messages() {
               onCancelReply={() => setReplyTarget(null)}
             />
           </>
-        )}
-      </main>
+        </main>
+      ) : (
+        <ConversationList
+          conversations={conversations}
+          selectedId={selectedConversation}
+          onSelect={setSelectedConversation}
+          currentUser={user}
+          onCreateGroup={() => setGroupModalOpen(true)}
+        />
+      )}
       <CreateGroupModal
         open={groupModalOpen}
         onClose={() => setGroupModalOpen(false)}

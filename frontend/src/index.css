@@ -5874,6 +5874,18 @@ a {
   box-shadow: none;
 }
 
+.messages-shell .messages-page.has-selected-conversation {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.messages-shell .messages-page:not(.has-selected-conversation) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.messages-shell .conversation-list {
+  border-right: 0;
+}
+
 .messages-page .conversation-details {
   min-width: 0;
 }
@@ -5901,8 +5913,27 @@ a {
   background: var(--surface);
 }
 
+.chat-back-button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-secondary);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.chat-back-button:hover {
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--primary);
+}
+
 .chat-header-identity {
   display: grid;
+  flex: 1;
   min-width: 0;
   gap: 3px;
 }
