@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db.models import QuerySet
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
@@ -122,15 +123,25 @@ class BillingTests(APITestCase):
         self.client.force_authenticate(user=None)
         self.client.force_login(admin_user)
 
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                reverse("admin:billing_paymentrequest_changelist"),
-                {
-                    "action": "approve_requests",
-                    "_selected_action": [str(payment.pk)],
-                    "index": "0",
-                },
-            )
+        lock_options = []
+        select_for_update = QuerySet.select_for_update
+
+        def record_lock_options(queryset, *args, **kwargs):
+            lock_options.append(kwargs)
+            return select_for_update(queryset, *args, **kwargs)
+
+        with patch.object(QuerySet, "select_for_update", record_lock_options):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse("admin:billing_paymentrequest_changelist"),
+                    {
+                        "action": "approve_requests",
+                        "_selected_action": [str(payment.pk)],
+                        "index": "0",
+                    },
+                )
+
+        self.assertEqual(lock_options, [{"of": ("self",)}])
 
         self.assertEqual(response.status_code, 302)
         payment.refresh_from_db()

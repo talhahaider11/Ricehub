@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 @transaction.atomic
 def review_payment_request(payment_request_id, reviewer, approved):
     payment = (
-        PaymentRequest.objects.select_for_update()
+        PaymentRequest.objects.select_for_update(of=("self",))
         .select_related("user", "post")
         .get(pk=payment_request_id)
     )
