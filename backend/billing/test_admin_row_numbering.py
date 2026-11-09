@@ -88,3 +88,13 @@ class PaymentAdminRowNumberingTests(TestCase):
             [(newest.pk, 3)],
         )
         self.assertEqual(len(reviewed), 8)
+
+    def test_payment_changelist_renders_without_manifest_entry(self):
+        self.create_payment("pending-page", PaymentRequest.Status.PENDING)
+        self.client.force_login(self.admin_user)
+
+        response = self.client.get("/admin/billing/paymentrequest/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No.")
+        self.assertContains(response, "pending-page")

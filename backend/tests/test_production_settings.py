@@ -46,7 +46,7 @@ assert settings.STORAGES["default"]["OPTIONS"]["endpoint_url"] == (
 assert settings.STORAGES["default"]["OPTIONS"]["querystring_auth"] is True
 assert settings.STORAGES["default"]["OPTIONS"]["querystring_expire"] == 3600
 assert settings.STORAGES["staticfiles"]["BACKEND"] == (
-    "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    "whitenoise.storage.CompressedStaticFilesStorage"
 )
 assert settings.CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] == [
     {"address": "rediss://test.example:6379/0", "protocol": 2}
