@@ -13,6 +13,24 @@ import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
 import { getArrayResults } from "../utils/arrayResults";
 
+function formatLastSeen(lastSeen, now) {
+  if (!lastSeen) return "";
+  const lastSeenTime = new Date(lastSeen).getTime();
+  if (!Number.isFinite(lastSeenTime)) return "";
+  const minutes = Math.max(
+    0,
+    Math.floor((now - lastSeenTime) / 60_000)
+  );
+  if (minutes < 1) return "Last seen just now";
+  if (minutes === 1) return "Last seen 1 min ago";
+  if (minutes < 60) return `Last seen ${minutes} mins ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours === 1) return "Last seen 1 hour ago";
+  if (hours < 24) return `Last seen ${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "Last seen 1 day ago" : `Last seen ${days} days ago`;
+}
+
 export default function Messages() {
   const { user } = useAuth();
   const location = useLocation();
@@ -22,6 +40,12 @@ export default function Messages() {
   const [error, setError] = useState("");
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState(null);
+  const [lastSeenNow, setLastSeenNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setLastSeenNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -132,6 +156,26 @@ export default function Messages() {
     activeConversation?.participants?.find(
       (participant) => String(participant.id) !== String(user?.id)
     );
+  useEffect(() => {
+    if (!selectedConversation) return undefined;
+    let active = true;
+    const refreshPresence = () => {
+      messageService.conversations()
+        .then((data) => {
+          if (!active) return;
+          setConversations(getArrayResults(data, "Conversations"));
+          setLastSeenNow(Date.now());
+        })
+        .catch((refreshError) => {
+          console.error("Conversation presence could not be refreshed:", refreshError);
+        });
+    };
+    const timer = window.setInterval(refreshPresence, 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [selectedConversation]);
   const showVerificationWarning = Boolean(
     user &&
       otherUser?.is_email_verified &&
@@ -169,22 +213,40 @@ export default function Messages() {
           </div>
         ) : (
           <>
-            <div className="chat-status">
-              {connected ? "Connected 🟢" : "Connecting... 🔴"}
-            </div>
-            {activeConversation
-              && !activeConversation.is_group
-              && activeConversation.conversation_type !== "group"
-              && otherUser && (
-                <AudioCallControls
-                  peerId={otherUser.id}
-                  peerName={otherUser.username}
-                  disabled={!connected}
-                  callSignal={callSignal}
-                  sendCallSignal={sendCallSignal}
-                  clearCallSignal={clearCallSignal}
-                />
-              )}
+            <header className="chat-header">
+              <div className="chat-header-identity">
+                <strong>
+                  {activeConversation?.is_group
+                    || activeConversation?.conversation_type === "group"
+                    ? activeConversation.name || "Group conversation"
+                    : otherUser?.username || "Conversation"}
+                </strong>
+                {otherUser && (
+                  <small className="chat-presence" aria-live="polite">
+                    {otherUser.is_online === true ? (
+                      <>
+                        <span className="chat-presence-dot" aria-hidden="true" />
+                        Active
+                      </>
+                    ) : (
+                      formatLastSeen(otherUser.last_seen, lastSeenNow)
+                    )}
+                  </small>
+                )}
+              </div>
+              {activeConversation
+                && !activeConversation.is_group
+                && activeConversation.conversation_type !== "group"
+                && otherUser && (
+                  <AudioCallControls
+                    peerId={otherUser.id}
+                    disabled={!connected}
+                    callSignal={callSignal}
+                    sendCallSignal={sendCallSignal}
+                    clearCallSignal={clearCallSignal}
+                  />
+                )}
+            </header>
             {showVerificationWarning && (
               <p className="message-verification-warning" role="alert">
                 This is not a verified member. Trust this member at your own risk.

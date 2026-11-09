@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from friendships.models import FriendRequest
@@ -8,6 +9,7 @@ from messaging.models import (
     ConversationMember,
     Message,
 )
+from users.models import UserPrivacySettings
 
 
 User = get_user_model()
@@ -90,6 +92,37 @@ class MessagingFeatureTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_conversation_participant_includes_privacy_aware_presence(self):
+        self.friend.last_seen = timezone.now()
+        self.friend.save(update_fields=("last_seen",))
+
+        response = self.client.get("/api/messages/conversations/")
+
+        self.assertEqual(response.status_code, 200)
+        conversations = response.data["results"]
+        participant = next(
+            item
+            for item in conversations[0]["participants"]
+            if item["id"] == self.friend.pk
+        )
+        self.assertTrue(participant["is_online"])
+        self.assertIsNotNone(participant["last_seen"])
+
+        UserPrivacySettings.objects.create(
+            user=self.friend,
+            show_activity_status=False,
+            show_last_seen=False,
+        )
+        response = self.client.get("/api/messages/conversations/")
+        conversations = response.data["results"]
+        participant = next(
+            item
+            for item in conversations[0]["participants"]
+            if item["id"] == self.friend.pk
+        )
+        self.assertIsNone(participant["is_online"])
+        self.assertIsNone(participant["last_seen"])
 
     def test_voice_note_upload_creates_audio_message(self):
         self.make_friends()

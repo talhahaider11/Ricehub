@@ -52,6 +52,12 @@ export default function Billing() {
     && now < graceEndsAt
     ? Math.ceil((graceEndsAt - now) / (60 * 60 * 1000))
     : 0;
+  const subscriptionActive = !isBoost
+    && user?.is_verified
+    && (expiryTime === null || now < expiryTime);
+  const showVerifiedStatus = !isBoost
+    && user?.is_verified
+    && (expiryTime === null || now < graceEndsAt);
   const submitPayment = async (event) => {
     event.preventDefault();
     setPaymentError("");
@@ -117,6 +123,29 @@ export default function Billing() {
           </section>
         )}
 
+        {showVerifiedStatus && (
+          <section className="settings-section" role="status">
+            <h2>{t("verified")}</h2>
+            <p>
+              {expiryTime === null
+                ? t("verifiedIndefinitely")
+                : now < expiryTime
+                  ? `${t("verifiedThrough")} ${new Date(expiryTime).toLocaleDateString()}.`
+                  : `${t("verifiedDuringGrace")} ${new Date(expiryTime).toLocaleDateString()}.`}
+            </p>
+            {graceHoursRemaining > 0 && (
+              <>
+                <p>{t("gracePeriodBadge")}</p>
+                <p className="settings-status" role="timer">
+                  {t("graceRemaining")}: {Math.floor(graceHoursRemaining / 24)} {t("days")}, {graceHoursRemaining % 24} {t("hours")}.
+                </p>
+                <p>{t("renewAfterExpiry")}</p>
+              </>
+            )}
+          </section>
+        )}
+
+        {(isBoost || !subscriptionActive) && (
         <form className="settings-section" onSubmit={submitPayment}>
           <h2>{isBoost ? t("boostPost") : t("monthlySubscription")}</h2>
           {isBoost ? (
@@ -252,6 +281,7 @@ export default function Billing() {
             {busy ? "Submitting..." : t("submitReview")}
           </button>
         </form>
+        )}
 
         {requests.length > 0 && (
           <section className="settings-section">
@@ -262,16 +292,6 @@ export default function Billing() {
               </p>
             ))}
           </section>
-        )}
-        {!isBoost && user?.is_verified && (
-          <p className="settings-status">
-            Your account is verified{user.subscription_expires_at ? ` through ${new Date(user.subscription_expires_at).toLocaleDateString()}` : ""}.
-          </p>
-        )}
-        {!isBoost && user?.is_verified && graceHoursRemaining > 0 && (
-          <p className="settings-status" role="timer">
-            {t("graceRemaining")}: {Math.floor(graceHoursRemaining / 24)} {t("days")}, {graceHoursRemaining % 24} {t("hours")}.
-          </p>
         )}
         <p className="muted">{t("verified")} status is activated only after a staff member confirms the transfer.</p>
       </section>

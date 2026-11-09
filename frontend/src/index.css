@@ -5846,3 +5846,200 @@ a {
 .billing-sadapay-details .billing-details-unavailable {
   color: var(--muted);
 }
+
+.messages-shell {
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.messages-shell .app-body,
+.messages-shell .main-content,
+.messages-shell .main-content > .page-transition {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+}
+
+.messages-shell .messages-page {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.messages-page .conversation-details {
+  min-width: 0;
+}
+
+.messages-page .conversation-details strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-window {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-header {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chat-header-identity {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.chat-header-identity strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-presence {
+  display: inline-flex;
+  min-height: 14px;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chat-presence-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #20bf63;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #20bf63 16%, transparent);
+}
+
+.chat-header .audio-call-controls {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+}
+
+.chat-header .audio-call-controls button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-secondary);
+  color: var(--primary);
+}
+
+.chat-header .audio-call-controls button:disabled {
+  opacity: 0.45;
+}
+
+.chat-header .audio-call-controls span[role="alert"] {
+  max-width: 180px;
+  font-size: 12px;
+}
+
+.message-input {
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px;
+}
+
+.message-input input,
+.message-input button {
+  min-width: 0;
+  height: 44px;
+}
+
+.message-input input {
+  padding: 8px 12px;
+}
+
+.message-input button {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.message-actions {
+  min-height: 0;
+}
+
+.message.mine .message-actions {
+  margin: 0;
+}
+
+.message.mine .message-actions-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.message.mine .message-bubble {
+  -webkit-touch-callout: none;
+}
+
+.messages-page .message-list {
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .messages-page {
+    height: 100%;
+    grid-template-rows: minmax(100px, 22%) minmax(0, 1fr);
+  }
+
+  .messages-page .conversation-list {
+    max-height: none;
+    min-height: 0;
+  }
+
+  .messages-page .chat-window {
+    min-height: 0;
+  }
+
+  .message-list {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .message-input {
+    gap: 5px;
+    padding: 7px;
+  }
+
+  .message-input button {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .message-input button[aria-label="Record voice note"],
+  .message-input button[aria-label="Stop voice recording"] {
+    width: 42px;
+    padding: 0;
+  }
+
+  .message-input-button-label {
+    display: none;
+  }
+}

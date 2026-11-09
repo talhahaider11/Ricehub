@@ -23,9 +23,10 @@ def create_notification(
     preferences = NotificationPreference.objects.filter(
         user=recipient
     ).first()
-    is_mandatory = (
-        notification_type == Notification.NotificationType.VERIFICATION
-    )
+    is_mandatory = notification_type in {
+        Notification.NotificationType.VERIFICATION,
+        Notification.NotificationType.SUBSCRIPTION_EXPIRED,
+    }
     if preferences and not preferences.all_notifications and not is_mandatory:
         return None
 

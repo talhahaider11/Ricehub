@@ -8,13 +8,12 @@ const ICE_SERVERS = [
 
 export default function AudioCallControls({
   peerId,
-  peerName,
   disabled,
   callSignal,
   sendCallSignal,
   clearCallSignal,
 }) {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
   const incomingOfferRef = useRef(null);
@@ -189,18 +188,19 @@ export default function AudioCallControls({
   return (
     <section className="audio-call-controls" aria-label="Audio call">
       {callState === "idle" && (
-        <button type="button" disabled={disabled} onClick={() => void startCall()}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => void startCall()}
+          aria-label="Start audio call"
+          title="Start audio call"
+        >
           <Phone size={16} aria-hidden="true" />
-          {t("call")} {peerName || "user"}
         </button>
       )}
       {callState === "incoming" && (
         <>
-          <span>
-            {language === "ur"
-              ? `${peerName || "user"} ${t("incomingCall")}`
-              : `${t("incomingCall")} ${peerName || "user"}`}
-          </span>
+          <span>{t("incomingCall")}</span>
           <button type="button" disabled={disabled} onClick={() => void acceptCall()}>{t("answerCall")}</button>
           <button type="button" onClick={endCall}>
             <PhoneOff size={16} aria-hidden="true" />

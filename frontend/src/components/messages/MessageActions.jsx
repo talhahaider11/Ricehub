@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MoreVertical } from "lucide-react";
 
 export default function MessageActions({
@@ -7,6 +7,8 @@ export default function MessageActions({
   onReply,
   onEdit,
   onDelete,
+  open = false,
+  onClose,
 }) {
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(message.content || "");
@@ -15,15 +17,24 @@ export default function MessageActions({
   const actionsRef = useRef(null);
 
   useEffect(() => {
+    if (own) setMenuOpen(open);
+  }, [open, own]);
+
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+    onClose?.();
+  }, [onClose]);
+
+  useEffect(() => {
     if (!menuOpen) return undefined;
 
     const handlePointerDown = (event) => {
       if (!actionsRef.current?.contains(event.target)) {
-        setMenuOpen(false);
+        closeMenu();
       }
     };
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Escape") closeMenu();
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
@@ -32,7 +43,7 @@ export default function MessageActions({
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [menuOpen]);
+  }, [closeMenu, menuOpen]);
 
   const save = async (event) => {
     event.preventDefault();
@@ -62,7 +73,7 @@ export default function MessageActions({
   const startEditing = () => {
     setContent(message.content || "");
     setEditing(true);
-    setMenuOpen(false);
+    closeMenu();
     setError("");
   };
 
@@ -70,56 +81,54 @@ export default function MessageActions({
 
   return (
     <div className="message-actions" ref={actionsRef}>
-      {!editing && (
-        <>
+      {!editing && !own && (
+        <button
+          className="message-actions-trigger"
+          type="button"
+          aria-label="Message options"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-controls={`message-options-${message.id}`}
+          onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
+        >
+          <MoreVertical size={18} aria-hidden="true" />
+        </button>
+      )}
+      {!editing && menuOpen && (
+        <div
+          className="message-actions-menu"
+          id={`message-options-${message.id}`}
+          role="menu"
+          aria-label="Message options"
+        >
           <button
-            className="message-actions-trigger"
             type="button"
-            aria-label="Message options"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-controls={`message-options-${message.id}`}
-            onClick={() => setMenuOpen((open) => !open)}
+            role="menuitem"
+            onClick={() => {
+              closeMenu();
+              onReply(message);
+            }}
           >
-            <MoreVertical size={18} aria-hidden="true" />
+            Reply
           </button>
-          {menuOpen && (
-            <div
-              className="message-actions-menu"
-              id={`message-options-${message.id}`}
-              role="menu"
-              aria-label="Message options"
-            >
+          {own && (
+            <>
+              <button type="button" role="menuitem" onClick={startEditing}>
+                Edit
+              </button>
               <button
                 type="button"
                 role="menuitem"
                 onClick={() => {
-                  setMenuOpen(false);
-                  onReply(message);
+                  closeMenu();
+                  void remove();
                 }}
               >
-                Reply
+                Delete
               </button>
-              {own && (
-                <>
-                  <button type="button" role="menuitem" onClick={startEditing}>
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      void remove();
-                    }}
-                  >
-                    Delete
-                  </button>
-                </>
-              )}
-            </div>
+            </>
           )}
-        </>
+        </div>
       )}
       {editing && (
         <form className="message-edit-form" onSubmit={save}>

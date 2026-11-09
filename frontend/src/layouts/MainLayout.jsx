@@ -2,23 +2,25 @@ import Navbar from "../components/navbar/Navbar.jsx";
 import Sidebar from "../components/sidebar/Sidebar.jsx";
 import PageTransition from "../components/common/PageTransition.jsx";
 import MobileLayout from "./MobileLayout.jsx";
+import { useLocation } from "react-router-dom";
 
 export default function MainLayout() {
-  return (
-    <div className="app-shell">
+  const { pathname } = useLocation();
+  const isMessagesPage = pathname === "/messages";
 
-      <Navbar />
+  return (
+    <div className={`app-shell${isMessagesPage ? " messages-shell" : ""}`}>
+      {!isMessagesPage && <Navbar />}
 
       <div className="app-body">
-        <Sidebar />
+        {!isMessagesPage && <Sidebar />}
 
         <main className="main-content">
           <PageTransition />
         </main>
       </div>
 
-      <MobileLayout />
-
+      {!isMessagesPage && <MobileLayout />}
     </div>
   );
 }

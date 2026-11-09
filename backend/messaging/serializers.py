@@ -2,6 +2,9 @@ from django.contrib.auth import get_user_model
 from pathlib import PurePath
 from rest_framework import serializers
 
+from users.models import UserPrivacySettings
+from users.presence import is_user_online
+
 from .models import Conversation, Message
 
 
@@ -14,6 +17,8 @@ class MessageSenderSerializer(
 
     profile_picture = serializers.SerializerMethodField()
     is_verified = serializers.BooleanField(read_only=True)
+    is_online = serializers.SerializerMethodField()
+    last_seen = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -25,7 +30,26 @@ class MessageSenderSerializer(
             "last_name",
             "profile_picture",
             "is_verified",
+            "is_online",
+            "last_seen",
         ]
+
+    def get_is_online(self, obj):
+        if not self._privacy_setting(obj, "show_activity_status"):
+            return None
+        return is_user_online(obj)
+
+    def get_last_seen(self, obj):
+        if not self._privacy_setting(obj, "show_last_seen"):
+            return None
+        return obj.last_seen
+
+    @staticmethod
+    def _privacy_setting(user, field):
+        try:
+            return getattr(user.privacy_settings, field)
+        except UserPrivacySettings.DoesNotExist:
+            return True
 
     def get_profile_picture(self, obj):
 

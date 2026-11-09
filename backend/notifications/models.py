@@ -33,6 +33,10 @@ class Notification(models.Model):
             "verification",
             "Verification"
         )
+        SUBSCRIPTION_EXPIRED = (
+            "subscription_expired",
+            "Subscription Expired"
+        )
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,

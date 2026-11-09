@@ -43,12 +43,10 @@ export default function ConversationList({
               size="small"
             />
 
-            <div>
+            <div className="conversation-details">
               <strong>{isGroup
                 ? conversation.name || "Group conversation"
                 : otherUser?.username || "Conversation"}</strong>
-
-              <small>{conversation.last_message?.content || "No messages yet"}</small>
             </div>
           </button>
         );

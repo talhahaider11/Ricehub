@@ -32,7 +32,7 @@ describe("MessageActions", () => {
     const onEdit = vi.fn().mockResolvedValue(undefined);
     const onDelete = vi.fn().mockResolvedValue(undefined);
 
-    render(
+    const { rerender } = render(
       <MessageActions
         message={message}
         own
@@ -42,7 +42,30 @@ describe("MessageActions", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Message options" }));
+    expect(screen.queryByRole("button", { name: "Message options" }))
+      .not.toBeInTheDocument();
+    rerender(
+      <MessageActions
+        message={message}
+        own
+        open={false}
+        onClose={vi.fn()}
+        onReply={vi.fn()}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+    );
+    rerender(
+      <MessageActions
+        message={message}
+        own
+        open
+        onClose={vi.fn()}
+        onReply={vi.fn()}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+    );
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Edit message" }), {
       target: { value: "Updated" },
@@ -52,7 +75,28 @@ describe("MessageActions", () => {
     await waitFor(() => {
       expect(onEdit).toHaveBeenCalledWith(message, "Updated");
     });
-    fireEvent.click(screen.getByRole("button", { name: "Message options" }));
+    rerender(
+      <MessageActions
+        message={message}
+        own
+        open={false}
+        onClose={vi.fn()}
+        onReply={vi.fn()}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+    );
+    rerender(
+      <MessageActions
+        message={message}
+        own
+        open
+        onClose={vi.fn()}
+        onReply={vi.fn()}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+    );
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 
     await waitFor(() => {

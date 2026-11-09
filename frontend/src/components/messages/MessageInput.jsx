@@ -152,9 +152,10 @@ export default function MessageInput({
             disabled={disabled || sending}
             onClick={() => void startRecording()}
             aria-label="Record voice note"
+            title={t("voiceNote")}
           >
             <Mic size={16} aria-hidden="true" />
-            {t("voiceNote")}
+            <span className="message-input-button-label">{t("voiceNote")}</span>
           </button>
         )}
         {recording && (
