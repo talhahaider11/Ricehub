@@ -113,6 +113,20 @@ assert settings.SECURE_SSL_REDIRECT is True
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_explicit_cors_origins_keep_local_development_origins(self):
+        result = run_production_settings(
+            """
+from config.settings import production as settings
+assert "https://ricehub-frontend.onrender.com" in settings.CORS_ALLOWED_ORIGINS
+assert "http://127.0.0.1:5173" in settings.CORS_ALLOWED_ORIGINS
+assert "http://localhost:5173" in settings.CORS_ALLOWED_ORIGINS
+assert "http://127.0.0.1:5173" in settings.CSRF_TRUSTED_ORIGINS
+assert settings.CORS_ALLOW_ALL_ORIGINS is False
+""",
+            CORS_ALLOWED_ORIGINS="https://ricehub-frontend.onrender.com",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

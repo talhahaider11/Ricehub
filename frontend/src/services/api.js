@@ -1,4 +1,5 @@
 import axios from "axios";
+export const API_BASE_URL = "https://ricehub-umfd.onrender.com";
 import { API_URL, ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from "../utils/constants";
 
 // Render / Live API Endpoint Fallback Base Axios Client
