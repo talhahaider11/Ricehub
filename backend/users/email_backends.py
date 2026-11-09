@@ -76,6 +76,20 @@ class BrevoEmailBackend(BaseEmailBackend):
             payload["replyTo"] = self._format_address(message.reply_to[0])
 
         api_key = getattr(settings, "BREVO_API_KEY", "").strip()
+        if (
+            len(api_key) >= 2
+            and api_key[0] == api_key[-1]
+            and api_key[0] in {"'", '"'}
+        ):
+            api_key = api_key[1:-1].strip()
+
+        if not api_key:
+            logger.error(
+                "BREVO_API_KEY is empty; configure it on the ricehub-backend "
+                "service and redeploy."
+            )
+            return False
+
         timeout = getattr(settings, "EMAIL_TIMEOUT", 15)
 
         try:
@@ -91,16 +105,24 @@ class BrevoEmailBackend(BaseEmailBackend):
             )
             if response.status_code in [200, 201, 202]:
                 return True
+
+            if response.status_code == 401:
+                logger.error(
+                    "Brevo rejected BREVO_API_KEY (401). Confirm this is an active "
+                    "Brevo API key, not an SMTP key, and that the ricehub-backend "
+                    "service has the updated value. Response: %s",
+                    response.text,
+                )
             else:
-                logger.error(f"Brevo email API error ({response.status_code}): {response.text}")
-                if not self.fail_silently:
-                    return False
-                return False
+                logger.error(
+                    "Brevo email API error (%s): %s",
+                    response.status_code,
+                    response.text,
+                )
+            return False
 
         except requests.RequestException as error:
             logger.error(f"Could not connect to Brevo email API: {str(error)}")
-            if not self.fail_silently:
-                return False
             return False
 
     @staticmethod

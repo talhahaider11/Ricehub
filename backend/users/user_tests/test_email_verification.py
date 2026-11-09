@@ -159,6 +159,29 @@ class EmailVerificationTests(APITestCase):
             },
         )
 
+    @override_settings(
+        EMAIL_BACKEND="users.email_backends.BrevoEmailBackend",
+        BREVO_API_KEY='"test-api-key"',
+        BREVO_SENDER_EMAIL="verified@ricehub.test",
+        DEFAULT_FROM_EMAIL="verified@ricehub.test",
+    )
+    @patch("users.email_backends.requests.post")
+    def test_brevo_backend_strips_quotes_from_api_key_environment_value(self, post):
+        post.return_value = Mock(ok=True, status_code=201)
+
+        sent = send_mail(
+            "Verify your email",
+            "Your code is 123456.",
+            None,
+            ["person@example.com"],
+        )
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["api-key"],
+            "test-api-key",
+        )
+
     def test_resend_handles_smtp_authentication_failure_without_losing_old_code(self):
         user = User.objects.create_user(
             username="smtp-failure",
