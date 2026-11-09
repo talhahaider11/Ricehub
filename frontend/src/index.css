@@ -5876,10 +5876,12 @@ a {
 
 .messages-shell .messages-page.has-selected-conversation {
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .messages-shell .messages-page:not(.has-selected-conversation) {
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .messages-shell .conversation-list {
