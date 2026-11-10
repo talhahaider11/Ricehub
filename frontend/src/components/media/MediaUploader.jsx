@@ -7,12 +7,10 @@ import {
   MAX_POST_VIDEO_SIZE,
 } from "../../utils/constants";
 import { uploadMedia } from "../../services/mediaService";
-import {
-  NativeMediaSource,
-  pickPhoto,
-} from "../../services/nativeMediaService";
+import { NativeMediaSource, pickPhoto } from "../../services/nativeMediaService";
 import { getMediaType } from "../../utils/media";
 import UploadProgress from "./UploadProgress";
+import CameraCapture from "./CameraCapture";
 
 function getErrorMessage(error) {
   return (
@@ -28,6 +26,7 @@ export default function MediaUploader({
   onUploaded,
   accept = "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime",
   multiple = true,
+  showCamera = true,
 }) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -129,13 +128,6 @@ export default function MediaUploader({
           <button
             type="button"
             disabled={uploading || maxFiles <= 0}
-            onClick={() => void chooseNativePhoto(NativeMediaSource.CAMERA)}
-          >
-            <Camera size={17} /> Take photo
-          </button>
-          <button
-            type="button"
-            disabled={uploading || maxFiles <= 0}
             onClick={() => void chooseNativePhoto(NativeMediaSource.PHOTOS)}
           >
             <ImagePlus size={17} /> Choose photo
@@ -144,6 +136,12 @@ export default function MediaUploader({
         </div>
       )}
 
+      {showCamera && (
+        <CameraCapture
+          disabled={uploading || maxFiles <= 0}
+          onCapture={(file) => uploadFiles([file])}
+        />
+      )}
       {uploading && <UploadProgress progress={progress} filename={filename} />}
       {maxFiles <= 0 && <p className="muted">Maximum of 10 media files reached.</p>}
       {error && <p className="error" role="alert">{error}</p>}

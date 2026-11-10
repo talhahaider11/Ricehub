@@ -6,6 +6,7 @@ import PostCard from "../components/posts/PostCard";
 import friendService from "../services/friendService";
 import searchService from "../services/searchService";
 import useAuth from "../hooks/useAuth";
+import { useLanguage } from "../context/LanguageContext";
 
 const emptyExplore = {
   posts: [],
@@ -24,6 +25,7 @@ function getNextPage(nextUrl) {
 
 export default function Explore() {
   const { user: currentUser } = useAuth();
+  const { t } = useLanguage();
   const [data, setData] = useState(emptyExplore);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -39,7 +41,7 @@ export default function Explore() {
       })
       .catch((loadError) => {
         console.error("Explore content could not be loaded:", loadError);
-        if (active) setError("Explore content could not be loaded.");
+        if (active) setError(t("exploreContentLoadFailed"));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -48,7 +50,7 @@ export default function Explore() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   const loadMore = async () => {
     const page = getNextPage(data.pagination?.next);
@@ -64,7 +66,7 @@ export default function Explore() {
       }));
     } catch (loadError) {
       console.error("More explore posts could not be loaded:", loadError);
-      setError("More explore posts could not be loaded.");
+      setError(t("moreExplorePostsLoadFailed"));
     } finally {
       setLoadingMore(false);
     }
@@ -85,22 +87,22 @@ export default function Explore() {
       console.error("Friend request could not be sent:", requestError);
       setError(
         requestError.response?.data?.detail
-          || "Friend request could not be sent. Please try again."
+          || t("friendRequestSendFailed")
       );
     } finally {
       setSendingUserId(null);
     }
   };
 
-  if (loading) return <div className="page-container">Loading Explore...</div>;
+  if (loading) return <div className="page-container">{t("loadingExplore")}</div>;
 
   return (
     <main className="page-container">
-      <h1>Explore</h1>
+      <h1>{t("explore")}</h1>
       {error && <p className="error" role="alert">{error}</p>}
 
       <section aria-labelledby="trending-hashtags-heading">
-        <h2 id="trending-hashtags-heading">Trending hashtags</h2>
+        <h2 id="trending-hashtags-heading">{t("trendingHashtags")}</h2>
         {data.hashtags.length ? (
           <div className="search-results">
             {data.hashtags.map((hashtag) => (
@@ -111,12 +113,12 @@ export default function Explore() {
             ))}
           </div>
         ) : (
-          <p className="muted">No trending hashtags yet.</p>
+          <p className="muted">{t("noTrendingHashtags")}</p>
         )}
       </section>
 
       <section aria-labelledby="suggested-users-heading">
-        <h2 id="suggested-users-heading">People you may know</h2>
+        <h2 id="suggested-users-heading">{t("peopleYouMayKnow")}</h2>
         {data.suggested_users.map((suggestedUser) => (
           <SuggestedUserCard
             key={suggestedUser.id}
@@ -126,12 +128,12 @@ export default function Explore() {
           />
         ))}
         {!data.suggested_users.length && (
-          <p className="muted">No suggestions right now.</p>
+          <p className="muted">{t("noSuggestionsRightNow")}</p>
         )}
       </section>
 
       <section aria-labelledby="explore-posts-heading">
-        <h2 id="explore-posts-heading">Explore posts</h2>
+        <h2 id="explore-posts-heading">{t("explorePosts")}</h2>
         {data.posts.map((post) => (
           <PostCard
             key={post.id}
@@ -139,10 +141,10 @@ export default function Explore() {
             currentUser={currentUser}
           />
         ))}
-        {!data.posts.length && <p className="muted">No posts to explore yet.</p>}
+        {!data.posts.length && <p className="muted">{t("noPostsToExplore")}</p>}
         {data.pagination?.next && (
           <button type="button" disabled={loadingMore} onClick={loadMore}>
-            {loadingMore ? "Loading..." : "Load more"}
+            {loadingMore ? t("loading") : t("loadMore")}
           </button>
         )}
       </section>

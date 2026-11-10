@@ -9,6 +9,14 @@ import { getArrayResults } from "../utils/arrayResults";
 import { useLanguage } from "../context/LanguageContext";
 
 const tabs = ["Stories", "Groups & Pages", "Events", "Marketplace"];
+const socialHubCache = new Map();
+const orderStatusKeys = {
+  requested: "orderRequested",
+  accepted: "orderAccepted",
+  declined: "orderDeclined",
+  cancelled: "orderCancelled",
+  completed: "orderCompleted",
+};
 
 function localDateTime(value) {
   const date = new Date(value);
@@ -26,7 +34,7 @@ function formatDateTime(value, language) {
 export default function SocialHub() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(
     tabs.includes(searchParams.get("tab")) ? searchParams.get("tab") : tabs[0]
   );
@@ -63,29 +71,67 @@ export default function SocialHub() {
   const [listingImage, setListingImage] = useState(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const cacheKey = activeTab === "Marketplace"
+      ? `${activeTab}:${search.trim()}`
+      : activeTab;
+    const cachedData = socialHubCache.get(cacheKey);
+    if (cachedData) {
+      if (activeTab === "Stories") setStories(cachedData);
+      if (activeTab === "Groups & Pages") setCommunities(cachedData);
+      if (activeTab === "Events") {
+        setEvents(cachedData.events);
+        setFriends(cachedData.friends);
+        setInvitations(cachedData.invitations);
+      }
+      if (activeTab === "Marketplace") {
+        setListings(cachedData.listings);
+        setOrders(cachedData.orders);
+      }
+    }
+    setLoading(!cachedData);
     setError("");
     try {
       if (activeTab === "Stories") {
-        setStories(getArrayResults(await communityService.stories(), "Stories"));
+        const data = getArrayResults(await communityService.stories(), "Stories");
+        socialHubCache.set(cacheKey, data);
+        setStories(data);
       } else if (activeTab === "Groups & Pages") {
-        setCommunities(getArrayResults(await communityService.communities(), "Communities"));
+        const data = getArrayResults(await communityService.communities(), "Communities");
+        socialHubCache.set(cacheKey, data);
+        setCommunities(data);
       } else if (activeTab === "Events") {
         const [eventData, friendData, invitationData] = await Promise.all([
           communityService.events(),
           friendService.list(),
           communityService.invitations(),
         ]);
-        setEvents(getArrayResults(eventData, "Events"));
-        setFriends(getArrayResults(friendData, "Friends"));
-        setInvitations(getArrayResults(invitationData, "Event invitations"));
+        const data = {
+          events: getArrayResults(eventData, "Events"),
+          friends: getArrayResults(friendData, "Friends"),
+          invitations: getArrayResults(invitationData, "Event invitations"),
+        };
+        socialHubCache.set(cacheKey, data);
+        setEvents(data.events);
+        setFriends(data.friends);
+        setInvitations(data.invitations);
       } else {
-        const [listingData, orderData] = await Promise.all([
+        const [listingResult, orderResult] = await Promise.allSettled([
           communityService.listings(search),
           communityService.orders(),
         ]);
-        setListings(getArrayResults(listingData, "Marketplace listings"));
-        setOrders(getArrayResults(orderData, "Marketplace orders"));
+        if (listingResult.status === "rejected") throw listingResult.reason;
+        const orderData = orderResult.status === "fulfilled" ? orderResult.value : [];
+        if (orderResult.status === "rejected") {
+          console.error("Marketplace orders could not be loaded:", orderResult.reason);
+          setError(t("marketplaceOrdersLoadFailed"));
+        }
+        const data = {
+          listings: getArrayResults(listingResult.value, "Marketplace listings"),
+          orders: getArrayResults(orderData, "Marketplace orders"),
+        };
+        socialHubCache.set(cacheKey, data);
+        setListings(data.listings);
+        setOrders(data.orders);
       }
     } catch (loadError) {
       console.error("Community features could not be loaded:", loadError);
@@ -113,9 +159,12 @@ export default function SocialHub() {
 
   useEffect(() => {
     const communityId = searchParams.get("community");
+    const requestedTab = searchParams.get("tab");
     if (communityId && /^\d+$/.test(communityId)) {
       setActiveTab("Groups & Pages");
       loadCommunityPosts(communityId);
+    } else {
+      setActiveTab(tabs.includes(requestedTab) ? requestedTab : tabs[0]);
     }
   }, [searchParams]);
 
@@ -207,7 +256,10 @@ export default function SocialHub() {
             aria-selected={activeTab === tab}
             className={activeTab === tab ? "active" : ""}
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => {
+              setActiveTab(tab);
+              setSearchParams({ tab }, { replace: true });
+            }}
           >
             {t({
               Stories: "stories",
@@ -428,7 +480,13 @@ export default function SocialHub() {
           {orders.map((order) => (
             <article className="card social-card" key={order.id}>
               <strong>{order.listing_title}</strong>
-              <small>{t("buyer")}: @{order.buyer.username} · {order.status}</small>
+              <small>
+                {t("buyer")}: @{order.buyer.username} ·
+                {" "}
+                {orderStatusKeys[order.status]
+                  ? t(orderStatusKeys[order.status])
+                  : order.status}
+              </small>
               {order.status === "requested" && order.seller.id === user?.id && (
                 <div className="social-actions">
                   <button className="btn btn-primary" disabled={saving} onClick={() => perform(() => communityService.updateOrder(order.id, "accepted"), t("purchaseRequestAccepted"))}>{t("accept")}</button>

@@ -22,11 +22,11 @@ import VerifiedBadge from "../common/VerifiedBadge";
 import { useLanguage } from "../../context/LanguageContext";
 
 const reactions = [
-  { type: "like", label: "Like", emoji: "👍" },
-  { type: "love", label: "Love", emoji: "❤️" },
-  { type: "care", label: "Care", emoji: "🥰" },
-  { type: "haha", label: "Haha", emoji: "😂" },
-  { type: "wow", label: "Wow", emoji: "😮" },
+  { type: "like", labelKey: "reactionLike", emoji: "👍" },
+  { type: "love", labelKey: "reactionLove", emoji: "❤️" },
+  { type: "care", labelKey: "reactionCare", emoji: "🥰" },
+  { type: "haha", labelKey: "reactionHaha", emoji: "😂" },
+  { type: "wow", labelKey: "reactionWow", emoji: "😮" },
 ];
 
 export default function PostCard({
@@ -110,7 +110,7 @@ export default function PostCard({
       }
     } catch (error) {
       setActionError(
-        error.response?.data?.detail || "Your reaction could not be saved."
+        error.response?.data?.detail || t("reactionCouldNotSave")
       );
     } finally {
       setShowReactionPicker(false);
@@ -126,19 +126,19 @@ export default function PostCard({
     try {
       if (navigator.share) {
         await navigator.share({
-          title: "RiceHub post",
-          text: post.content?.slice(0, 120) || "View this post on RiceHub",
+          title: t("riceHubPost"),
+          text: post.content?.slice(0, 120) || t("viewPostOnRiceHub"),
           url: shareUrl,
         });
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl);
-        setActionMessage("Post link copied.");
+        setActionMessage(t("postLinkCopied"));
       } else {
-        setActionError("Sharing is not supported by this browser.");
+        setActionError(t("sharingUnsupported"));
       }
     } catch (error) {
       if (error.name !== "AbortError") {
-        setActionError("The post link could not be shared.");
+        setActionError(t("postLinkShareFailed"));
       }
     }
   };
@@ -163,7 +163,9 @@ export default function PostCard({
           <Link
             className="post-author-link"
             to={`/profile/${post.author?.id}`}
-            aria-label={`View ${post.author?.username || "user"}'s profile`}
+            aria-label={t("viewProfileOf", {
+              username: post.author?.username || t("user"),
+            })}
           >
             <Avatar user={post.author} />
             <span>
@@ -185,7 +187,7 @@ export default function PostCard({
       </div>
 
       {post.post_type === "reel" && (
-        <span className="post-type-label">Reel</span>
+        <span className="post-type-label">{t("reel")}</span>
       )}
       {post.content && <PostContent content={post.content} />}
 
@@ -194,7 +196,7 @@ export default function PostCard({
           <img
             className="post-image clickable-image"
             src={getMediaUrl(post.image)}
-            alt="Post attachment"
+            alt={t("postAttachment")}
             onClick={() => setImageOpen(true)}
           />
 
@@ -213,7 +215,7 @@ export default function PostCard({
           playsInline
           preload="metadata"
         >
-          Your browser does not support video playback.
+          {t("videoPlaybackUnsupported")}
         </video>
       )}
       {post.media_assets?.length > 0 && (
@@ -223,13 +225,13 @@ export default function PostCard({
       <div className="post-stats">
         <span>
           {selectedReaction && (
-            <span aria-label={`Your reaction: ${selectedReaction.label}`}>
+            <span aria-label={`${t("yourReaction")}: ${t(selectedReaction.labelKey)}`}>
               {selectedReaction.emoji}{" "}
             </span>
           )}
-          {reactionCount} reactions
+          {t("reactionCount", { count: reactionCount })}
         </span>
-        <span>{commentsCount} comments</span>
+        <span>{t("commentCount", { count: commentsCount })}</span>
       </div>
 
       <div className="post-actions">
@@ -252,21 +254,25 @@ export default function PostCard({
               chooseReaction(reactionType || "like");
             }}
             disabled={reactionSaving}
-            aria-label={reactionType ? `Remove ${selectedReaction?.label} reaction` : "Like post"}
+            aria-label={reactionType
+              ? t("removeReaction", {
+                reaction: selectedReaction ? t(selectedReaction.labelKey) : "",
+              })
+              : t("likePost")}
           >
             {selectedReaction ? (
               <span aria-hidden="true">{selectedReaction.emoji}</span>
             ) : (
               <ThumbsUp size={18} />
             )}
-            {selectedReaction?.label || "Like"}
+            {selectedReaction ? t(selectedReaction.labelKey) : t("reactionLike")}
           </button>
           <button
             className="post-action reaction-picker-trigger"
             onClick={() => setShowReactionPicker((shown) => !shown)}
             disabled={reactionSaving}
             aria-expanded={showReactionPicker}
-            aria-label="Choose a reaction"
+            aria-label={t("chooseReaction")}
           >
             <SmilePlus size={18} aria-hidden="true" />
           </button>
@@ -275,7 +281,7 @@ export default function PostCard({
               <motion.div
                 className="reaction-picker"
                 role="group"
-                aria-label="Reactions"
+                aria-label={t("reactions")}
                 initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 6, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -287,8 +293,8 @@ export default function PostCard({
                     type="button"
                     onClick={() => chooseReaction(reaction.type)}
                     disabled={reactionSaving}
-                    aria-label={reaction.label}
-                    title={reaction.label}
+                    aria-label={t(reaction.labelKey)}
+                    title={t(reaction.labelKey)}
                     aria-pressed={reactionType === reaction.type}
                     whileHover={prefersReducedMotion ? undefined : { scale: 1.15, y: -3 }}
                     whileTap={prefersReducedMotion ? undefined : { scale: 0.92 }}
@@ -306,11 +312,11 @@ export default function PostCard({
           onClick={() => setShowComments((value) => !value)}
         >
           <MessageCircle size={18} />
-          Comment
+          {t("comment")}
         </button>
         <button className="post-action" onClick={sharePost}>
           <Share2 size={18} />
-          Share
+          {t("share")}
         </button>
         {currentUser?.id
           && String(post.author?.id) === String(currentUser.id) && (

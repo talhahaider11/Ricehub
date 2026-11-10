@@ -14,6 +14,7 @@ import Button from "../common/Button";
 import MediaUploader from "../media/MediaUploader";
 import { deleteMedia } from "../../services/mediaService";
 import { MAX_POST_MEDIA_COUNT } from "../../utils/constants";
+import CameraCapture from "../media/CameraCapture";
 
 export default function CreatePost({
   onCreated,
@@ -151,6 +152,7 @@ export default function CreatePost({
 
       <MediaUploader
         maxFiles={MAX_POST_MEDIA_COUNT - mediaAssets.length}
+        showCamera={false}
         onUploaded={(uploaded) =>
           setMediaAssets((current) => [...current, ...uploaded])
         }
@@ -207,6 +209,15 @@ export default function CreatePost({
               }}
             />
           </label>
+          <CameraCapture
+            className="icon-button"
+            disabled={submitting || postType === "reel"}
+            onCapture={(file) => {
+              setImage(file);
+              setVideo(null);
+              setError("");
+            }}
+          />
           <label className="file-button icon-button" aria-label="Add short video">
             <VideoIcon size={20} /> {postType === "reel" ? "Reel video" : "Video"}
             <input

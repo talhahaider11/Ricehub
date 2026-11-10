@@ -3,12 +3,14 @@ import { useState } from "react";
 import Avatar from "../common/Avatar";
 import Button from "../common/Button";
 import friendService from "../../services/friendService";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function FriendRequest({
   request,
   onRemoved,
   onError,
 }) {
+  const { t } = useLanguage();
   const [loading, setLoading] =
     useState(false);
   const [error, setError] = useState("");
@@ -29,7 +31,7 @@ export default function FriendRequest({
     } catch (requestError) {
       const message =
         requestError.response?.data?.detail ||
-        "Friend request could not be accepted.";
+        t("friendRequestAcceptFailed");
       setError(message);
       onError?.(message);
     } finally {
@@ -50,7 +52,7 @@ export default function FriendRequest({
     } catch (requestError) {
       const message =
         requestError.response?.data?.detail ||
-        "Friend request could not be declined.";
+        t("friendRequestDeclineFailed");
       setError(message);
       onError?.(message);
     } finally {
@@ -73,7 +75,7 @@ export default function FriendRequest({
             onClick={accept}
             disabled={loading}
           >
-            Accept
+            {t("acceptRequest")}
           </Button>
 
           <Button
@@ -81,7 +83,7 @@ export default function FriendRequest({
             onClick={reject}
             disabled={loading}
           >
-            Delete
+            {t("deleteRequest")}
           </Button>
         </div>
         {error && <p className="error" role="alert">{error}</p>}

@@ -5,8 +5,10 @@ import FriendRequest from "../components/friends/FriendRequest";
 import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
 import { getArrayResults } from "../utils/arrayResults";
+import { useLanguage } from "../context/LanguageContext";
 
 export default function FriendRequests() {
+  const { t } = useLanguage();
   const [requests, setRequests] =
     useState([]);
 
@@ -24,7 +26,7 @@ export default function FriendRequests() {
       )
       .catch((loadError) => {
         console.error("Friend requests could not be loaded:", loadError);
-        setError("Friend requests could not be loaded.");
+        setError(t("friendRequestsLoadFailed"));
       })
       .finally(() =>
         setLoading(false)
@@ -45,7 +47,7 @@ export default function FriendRequests() {
   return (
     <div className="page-container">
 
-      <h1>Friend Requests</h1>
+      <h1>{t("friendRequestsTitle")}</h1>
 
       {loading ? (
         <Loader />
@@ -53,7 +55,7 @@ export default function FriendRequests() {
         <ErrorState message={error} onRetry={load} />
       ) : requests.length === 0 ? (
         <div className="empty-state">
-          No pending requests.
+          {t("noPendingRequests")}
         </div>
       ) : (
         <div className="request-list">

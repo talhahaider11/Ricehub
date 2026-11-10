@@ -1,8 +1,10 @@
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function SearchBar() {
+  const { t } = useLanguage();
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState(params.get("q") || "");
   const location = useLocation();
@@ -38,10 +40,10 @@ export default function SearchBar() {
         <Search size={18} />
         <input
           type="search"
-          aria-label="Search users and posts"
+          aria-label={t("searchUsersPosts")}
           value={query}
           onChange={(event) => updateQuery(event.target.value)}
-          placeholder="Search RiceHub"
+          placeholder={t("searchRiceHub")}
         />
       </form>
     </div>

@@ -8,20 +8,20 @@ import settingsService from "../services/settingsService";
 import { getArrayResults } from "../utils/arrayResults";
 import { useLanguage } from "../context/LanguageContext";
 
-const preferenceLabels = {
-  friend_requests: "Friend requests",
-  friend_accepted: "Accepted friend requests",
-  comments: "Comments on your posts",
-  reactions: "Reactions to your posts",
-  messages: "New messages",
-  event_invitations: "Event invitations",
-  all_notifications: "Allow in-app notifications",
+const preferenceLabelKeys = {
+  friend_requests: "friendRequests",
+  friend_accepted: "acceptedFriendRequests",
+  comments: "commentsOnPosts",
+  reactions: "reactionsToPosts",
+  messages: "newMessages",
+  event_invitations: "eventInvitations",
+  all_notifications: "allowInAppNotifications",
 };
 
 export default function Settings() {
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   const {
     theme,
     toggleTheme,
@@ -50,20 +50,20 @@ export default function Settings() {
   useEffect(() => {
     notificationService.getPreferences()
       .then(setPreferences)
-      .catch(() => setPreferencesError("Notification preferences could not be loaded."));
+      .catch(() => setPreferencesError(t("notificationPreferencesLoadFailed")));
     settingsService.getPrivacy()
       .then(setPrivacy)
-      .catch(() => setActionError("Privacy settings could not be loaded."));
+      .catch(() => setActionError(t("privacySettingsLoadFailed")));
     settingsService.getBlockedUsers()
       .then((data) => setBlockedUsers(getArrayResults(data, "Blocked accounts")))
       .catch((error) => {
         console.error("Blocked accounts could not be loaded:", error);
-        setActionError("Blocked accounts could not be loaded.");
+        setActionError(t("blockedAccountsLoadFailed"));
       });
     settingsService.getSecurity()
       .then(setSecurity)
-      .catch(() => setActionError("Security settings could not be loaded."));
-  }, []);
+      .catch(() => setActionError(t("securitySettingsLoadFailed")));
+  }, [t]);
 
   const saveVisibility = async () => {
     setSaving(true);
@@ -78,13 +78,13 @@ export default function Settings() {
       setUser(updatedUser);
       const updatedPrivacy = await settingsService.updatePrivacy(privacy);
       setPrivacy(updatedPrivacy);
-      setMessage("Privacy settings saved.");
+      setMessage(t("privacySettingsSaved"));
     } catch (error) {
       setActionError(
         (visibilitySaved
-          ? "Profile visibility was saved, but the other privacy settings could not be saved."
+          ? t("profileVisibilitySavedOtherFailed")
           : error.response?.data?.profile_visibility?.[0]) ||
-          "Privacy settings could not be saved."
+          t("privacySettingsSaveFailed")
       );
     } finally {
       setSaving(false);
@@ -100,12 +100,12 @@ export default function Settings() {
       formData.append("preferred_language", nextLanguage);
       const updatedUser = await userService.updateMe(formData);
       setUser(updatedUser);
-      setActionMessage("Language preference saved.");
+      setActionMessage(t("languagePreferenceSaved"));
     } catch (error) {
       setLanguage(previousLanguage);
       setActionError(
         error.response?.data?.preferred_language?.[0]
-          || "Language preference could not be saved."
+          || t("languagePreferenceSaveFailed")
       );
     }
   };
@@ -117,10 +117,10 @@ export default function Settings() {
     try {
       const updated = await notificationService.updatePreferences(preferences);
       setPreferences(updated);
-      setPreferencesMessage("Notification preferences saved.");
+      setPreferencesMessage(t("notificationPreferencesSaved"));
     } catch (error) {
       setPreferencesError(
-        error.response?.data?.detail || "Notification preferences could not be saved."
+        error.response?.data?.detail || t("notificationPreferencesSaveFailed")
       );
     } finally {
       setPreferencesSaving(false);
@@ -136,7 +136,7 @@ export default function Settings() {
       await settingsService.unblockUser(blocked.id);
       setBlockedUsers((items) => items.filter((item) => item.id !== blocked.id));
     } catch (error) {
-      setActionError(error.response?.data?.detail || "This account could not be unblocked.");
+      setActionError(error.response?.data?.detail || t("accountUnblockFailed"));
     }
   };
 
@@ -159,12 +159,12 @@ export default function Settings() {
         setTwoFactorPassword("");
         setActionMessage(
           response.two_factor_enabled
-            ? "Two-step verification is enabled."
-            : "Two-step verification is disabled."
+            ? t("twoStepEnabled")
+            : t("twoStepDisabled")
         );
       }
     } catch (error) {
-      setActionError(error.response?.data?.detail || "Two-step verification could not be updated.");
+      setActionError(error.response?.data?.detail || t("twoStepUpdateFailed"));
     }
   };
 
@@ -174,7 +174,7 @@ export default function Settings() {
       const response = await settingsService.signOutOtherSessions();
       setActionMessage(response.detail);
     } catch (error) {
-      setActionError(error.response?.data?.detail || "Other sessions could not be signed out.");
+      setActionError(error.response?.data?.detail || t("otherSessionsSignOutFailed"));
     }
   };
 
@@ -189,9 +189,9 @@ export default function Settings() {
       link.download = "ricehub-account-data.json";
       link.click();
       URL.revokeObjectURL(url);
-      setActionMessage("Your account data export has been downloaded.");
+      setActionMessage(t("accountExportDownloaded"));
     } catch (error) {
-      setActionError(error.response?.data?.detail || "Account data could not be exported.");
+      setActionError(error.response?.data?.detail || t("accountExportFailed"));
     }
   };
 
@@ -207,7 +207,7 @@ export default function Settings() {
       logout();
       navigate("/register", { replace: true });
     } catch (error) {
-      setActionError(error.response?.data?.detail || "Account could not be deleted.");
+      setActionError(error.response?.data?.detail || t("accountDeleteFailed"));
     } finally {
       setDeleting(false);
     }
@@ -218,40 +218,40 @@ export default function Settings() {
 
       <div className="settings-layout">
         <aside className="settings-sidebar card">
-          <p className="settings-eyebrow">SETTINGS</p>
-          <a href="#account">Account</a>
-          <a href="#privacy">Privacy &amp; audience</a>
-          <a href="#blocking">Blocked accounts</a>
-          <a href="#notifications">Notifications</a>
-          <a href="#security">Security &amp; login</a>
-          <Link to="/help-support">Help &amp; support</Link>
-          <a href="#appearance">Appearance</a>
-          <a href="#account-data">Your information</a>
+          <p className="settings-eyebrow">{t("settingsEyebrow")}</p>
+          <a href="#account">{t("accountTitle")}</a>
+          <a href="#privacy">{t("privacyAudience")}</a>
+          <a href="#blocking">{t("blockedAccounts")}</a>
+          <a href="#notifications">{t("notifications")}</a>
+          <a href="#security">{t("securityLogin")}</a>
+          <Link to="/help-support">{t("helpSupport")}</Link>
+          <a href="#appearance">{t("appearanceTitle")}</a>
+          <a href="#account-data">{t("yourInformation")}</a>
         </aside>
 
         <div className="card settings-card">
           <header className="settings-header">
             <div>
-              <p className="settings-eyebrow">RICEHUB</p>
-              <h1>Settings &amp; privacy</h1>
-              <p>Control your audience, messages, notifications and security.</p>
+              <p className="settings-eyebrow">RiceHub</p>
+              <h1>{t("settingsTitle")}</h1>
+              <p>{t("settingsDescription")}</p>
             </div>
           </header>
           {actionError && <p className="settings-error" role="alert">{actionError}</p>}
           {actionMessage && <p className="settings-status" role="status">{actionMessage}</p>}
 
           <section className="settings-section" id="account">
-            <h2>Account</h2>
+            <h2>{t("accountTitle")}</h2>
             <div className="settings-row">
-              <div><strong>Username</strong><p>@{user?.username}</p></div>
+              <div><strong>{t("username")}</strong><p>@{user?.username}</p></div>
             </div>
             <div className="settings-row">
               <div>
-                <strong>Email address</strong>
+                <strong>{t("emailAddress")}</strong>
                 <p>{user?.email}</p>
               </div>
               <span className={`settings-badge ${user?.is_email_verified ? "settings-badge-verified" : "settings-badge-unverified"}`}>
-                {user?.is_email_verified ? "Verified" : "Not verified"}
+                {user?.is_email_verified ? t("verified") : t("notVerified")}
               </span>
             </div>
             {!user?.is_email_verified && (
@@ -260,34 +260,34 @@ export default function Settings() {
                 to="/verify-email"
                 state={{ email: user?.email }}
               >
-                Verify email
+                {t("verifyEmail")}
               </Link>
             )}
             <div className="settings-row">
               <div>
-                <strong>Verification subscription</strong>
+                <strong>{t("verificationSubscription")}</strong>
                 <p>
                   {user?.is_verified
-                    ? "Verified account · PKR 249/month"
-                    : "Unverified account · up to 3 posts"}
+                    ? t("verifiedAccountPrice")
+                    : t("unverifiedAccountPosts")}
                 </p>
               </div>
               <span className={`settings-badge ${user?.is_verified ? "settings-badge-verified" : "settings-badge-unverified"}`}>
-                {user?.is_verified ? "Verified" : "Not verified"}
+                {user?.is_verified ? t("verified") : t("notVerified")}
               </span>
               <Link className="btn btn-secondary" to="/billing">
-                {user?.is_verified ? "Manage verification" : "Get verified"}
+                {user?.is_verified ? t("manageVerification") : t("getVerified")}
               </Link>
             </div>
           </section>
 
           <section className="settings-section" id="language">
-            <h2>Language</h2>
+            <h2>{t("languageTitle")}</h2>
             <p className="settings-description">
-              Your initial language follows your region. You can change it at any time.
+              {t("languageDescription")}
             </p>
             <label className="settings-row">
-              <span><strong>App language</strong></span>
+              <span><strong>{t("appLanguage")}</strong></span>
               <select
                 value={language}
                 onChange={(event) => void saveLanguage(event.target.value)}
@@ -299,56 +299,56 @@ export default function Settings() {
           </section>
 
           <section className="settings-section" id="privacy">
-            <h2>Privacy &amp; audience</h2>
+            <h2>{t("privacyAudience")}</h2>
             <div className="settings-row">
               <div>
-                <strong>Who can see your profile?</strong>
-                <p>Post visibility is set separately when you share each post.</p>
+                <strong>{t("whoSeeProfile")}</strong>
+                <p>{t("postVisibilitySeparate")}</p>
               </div>
               <select
                 value={visibility}
                 onChange={(event) => setVisibility(event.target.value)}
               >
-                <option value="public">Everyone</option>
-                <option value="friends">Friends</option>
-                <option value="private">Only me</option>
+                <option value="public">{t("everyone")}</option>
+                <option value="friends">{t("friends")}</option>
+                <option value="private">{t("onlyMe")}</option>
               </select>
             </div>
             {privacy && (
               <>
                 <label className="settings-row">
                   <span>
-                    <strong>Who can send friend requests?</strong>
-                    <small>Limit who can start a friendship with you.</small>
+                    <strong>{t("whoSendFriendRequests")}</strong>
+                    <small>{t("limitFriendRequests")}</small>
                   </span>
                   <select
                     value={privacy.friend_requests_from}
                     onChange={(event) => updatePrivacy("friend_requests_from", event.target.value)}
                   >
-                    <option value="everyone">Everyone</option>
-                    <option value="friends_of_friends">Friends of friends</option>
-                    <option value="nobody">No one</option>
+                    <option value="everyone">{t("everyone")}</option>
+                    <option value="friends_of_friends">{t("friendsOfFriends")}</option>
+                    <option value="nobody">{t("noOne")}</option>
                   </select>
                 </label>
                 <label className="settings-row">
                   <span>
-                    <strong>Who can start a chat?</strong>
-                    <small>Choose who is allowed to message you.</small>
+                    <strong>{t("whoStartChat")}</strong>
+                    <small>{t("chooseWhoCanMessage")}</small>
                   </span>
                   <select
                     value={privacy.messages_from}
                     onChange={(event) => updatePrivacy("messages_from", event.target.value)}
                   >
-                    <option value="everyone">Everyone</option>
-                    <option value="friends">Friends</option>
-                    <option value="nobody">No one</option>
+                    <option value="everyone">{t("everyone")}</option>
+                    <option value="friends">{t("friends")}</option>
+                    <option value="nobody">{t("noOne")}</option>
                   </select>
                 </label>
                 {[
-                  ["discoverable_by_email", "Allow people to find me by email"],
-                  ["show_activity_status", "Show when I’m active"],
-                  ["show_last_seen", "Show my last active time"],
-                  ["read_receipts", "Send read receipts in chats"],
+                  ["discoverable_by_email", t("allowFindByEmail")],
+                  ["show_activity_status", t("showActive")],
+                  ["show_last_seen", t("showLastActive")],
+                  ["read_receipts", t("sendReadReceipts")],
                 ].map(([name, label]) => (
                   <label className="settings-option" key={name}>
                     <span>{label}</span>
@@ -366,7 +366,7 @@ export default function Settings() {
               onClick={saveVisibility}
               disabled={saving || !privacy}
             >
-              {saving ? "Saving..." : "Save privacy settings"}
+              {saving ? t("saving") : t("savePrivacySettings")}
             </button>
             {message && <p className="settings-status" role="status">{message}</p>}
           </section>
@@ -379,16 +379,18 @@ export default function Settings() {
               aria-controls="blocked-users-list"
               onClick={() => setBlockedUsersExpanded((expanded) => !expanded)}
             >
-              <span>Blocked users ({blockedUsers.length})</span>
+              <span>{t("blockedUsersCount", {
+                count: new Intl.NumberFormat(language === "ur" ? "ur-PK" : "en").format(blockedUsers.length),
+              })}</span>
               <span aria-hidden="true">{blockedUsersExpanded ? "−" : "+"}</span>
             </button>
             {blockedUsersExpanded && (
               <div id="blocked-users-list">
                 <p className="settings-description">
-                  Block accounts from the options menu on their profile. You can unblock accounts here.
+                  {t("blockedUsersHelp")}
                 </p>
                 {blockedUsers.length === 0 ? (
-                  <p className="settings-description">You haven’t blocked anyone.</p>
+                  <p className="settings-description">{t("noBlockedUsers")}</p>
                 ) : blockedUsers.map((blocked) => (
                   <div className="settings-row" key={blocked.id}>
                     <div>
@@ -396,7 +398,7 @@ export default function Settings() {
                       <p>@{blocked.username}</p>
                     </div>
                     <button className="btn btn-secondary" onClick={() => unblockUser(blocked)}>
-                      Unblock
+                      {t("unblock")}
                     </button>
                   </div>
                 ))}
@@ -405,13 +407,13 @@ export default function Settings() {
           </section>
 
           <section className="settings-section" id="notifications">
-            <h2>Notifications</h2>
+            <h2>{t("notifications")}</h2>
             <p className="settings-description">
-              Choose which in-app activity appears in your notifications.
+              {t("notificationsDescription")}
             </p>
-            {preferences && Object.entries(preferenceLabels).map(([key, label]) => (
+            {preferences && Object.entries(preferenceLabelKeys).map(([key, labelKey]) => (
               <label className="settings-option" key={key}>
-                <span>{label}</span>
+                <span>{t(labelKey)}</span>
                 <input
                   type="checkbox"
                   checked={preferences[key]}
@@ -427,7 +429,7 @@ export default function Settings() {
               onClick={savePreferences}
               disabled={!preferences || preferencesSaving}
             >
-              {preferencesSaving ? "Saving..." : "Save notification settings"}
+              {preferencesSaving ? t("saving") : t("saveNotificationSettings")}
             </button>
             {preferencesMessage && (
               <p className="settings-status" role="status">{preferencesMessage}</p>
@@ -435,14 +437,14 @@ export default function Settings() {
           </section>
 
           <section className="settings-section" id="security">
-            <h2>Security &amp; login</h2>
+            <h2>{t("securityLogin")}</h2>
             <div className="settings-row">
               <div>
-                <strong>Two-step verification by email</strong>
-                <p>Require a one-time code sent to your verified email when you sign in.</p>
+                <strong>{t("twoStepEmail")}</strong>
+                <p>{t("twoStepDescription")}</p>
               </div>
               <span className="settings-badge">
-                {security?.two_factor_enabled ? "On" : "Off"}
+                {security?.two_factor_enabled ? t("on") : t("off")}
               </span>
             </div>
             {!security?.two_factor_enabled && !confirmingTwoFactor && (
@@ -452,15 +454,15 @@ export default function Settings() {
                   autoComplete="current-password"
                   value={twoFactorPassword}
                   onChange={(event) => setTwoFactorPassword(event.target.value)}
-                  placeholder="Current password"
-                  aria-label="Current password to enable two-step verification"
+                  placeholder={t("currentPassword")}
+                  aria-label={t("currentPasswordEnable")}
                 />
                 <button
                   className="btn btn-primary"
                   onClick={() => updateTwoFactor("start_enable")}
                   disabled={!twoFactorPassword}
                 >
-                  Turn on
+                  {t("turnOn")}
                 </button>
               </div>
             )}
@@ -471,15 +473,15 @@ export default function Settings() {
                   onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  placeholder="6-digit email code"
-                  aria-label="Two-step verification code"
+                  placeholder={t("emailCode")}
+                  aria-label={t("twoStepCode")}
                 />
                 <button
                   className="btn btn-primary"
                   onClick={() => updateTwoFactor("confirm_enable")}
                   disabled={twoFactorCode.length !== 6}
                 >
-                  Confirm and turn on
+                  {t("confirmTurnOn")}
                 </button>
               </div>
             )}
@@ -490,73 +492,74 @@ export default function Settings() {
                   autoComplete="current-password"
                   value={twoFactorPassword}
                   onChange={(event) => setTwoFactorPassword(event.target.value)}
-                  placeholder="Current password"
-                  aria-label="Current password to disable two-step verification"
+                  placeholder={t("currentPassword")}
+                  aria-label={t("currentPasswordDisable")}
                 />
                 <button
                   className="btn btn-secondary"
                   onClick={() => updateTwoFactor("disable")}
                   disabled={!twoFactorPassword}
                 >
-                  Turn off
+                  {t("turnOff")}
                 </button>
               </div>
             )}
             <div className="settings-row">
               <div>
-                <strong>Password</strong>
-                <p>Reset your password if you think it may be compromised.</p>
+                <strong>{t("password")}</strong>
+                <p>{t("resetPasswordDescription")}</p>
               </div>
-              <Link className="btn btn-secondary" to="/forgot-password">Reset password</Link>
+              <Link className="btn btn-secondary" to="/forgot-password">{t("resetPassword")}</Link>
             </div>
             <button className="btn btn-secondary" onClick={signOutOtherSessions}>
-              Sign out all other sessions
+              {t("signOutOtherSessions")}
             </button>
           </section>
 
           <section className="settings-section" id="appearance">
-            <h2>Appearance</h2>
+            <h2>{t("appearanceTitle")}</h2>
             <div className="settings-row">
               <div>
-                <strong>Dark mode</strong>
-                <p>Use the {theme === "dark" ? "dark" : "light"} color theme.</p>
+                <strong>{t("darkMode")}</strong>
+                <p>{t("useColorTheme", {
+                  mode: t(theme === "dark" ? "dark" : "light"),
+                })}</p>
               </div>
               <button className="toggle" onClick={toggleTheme}>
-                {theme === "dark" ? "Turn off" : "Turn on"}
+                {theme === "dark" ? t("turnThemeOff") : t("turnThemeOn")}
               </button>
             </div>
           </section>
 
           <section className="settings-section" id="account-data">
-            <h2>Your information</h2>
+            <h2>{t("yourInformation")}</h2>
             <div className="settings-row">
               <div>
-                <strong>Download your information</strong>
-                <p>Export a JSON copy of your profile, posts, friendships and activity.</p>
+                <strong>{t("downloadYourInformation")}</strong>
+                <p>{t("exportInformationDescription")}</p>
               </div>
               <button className="btn btn-secondary" onClick={downloadAccountData}>
-                Download data
+                {t("downloadData")}
               </button>
             </div>
             <form className="settings-delete-form" onSubmit={deleteAccount}>
-              <h3>Delete account</h3>
+              <h3>{t("deleteAccount")}</h3>
               <p>
-                This permanently deletes your account and associated data. This cannot be undone.
-                Download your information first if you need a copy.
+                {t("deleteAccountDescription")}
               </p>
               <input
                 type="password"
                 autoComplete="current-password"
                 value={deletePassword}
                 onChange={(event) => setDeletePassword(event.target.value)}
-                placeholder="Current password"
+                placeholder={t("currentPassword")}
                 required
               />
               <input
                 value={deleteConfirmation}
                 onChange={(event) => setDeleteConfirmation(event.target.value)}
-                placeholder="Type DELETE to confirm"
-                aria-label="Type DELETE to confirm permanent account deletion"
+                placeholder={t("typeDeleteConfirm")}
+                aria-label={t("deleteAccountConfirmLabel")}
                 required
               />
               <button
@@ -564,7 +567,7 @@ export default function Settings() {
                 type="submit"
                 disabled={deleting || deleteConfirmation !== "DELETE"}
               >
-                {deleting ? "Deleting account..." : "Permanently delete account"}
+                {deleting ? t("deletingAccount") : t("deleteAccountPermanently")}
               </button>
             </form>
           </section>

@@ -16,8 +16,10 @@ import ThemeToggle from "../common/ThemeToggle";
 import MobileMenu from "./MobileMenu";
 import useAuth from "../../hooks/useAuth";
 import { NotificationContext } from "../../context/NotificationContext";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function Navbar() {
+  const { t } = useLanguage();
   const { user, logout } = useAuth();
   const { unreadCount } = useContext(NotificationContext);
   const navigate = useNavigate();
@@ -45,7 +47,7 @@ export default function Navbar() {
         <button
           className="mobile-menu-trigger icon-button"
           type="button"
-          aria-label="Open menu"
+          aria-label={t("openMenu")}
           aria-haspopup="dialog"
           aria-expanded={mobileMenuOpen}
           aria-controls="ricehub-mobile-menu"
@@ -60,14 +62,14 @@ export default function Navbar() {
         </Link>
 
         <nav className="navbar-links">
-          <Link to="/" aria-label="Home">
+          <Link to="/" aria-label={t("home")}>
             <Home size={20} />
-            <span>Home</span>
+            <span>{t("home")}</span>
           </Link>
 
-          <Link to="/messages" aria-label="Open messages">
+          <Link to="/messages" aria-label={t("openMessages")}>
             <MessageCircle size={20} />
-            <span>Messages</span>
+            <span>{t("messages")}</span>
           </Link>
 
           <NotificationBell count={unreadCount} />
@@ -79,13 +81,13 @@ export default function Navbar() {
               type="button"
               className="navbar-upload"
               onClick={() => setCreateMenuOpen((open) => !open)}
-              aria-label="Upload or create"
+              aria-label={t("uploadOrCreate")}
               aria-expanded={createMenuOpen}
               aria-haspopup="menu"
-              title="Upload or create"
+              title={t("uploadOrCreate")}
             >
               <Plus size={20} />
-              <span>Upload</span>
+              <span>{t("upload")}</span>
             </button>
             <AnimatePresence>
               {createMenuOpen && (
@@ -106,7 +108,7 @@ export default function Navbar() {
                       whileHover={prefersReducedMotion ? undefined : { x: 3 }}
                       whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
                     >
-                      {type[0].toUpperCase() + type.slice(1)}
+                      {t(type)}
                     </motion.button>
                   ))}
                 </motion.div>
@@ -114,14 +116,14 @@ export default function Navbar() {
             </AnimatePresence>
           </div>
 
-          <Link to="/settings" aria-label="Open settings">
+          <Link to="/settings" aria-label={t("openSettings")}>
             <Settings size={20} />
           </Link>
 
           {user?.is_staff && (
-            <Link to="/admin" aria-label="Open administration dashboard">
+            <Link to="/admin" aria-label={t("openAdminDashboard")}>
               <Shield size={20} />
-              <span>Moderation</span>
+              <span>{t("moderation")}</span>
             </Link>
           )}
 
@@ -130,8 +132,8 @@ export default function Navbar() {
           <button
             className="icon-button"
             onClick={handleLogout}
-            aria-label="Log out"
-            title="Log out"
+            aria-label={t("logOut")}
+            title={t("logOut")}
           >
             <LogOut size={20} />
           </button>

@@ -31,7 +31,7 @@ const primaryLinks = [
 ];
 
 const additionalLinks = [
-  { label: "discover", path: "/discover", icon: Compass },
+  { label: "discover", path: "/discover?tab=Stories", icon: Compass },
   { label: "marketplace", path: "/marketplace", icon: Store },
   { label: "explore", path: "/explore", icon: TrendingUp },
   { label: "friendRequests", path: "/friend-requests", icon: UserPlus },
@@ -101,6 +101,15 @@ export default function MobileMenu({ onClose }) {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose]);
+
+  useEffect(() => {
+    import("../../pages/SocialHub").catch((error) => {
+      console.error("Discover page could not be prefetched:", error);
+    });
+    import("../../pages/Messages").catch((error) => {
+      console.error("Messages page could not be prefetched:", error);
+    });
+  }, []);
 
   useEffect(() => {
     if (previousLocationRef.current !== currentLocation) {

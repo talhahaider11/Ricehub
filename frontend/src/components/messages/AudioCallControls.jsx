@@ -23,6 +23,7 @@ export default function AudioCallControls({
   const [callState, setCallState] = useState("idle");
   const [muted, setMuted] = useState(false);
   const [error, setError] = useState("");
+  const [permissionDenied, setPermissionDenied] = useState(false);
 
   const closeCall = useCallback(() => {
     peerConnectionRef.current?.close();
@@ -139,6 +140,11 @@ export default function AudioCallControls({
 
   const startCall = async () => {
     setError("");
+    setPermissionDenied(false);
+    if (!window.isSecureContext) {
+      setError(t("microphoneSecureContext"));
+      return;
+    }
     try {
       const connection = await createPeerConnection();
       const offer = await connection.createOffer();
@@ -146,13 +152,19 @@ export default function AudioCallControls({
       sendCallSignal(peerId, "offer", connection.localDescription.toJSON());
       setCallState("calling");
     } catch (callError) {
-      setError(callError.message || t("callStartFailed"));
+      if (callError.name === "NotAllowedError" || callError.name === "SecurityError") {
+        setPermissionDenied(true);
+        setError(t("callPermissionDenied"));
+      } else {
+        setError(callError.message || t("callStartFailed"));
+      }
       closeCall();
     }
   };
 
   const acceptCall = async () => {
     setError("");
+    setPermissionDenied(false);
     try {
       const connection = await createPeerConnection();
       await connection.setRemoteDescription(incomingOfferRef.current);
@@ -162,8 +174,14 @@ export default function AudioCallControls({
       sendCallSignal(peerId, "answer", connection.localDescription.toJSON());
       setCallState("connecting");
     } catch (callError) {
-      setError(callError.message || t("incomingCallAnswerFailed"));
-      closeCall();
+      if (callError.name === "NotAllowedError" || callError.name === "SecurityError") {
+        setPermissionDenied(true);
+        setError(t("callPermissionDenied"));
+        setCallState("incoming");
+      } else {
+        setError(callError.message || t("incomingCallAnswerFailed"));
+        closeCall();
+      }
     }
   };
 
@@ -228,6 +246,20 @@ export default function AudioCallControls({
       )}
       <audio ref={remoteAudioRef} autoPlay aria-label={t("remoteCallAudio")} />
       {error && <span className="error" role="alert">{error}</span>}
+      {permissionDenied && (
+        <div className="message-permission-help" role="group" aria-label={t("callPermissionDenied")}>
+          <p>{t("microphonePermissionSteps")}</p>
+          {callState === "incoming" ? (
+            <button type="button" onClick={() => void acceptCall()}>
+              {t("answerCall")}
+            </button>
+          ) : (
+            <button type="button" onClick={() => void startCall()}>
+              {t("requestCallPermissionAgain")}
+            </button>
+          )}
+        </div>
+      )}
     </section>
   );
 }

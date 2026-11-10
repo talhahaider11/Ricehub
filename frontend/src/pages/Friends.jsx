@@ -5,8 +5,10 @@ import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
 import EmptyState from "../components/common/EmptyState";
 import { getArrayResults } from "../utils/arrayResults";
+import { useLanguage } from "../context/LanguageContext";
 
 export default function Friends() {
+  const { t } = useLanguage();
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,10 +23,10 @@ export default function Friends() {
       })
      .catch((err) => {
         console.error("Friends could not be loaded:", err);
-        setError(err.message || "Failed to load friends");
+        setError(err.message || t("friendsLoadFailed"));
       })
      .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadFriends();
@@ -33,7 +35,7 @@ export default function Friends() {
   if (loading) {
     return (
       <div className="page-container">
-        <div className="page-heading"><h1>Friends</h1></div>
+        <div className="page-heading"><h1>{t("friendsPageTitle")}</h1></div>
         <Loader />
       </div>
     );
@@ -42,7 +44,7 @@ export default function Friends() {
   if (error) {
     return (
       <div className="page-container">
-        <div className="page-heading"><h1>Friends</h1></div>
+        <div className="page-heading"><h1>{t("friendsPageTitle")}</h1></div>
         <ErrorState message={error} onRetry={loadFriends} />
       </div>
     );
@@ -51,10 +53,10 @@ export default function Friends() {
   if (!friends.length) {
     return (
       <div className="page-container">
-        <div className="page-heading"><h1>Friends</h1></div>
+        <div className="page-heading"><h1>{t("friendsPageTitle")}</h1></div>
         <EmptyState
-          title="No friends"
-          message="Find people to connect with."
+          title={t("noFriendsTitle")}
+          message={t("findPeopleToConnect")}
         />
       </div>
     );
@@ -63,7 +65,7 @@ export default function Friends() {
   return (
     <div className="page-container">
       <div className="page-heading">
-        <h1>Friends</h1>
+        <h1>{t("friendsPageTitle")}</h1>
       </div>
       <FriendList friends={friends} />
     </div>

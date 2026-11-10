@@ -5,15 +5,17 @@ import {
 import {
   Link,
 } from "react-router-dom";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function NotificationBell({
   count = 0,
 }) {
+  const { t } = useLanguage();
   return (
     <Link
       to="/notifications"
       className="icon-button"
-      aria-label="Notifications"
+      aria-label={t("notifications")}
     >
       <Bell size={21} />
 

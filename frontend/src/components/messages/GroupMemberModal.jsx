@@ -2,6 +2,7 @@ import { useState } from "react";
 import Modal from "../common/Modal";
 import messageService from "../../services/messageService";
 import { useLanguage } from "../../context/LanguageContext";
+import { parseUserId } from "../../utils/userId";
 
 export default function GroupMemberModal({
   open,
@@ -17,8 +18,8 @@ export default function GroupMemberModal({
 
   const addMember = async (event) => {
     event.preventDefault();
-    const parsedId = Number(userId.trim());
-    if (!Number.isSafeInteger(parsedId) || parsedId <= 0) {
+    const parsedId = parseUserId(userId);
+    if (parsedId === null) {
       setError(t("enterValidUserId"));
       return;
     }

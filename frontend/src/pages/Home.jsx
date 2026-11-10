@@ -10,9 +10,11 @@ import FeedTabs from "../components/feed/FeedTabs";
 
 import usePosts from "../hooks/usePosts";
 import useAuth from "../hooks/useAuth";
+import { useLanguage } from "../context/LanguageContext";
 
 export default function Home() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const prefersReducedMotion = useReducedMotion();
   const [feedSort, setFeedSort] = useState("recent");
 
@@ -50,21 +52,21 @@ export default function Home() {
         ) : (
           <>
         <label className="feed-sort">
-          <span>Feed</span>
+          <span>{t("feed")}</span>
           <select
             value={feedSort}
             onChange={(event) => setFeedSort(event.target.value)}
-            aria-label="Feed order"
+            aria-label={t("feedOrder")}
           >
-            <option value="recent">Most recent</option>
-            <option value="popular">Popular</option>
+            <option value="recent">{t("mostRecent")}</option>
+            <option value="popular">{t("popular")}</option>
           </select>
         </label>
 
         {posts.length === 0 ? (
           <EmptyState
-            title="No posts yet"
-            message="Your feed is waiting for something new."
+            title={t("noPostsYet")}
+            message={t("feedWaitingForPosts")}
           />
         ) : (
           <motion.div

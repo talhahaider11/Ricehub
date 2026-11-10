@@ -9,6 +9,7 @@ import PostCard from "../components/posts/PostCard";
 import useAuth from "../hooks/useAuth";
 import { getForYouFeed } from "../services/feedService";
 import { getArrayResults } from "../utils/arrayResults";
+import { useLanguage } from "../context/LanguageContext";
 
 function cursorFromUrl(url) {
   if (!url) return null;
@@ -19,6 +20,7 @@ function cursorFromUrl(url) {
 
 export default function ForYou() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [posts, setPosts] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,12 +39,12 @@ export default function ForYou() {
       setNextCursor(cursorFromUrl(response.next));
     } catch (loadError) {
       console.error("For You feed could not be loaded:", loadError);
-      setError(loadError.message || "For You feed could not be loaded.");
+      setError(loadError.message || t("forYouFeedLoadFailed"));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadFeed();
@@ -61,7 +63,7 @@ export default function ForYou() {
       setNextCursor(cursorFromUrl(response.next));
     } catch (loadError) {
       console.error("More For You posts could not be loaded:", loadError);
-      setError(loadError.message || "More posts could not be loaded.");
+      setError(loadError.message || t("moreForYouPostsLoadFailed"));
     } finally {
       setLoading(false);
     }
@@ -71,14 +73,14 @@ export default function ForYou() {
     <main className="page-container">
       <FeedTabs />
       <header className="page-heading">
-        <h1>For You</h1>
+        <h1>{t("forYou")}</h1>
         <button
           type="button"
           className="btn btn-secondary"
           disabled={refreshing}
           onClick={() => loadFeed({ refresh: true })}
         >
-          {refreshing ? "Refreshing..." : "Refresh"}
+          {refreshing ? t("refreshing") : t("refresh")}
         </button>
       </header>
       {error && posts.length === 0 ? (
@@ -86,7 +88,10 @@ export default function ForYou() {
       ) : loading && posts.length === 0 ? (
         <Loader />
       ) : posts.length === 0 ? (
-        <EmptyState title="No posts available" message="Your personalized feed is waiting for new posts." />
+        <EmptyState
+          title={t("noPostsAvailable")}
+          message={t("personalizedFeedWaiting")}
+        />
       ) : (
         <>
           {error && <p className="settings-error" role="alert">{error}</p>}

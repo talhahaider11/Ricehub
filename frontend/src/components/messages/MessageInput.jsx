@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Mic, Square } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
+import CameraCapture from "../media/CameraCapture";
 
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -20,6 +21,7 @@ export default function MessageInput({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [recording, setRecording] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const recorderRef = useRef(null);
   const streamRef = useRef(null);
   const recordingTimeoutRef = useRef(null);
@@ -48,7 +50,7 @@ export default function MessageInput({
       onCancelReply?.();
       onTyping?.(false);
     } catch (sendError) {
-      setError(sendError.message || "Message could not be sent.");
+      setError(sendError.message || t("messageSendFailed"));
     } finally {
       setSending(false);
     }
@@ -64,9 +66,7 @@ export default function MessageInput({
     }
   };
 
-  const sendSelectedAttachment = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+  const sendAttachmentFile = async (file) => {
     if (!file) return;
 
     const attachmentType = IMAGE_TYPES.has(file.type)
@@ -95,10 +95,21 @@ export default function MessageInput({
     }
   };
 
+  const sendSelectedAttachment = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    void sendAttachmentFile(file);
+  };
+
   const startRecording = async () => {
     setError("");
+    setPermissionDenied(false);
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setError(t("voiceUnsupported"));
+      return;
+    }
+    if (!window.isSecureContext) {
+      setError(t("microphoneSecureContext"));
       return;
     }
 
@@ -155,7 +166,14 @@ export default function MessageInput({
       console.error("Microphone access could not be started:", recordError);
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
-      setError(t("microphoneDenied"));
+      if (recordError.name === "NotAllowedError" || recordError.name === "SecurityError") {
+        setPermissionDenied(true);
+        setError(t("microphoneDenied"));
+      } else if (recordError.name === "NotFoundError" || recordError.name === "DevicesNotFoundError") {
+        setError(t("microphoneNotFound"));
+      } else {
+        setError(recordError.message || t("microphoneDenied"));
+      }
     }
   };
 
@@ -187,6 +205,12 @@ export default function MessageInput({
           >
             <ImagePlus size={16} aria-hidden="true" />
           </button>
+        )}
+        {onSendAttachment && (
+          <CameraCapture
+            disabled={disabled || sending || recording}
+            onCapture={sendAttachmentFile}
+          />
         )}
         <input
           value={message}
@@ -221,6 +245,14 @@ export default function MessageInput({
           </button>
         )}
         {error && <span className="error" role="alert">{error}</span>}
+        {permissionDenied && (
+          <div className="message-permission-help" role="group" aria-label={t("microphoneDenied")}>
+            <p>{t("microphonePermissionSteps")}</p>
+            <button type="button" onClick={() => void startRecording()}>
+              {t("requestMicAgain")}
+            </button>
+          </div>
+        )}
       </form>
     </>
   );

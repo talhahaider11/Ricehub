@@ -4,6 +4,7 @@ import friendService from "../../services/friendService";
 import messageService from "../../services/messageService";
 import { getArrayResults } from "../../utils/arrayResults";
 import { useLanguage } from "../../context/LanguageContext";
+import { parseUserId } from "../../utils/userId";
 
 export default function CreateGroupModal({ open, onClose, onCreated }) {
   const { t } = useLanguage();
@@ -44,8 +45,8 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
   };
 
   const addUserId = () => {
-    const parsedId = Number(userId.trim());
-    if (!Number.isSafeInteger(parsedId) || parsedId <= 0) {
+    const parsedId = parseUserId(userId);
+    if (parsedId === null) {
       setError(t("enterValidUserId"));
       return;
     }
@@ -86,7 +87,7 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
           ? memberError[0]
           : typeof memberError === "string"
             ? memberError
-            : "Group conversation could not be created.");
+            : t("groupConversationCreateFailed"));
     } finally {
       setCreating(false);
     }

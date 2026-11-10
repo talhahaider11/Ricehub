@@ -5,9 +5,11 @@ import Loader from "../components/common/Loader";
 import Button from "../components/common/Button";
 import EmptyState from "../components/common/EmptyState";
 import { getNotificationPath } from "../utils/notificationNavigation";
+import { useLanguage } from "../context/LanguageContext";
 
 export default function Notifications() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const {
     notifications,
     loading,
@@ -39,14 +41,14 @@ export default function Notifications() {
     <div className="page-container">
 
       <div className="page-heading">
-        <h1>Notifications</h1>
+        <h1>{t("notifications")}</h1>
 
         <Button
           variant="secondary"
           onClick={handleMarkAllRead}
           disabled={unreadCount === 0}
         >
-          Mark all read
+          {t("notificationMarkAllRead")}
         </Button>
       </div>
 
@@ -54,7 +56,7 @@ export default function Notifications() {
         <div className="error" role="alert">
           {error}
           <Button variant="secondary" onClick={refresh}>
-            Retry
+            {t("retry")}
           </Button>
         </div>
       )}
@@ -63,8 +65,8 @@ export default function Notifications() {
         <Loader />
       ) : notifications.length === 0 ? (
         <EmptyState
-          title="You're all caught up"
-          message="New notifications will appear here."
+          title={t("allCaughtUp")}
+          message={t("newNotificationsHere")}
         />
       ) : (
         <div className="notification-list">
@@ -86,7 +88,7 @@ export default function Notifications() {
                       ? [notification.sender.first_name, notification.sender.last_name]
                           .filter(Boolean)
                           .join(" ") || notification.sender.username
-                      : "RiceHub"}
+                      : t("riceHubMember")}
                   </strong>
                   <small className="notification-type">
                     {notification.notification_type_label ||
