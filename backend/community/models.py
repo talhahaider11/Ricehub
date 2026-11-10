@@ -138,6 +138,13 @@ class Community(models.Model):
         on_delete=models.CASCADE,
         related_name="owned_communities",
     )
+    conversation = models.OneToOneField(
+        "messaging.Conversation",
+        on_delete=models.SET_NULL,
+        related_name="community",
+        null=True,
+        blank=True,
+    )
     name = models.CharField(max_length=100)
     description = models.TextField(max_length=2000, blank=True)
     kind = models.CharField(max_length=10, choices=Kind.choices)

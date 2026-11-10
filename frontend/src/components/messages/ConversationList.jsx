@@ -1,4 +1,5 @@
 import Avatar from "../common/Avatar";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function ConversationList({
   conversations,
@@ -7,12 +8,13 @@ export default function ConversationList({
   currentUser,
   onCreateGroup,
 }) {
+  const { t } = useLanguage();
   return (
     <aside className="conversation-list">
 
       <div className="conversation-list-header">
-        <h2>Messages</h2>
-        <button type="button" onClick={onCreateGroup}>New group</button>
+        <h2>{t("messages")}</h2>
+        <button type="button" onClick={onCreateGroup}>{t("newGroup")}</button>
       </div>
 
       {conversations.map((conversation) => {

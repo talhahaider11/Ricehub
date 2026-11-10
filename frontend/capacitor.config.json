@@ -3,8 +3,8 @@
   "appName": "Rice Hub",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https",
-    "cleartext": false
+    "url": "https://ricehub-frontend.onrender.com",
+    "cleartext": true
   },
   "plugins": {
     "SplashScreen": {

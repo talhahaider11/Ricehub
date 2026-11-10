@@ -26,7 +26,6 @@ from .serializers import (
 )
 from .services import get_or_create_conversation
 from .permissions import is_conversation_member
-from friendships.services import get_friend_ids
 from users.privacy import (
     can_message_between,
     get_blocked_user_ids,
@@ -164,7 +163,7 @@ class GroupConversationCreateView(APIView):
         if len(name) > 100:
             raise ValidationError({"name": "Group name cannot exceed 100 characters."})
         if not isinstance(user_ids, list) or not user_ids:
-            raise ValidationError({"user_ids": "Select at least one friend."})
+            raise ValidationError({"user_ids": "Select at least one group member."})
         if not all(
             isinstance(user_id, int) and not isinstance(user_id, bool)
             for user_id in user_ids
@@ -178,8 +177,6 @@ class GroupConversationCreateView(APIView):
         selected_ids = set(user_ids)
         if request.user.pk in selected_ids:
             raise ValidationError({"user_ids": "You are already included in the group."})
-        if not selected_ids.issubset(set(get_friend_ids(request.user))):
-            raise ValidationError({"user_ids": "All group members must be your friends."})
 
         members = list(
             User.objects.filter(
@@ -190,10 +187,9 @@ class GroupConversationCreateView(APIView):
         )
         if len(members) != len(selected_ids):
             raise ValidationError({"user_ids": "One or more selected members are unavailable."})
-        if any(not can_message_between(request.user, member) for member in members):
-            raise ValidationError(
-                {"user_ids": "A selected member is not accepting messages."}
-            )
+        blocked_ids = get_blocked_user_ids(request.user)
+        if selected_ids.intersection(blocked_ids):
+            raise ValidationError({"user_ids": "Blocked users cannot be added to a group."})
 
         conversation = Conversation.objects.create(
             conversation_type=Conversation.ConversationType.GROUP,
@@ -221,6 +217,67 @@ class GroupConversationCreateView(APIView):
                 context={"request": request},
             ).data,
             status=status.HTTP_201_CREATED,
+        )
+
+
+class GroupConversationMemberAddView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [MessageRateThrottle]
+
+    @transaction.atomic
+    def post(self, request, conversation_id):
+        conversation = (
+            Conversation.objects.select_for_update()
+            .filter(
+                pk=conversation_id,
+                conversation_type=Conversation.ConversationType.GROUP,
+                participants=request.user,
+            )
+            .first()
+        )
+        if not conversation:
+            raise PermissionDenied("You cannot add members to this conversation.")
+
+        user_id = request.data.get("user_id")
+        if not isinstance(user_id, int) or isinstance(user_id, bool):
+            raise ValidationError({"user_id": "Enter a valid user ID."})
+
+        if conversation.participants.filter(pk=user_id).exists():
+            raise ValidationError({"user_id": "This user is already in the group."})
+        if conversation.participants.count() >= 100:
+            raise ValidationError({"user_id": "A group can have at most 100 members."})
+
+        member = User.objects.filter(
+            pk=user_id,
+            is_active=True,
+            is_suspended=False,
+        ).first()
+        if not member:
+            raise ValidationError({"user_id": "User ID was not found or is unavailable."})
+        if member.pk in get_blocked_user_ids(request.user):
+            raise ValidationError({"user_id": "Blocked users cannot be added to a group."})
+
+        conversation.participants.add(member)
+        ConversationMember.objects.create(
+            conversation=conversation,
+            user=member,
+        )
+        community = getattr(conversation, "community", None)
+        if community:
+            from community.models import CommunityMembership
+
+            CommunityMembership.objects.get_or_create(
+                community=community,
+                user=member,
+            )
+        conversation.save()
+
+        return Response(
+            ConversationSerializer(
+                conversation,
+                context={"request": request},
+            ).data,
+            status=status.HTTP_200_OK,
         )
 
 

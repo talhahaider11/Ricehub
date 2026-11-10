@@ -7,15 +7,6 @@ from .views import (
 
 
 urlpatterns = [
-    path(
-        "posts/<int:post_id>/reactions/",
-        PostReactionView.as_view(),
-        name="post-reaction",
-    ),
-
-    path(
-        "posts/<int:post_id>/reactions/list/",
-        PostReactionListView.as_view(),
-        name="post-reaction-list",
-    ),
+    path("posts/<int:post_id>/reactions/",PostReactionView.as_view(),name="post-reaction",),
+    path( "posts/<int:post_id>/reactions/list/",PostReactionListView.as_view(),name="post-reaction-list",),
 ]

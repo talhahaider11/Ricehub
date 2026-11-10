@@ -7,7 +7,7 @@ describe("MessageList", () => {
     vi.useRealTimers();
   });
 
-  it("shows actions for the user's message after a two-second hold", () => {
+  it("shows actions for the user's message after a short hold", () => {
     vi.useFakeTimers();
     Element.prototype.scrollIntoView = vi.fn();
 
@@ -32,7 +32,7 @@ describe("MessageList", () => {
     fireEvent.pointerDown(message);
 
     act(() => {
-      vi.advanceTimersByTime(1999);
+      vi.advanceTimersByTime(549);
     });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
@@ -40,9 +40,10 @@ describe("MessageList", () => {
       vi.advanceTimersByTime(1);
     });
     expect(screen.getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Message options" }))
-      .not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Unsend" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Message options" }))
+      .toBeInTheDocument();
   });
 
   it("shows a single sent or seen receipt for the latest own message", () => {

@@ -1,4 +1,5 @@
 import api from "./api";
+import { prepareImage } from "./mediaService";
 import { ACCESS_TOKEN_KEY, WS_URL } from "../utils/constants";
 
 const messageService = {
@@ -29,6 +30,14 @@ const messageService = {
     return response.data;
   },
 
+  async addGroupMember(conversationId, userId) {
+    const response = await api.post(
+      `/messages/conversations/${conversationId}/members/`,
+      { user_id: userId }
+    );
+    return response.data;
+  },
+
   async messages(conversationId, page = 1) {
     const response = await api.get(
       `/messages/conversations/${conversationId}/messages/`,
@@ -40,10 +49,13 @@ const messageService = {
     return response.data;
   },
 
-  async sendAttachment(conversationId, file, replyToId) {
+  async sendAttachment(conversationId, file, replyToId, attachmentType = "audio") {
+    const preparedFile = attachmentType === "image"
+      ? await prepareImage(file)
+      : file;
     const formData = new FormData();
-    formData.append("attachment", file);
-    formData.append("attachment_type", "audio");
+    formData.append("attachment", preparedFile, preparedFile.name || file.name);
+    formData.append("attachment_type", attachmentType);
     formData.append("content", "");
     if (replyToId) formData.append("reply_to_id", String(replyToId));
     const response = await api.post(

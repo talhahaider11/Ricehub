@@ -18,14 +18,15 @@ describe("MessageActions", () => {
       />
     );
 
-    expect(screen.queryByRole("button", { name: "Reply" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Reply" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Message options" }));
+    expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("menuitem", { name: "Reply" }));
 
     expect(onReply).toHaveBeenCalledWith(message);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Edit" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Delete" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Unsend" })).not.toBeInTheDocument();
   });
 
   it("edits and deletes an owned message from the menu", async () => {
@@ -42,8 +43,8 @@ describe("MessageActions", () => {
       />
     );
 
-    expect(screen.queryByRole("button", { name: "Message options" }))
-      .not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Message options" }))
+      .toBeInTheDocument();
     rerender(
       <MessageActions
         message={message}
@@ -97,7 +98,7 @@ describe("MessageActions", () => {
         onDelete={onDelete}
       />
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Unsend" }));
 
     await waitFor(() => {
       expect(onDelete).toHaveBeenCalledWith(message);

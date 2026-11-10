@@ -39,11 +39,11 @@ services:
       - key: BREVO_SENDER_EMAIL
         sync: false
       - key: BREVO_SENDER_NAME
-        value: RiceHub
+        sync:false
       - key: SADAPAY_ACCOUNT_NAME
-        value: Talha Haider
+        sync:false
       - key: SADAPAY_ACCOUNT_NUMBER
-        value: 0329-9047283
+        sync:false
       - key: SECURITY_EVENT_RETENTION_DAYS
         value: "90"
   - type: worker
@@ -57,7 +57,7 @@ services:
       - key: DJANGO_SECRET_KEY
         sync: false
       - key: DB_USER
-        value: admin
+        sync:false
       - key: DB_PASSWORD
         sync: false
       - key: DB_SERVICE_NAME

@@ -167,6 +167,10 @@ class CommunityFeatureTests(APITestCase):
                 user=self.user,
             ).exists()
         )
+        public_group.refresh_from_db()
+        self.assertTrue(
+            public_group.conversation.participants.filter(pk=self.user.pk).exists()
+        )
         self.assertEqual(denied.status_code, 403)
 
     def test_creator_becomes_group_admin(self):
@@ -179,6 +183,11 @@ class CommunityFeatureTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["membership_role"], "admin")
         self.assertEqual(response.data["member_count"], 1)
+        community = Community.objects.get(pk=response.data["id"])
+        self.assertIsNotNone(community.conversation_id)
+        self.assertTrue(
+            community.conversation.participants.filter(pk=self.user.pk).exists()
+        )
 
     def test_event_attendance_can_be_changed_and_cancelled(self):
         event = Event.objects.create(

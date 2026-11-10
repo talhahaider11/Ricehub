@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import {
   BrowserRouter,
   Route,
@@ -9,51 +9,52 @@ import {
 
 import ProtectedRoute from "./ProtectedRoute";
 
-import Login from "../pages/auth/Login";
-import Register from "../pages/auth/Register";
-import ForgotPassword from "../pages/auth/ForgotPassword";
-import VerifyEmail from "../pages/auth/VerifyEmail";
-
-import Home from "../pages/Home";
-import ForYou from "../pages/ForYou";
-import Profile from "../pages/Profile";
-import EditProfile from "../pages/EditProfile";
-import FriendRequests from "../pages/FriendRequests";
-import Notifications from "../pages/Notifications";
-import Search from "../pages/Search";
-import Explore from "../pages/Explore";
-import Hashtag from "../pages/Hashtag";
-import Messages from "../pages/Messages";
-import PostDetail from "../pages/PostDetail";
-import Settings from "../pages/Settings";
-import SocialHub from "../pages/SocialHub";
-import NotFound from "../pages/NotFound";
-import CreateContent from "../pages/CreateContent";
-import StoryViewer from "../pages/StoryViewer";
-import Stories from "../pages/Stories";
-import HelpSupport from "../pages/HelpSupport";
-import AdminDashboardPage from "../pages/admin/AdminDashboard";
-import AdminUsers from "../pages/admin/AdminUsers";
-import AdminUserDetails from "../pages/admin/AdminUserDetails";
-import AdminReports from "../pages/admin/AdminReports";
-import AdminReportDetails from "../pages/admin/AdminReportDetails";
-import AdminPosts from "../pages/admin/AdminPosts";
-import AdminSettings from "../pages/admin/AdminSettings";
-import PrivacyPolicy from "../pages/PrivacyPolicy";
-import TermsOfService from "../pages/TermsOfService";
-import DeleteAccount from "../pages/DeleteAccount";
-import Billing from "../pages/Billing";
-import Suggestions from "../pages/Suggestions";
+import Loader from "../components/common/Loader";
 import useAuth from "../hooks/useAuth";
 
-import MainLayout from "../layouts/MainLayout";
-import SearchLayout from "../layouts/SearchLayout";
-import AuthLayout from "../layouts/AuthLayout";
-import AdminLayout from "../layouts/AdminLayout";
 import AdminRoute from "./AdminRoute";
-import LegalLayout from "../layouts/LegalLayout";
 import { getNotificationPath } from "../utils/notificationNavigation";
 import notificationService from "../services/notificationService";
+
+const Login = lazy(() => import("../pages/auth/Login"));
+const Register = lazy(() => import("../pages/auth/Register"));
+const ForgotPassword = lazy(() => import("../pages/auth/ForgotPassword"));
+const VerifyEmail = lazy(() => import("../pages/auth/VerifyEmail"));
+const Home = lazy(() => import("../pages/Home"));
+const ForYou = lazy(() => import("../pages/ForYou"));
+const Profile = lazy(() => import("../pages/Profile"));
+const EditProfile = lazy(() => import("../pages/EditProfile"));
+const FriendRequests = lazy(() => import("../pages/FriendRequests"));
+const Notifications = lazy(() => import("../pages/Notifications"));
+const Search = lazy(() => import("../pages/Search"));
+const Explore = lazy(() => import("../pages/Explore"));
+const Hashtag = lazy(() => import("../pages/Hashtag"));
+const Messages = lazy(() => import("../pages/Messages"));
+const PostDetail = lazy(() => import("../pages/PostDetail"));
+const Settings = lazy(() => import("../pages/Settings"));
+const SocialHub = lazy(() => import("../pages/SocialHub"));
+const NotFound = lazy(() => import("../pages/NotFound"));
+const CreateContent = lazy(() => import("../pages/CreateContent"));
+const StoryViewer = lazy(() => import("../pages/StoryViewer"));
+const Stories = lazy(() => import("../pages/Stories"));
+const HelpSupport = lazy(() => import("../pages/HelpSupport"));
+const AdminDashboardPage = lazy(() => import("../pages/admin/AdminDashboard"));
+const AdminUsers = lazy(() => import("../pages/admin/AdminUsers"));
+const AdminUserDetails = lazy(() => import("../pages/admin/AdminUserDetails"));
+const AdminReports = lazy(() => import("../pages/admin/AdminReports"));
+const AdminReportDetails = lazy(() => import("../pages/admin/AdminReportDetails"));
+const AdminPosts = lazy(() => import("../pages/admin/AdminPosts"));
+const AdminSettings = lazy(() => import("../pages/admin/AdminSettings"));
+const PrivacyPolicy = lazy(() => import("../pages/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("../pages/TermsOfService"));
+const DeleteAccount = lazy(() => import("../pages/DeleteAccount"));
+const Billing = lazy(() => import("../pages/Billing"));
+const Suggestions = lazy(() => import("../pages/Suggestions"));
+const MainLayout = lazy(() => import("../layouts/MainLayout"));
+const SearchLayout = lazy(() => import("../layouts/SearchLayout"));
+const AuthLayout = lazy(() => import("../layouts/AuthLayout"));
+const AdminLayout = lazy(() => import("../layouts/AdminLayout"));
+const LegalLayout = lazy(() => import("../layouts/LegalLayout"));
 
 function PushNotificationNavigation() {
   const navigate = useNavigate();
@@ -92,7 +93,8 @@ export default function AppRoutes() {
   return (
     <BrowserRouter>
       <PushNotificationNavigation />
-      <Routes>
+      <Suspense fallback={<Loader />}>
+        <Routes>
         <Route element={<LegalLayout />}>
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
@@ -241,6 +243,10 @@ export default function AppRoutes() {
               path="/discover"
               element={<SocialHub />}
             />
+            <Route
+              path="/marketplace"
+              element={<Navigate to="/discover?tab=Marketplace" replace />}
+            />
 
           </Route>
         </Route>
@@ -250,7 +256,8 @@ export default function AppRoutes() {
           element={<NotFound />}
         />
 
-      </Routes>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

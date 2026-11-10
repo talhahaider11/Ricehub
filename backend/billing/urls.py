@@ -9,14 +9,6 @@ from .views import (
 
 urlpatterns = [
     path("options/", PaymentOptionsView.as_view(), name="billing-options"),
-    path(
-        "admin/payment-requests/<int:payment_id>/receipt/",
-        AdminPaymentReceiptView.as_view(),
-        name="admin-payment-receipt",
-    ),
-    path(
-        "payment-requests/",
-        PaymentRequestListCreateView.as_view(),
-        name="payment-requests",
-    ),
+    path("admin/payment-requests/<int:payment_id>/receipt/",AdminPaymentReceiptView.as_view(),name="admin-payment-receipt",),
+    path("payment-requests/",PaymentRequestListCreateView.as_view(),name="payment-requests",),
 ]

@@ -13,8 +13,10 @@ import TypingIndicator from "../components/messages/TypingIndicator";
 import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
 import { getArrayResults } from "../utils/arrayResults";
+import GroupMemberModal from "../components/messages/GroupMemberModal";
+import { useLanguage } from "../context/LanguageContext";
 
-function formatLastSeen(lastSeen, now) {
+function formatLastSeen(lastSeen, now, t, language) {
   if (!lastSeen) return "";
   const lastSeenTime = new Date(lastSeen).getTime();
   if (!Number.isFinite(lastSeenTime)) return "";
@@ -22,17 +24,30 @@ function formatLastSeen(lastSeen, now) {
     0,
     Math.floor((now - lastSeenTime) / 60_000)
   );
-  if (minutes < 1) return "Last seen just now";
-  if (minutes === 1) return "Last seen 1 min ago";
-  if (minutes < 60) return `Last seen ${minutes} mins ago`;
+  if (minutes < 1) return t("lastSeenJustNow");
+  if (minutes === 1) return t("lastSeenMinute");
+  if (minutes < 60) {
+    return t("lastSeenMinutes", {
+      count: new Intl.NumberFormat(language).format(minutes),
+    });
+  }
   const hours = Math.floor(minutes / 60);
-  if (hours === 1) return "Last seen 1 hour ago";
-  if (hours < 24) return `Last seen ${hours} hours ago`;
+  if (hours === 1) return t("lastSeenHour");
+  if (hours < 24) {
+    return t("lastSeenHours", {
+      count: new Intl.NumberFormat(language).format(hours),
+    });
+  }
   const days = Math.floor(hours / 24);
-  return days === 1 ? "Last seen 1 day ago" : `Last seen ${days} days ago`;
+  return days === 1
+    ? t("lastSeenDay")
+    : t("lastSeenDays", {
+      count: new Intl.NumberFormat(language).format(days),
+    });
 }
 
 export default function Messages() {
+  const { t, language } = useLanguage();
   const { user } = useAuth();
   const location = useLocation();
   const [conversations, setConversations] = useState([]);
@@ -40,6 +55,7 @@ export default function Messages() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState(null);
   const [lastSeenNow, setLastSeenNow] = useState(() => Date.now());
 
@@ -85,7 +101,7 @@ export default function Messages() {
       })
       .catch((loadError) => {
         console.error("Conversations could not be loaded:", loadError);
-        if (active) setError("Conversations could not be loaded.");
+        if (active) setError(t("conversationLoadFailed"));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -94,7 +110,7 @@ export default function Messages() {
     return () => {
       active = false;
     };
-  }, [location.search, location.state?.conversationId]);
+  }, [location.search, location.state?.conversationId, t]);
 
   const {
     messages,
@@ -113,11 +129,12 @@ export default function Messages() {
     sendMessage(content, replyToId);
     sendTyping(false);
   };
-  const handleSendAttachment = async (file, replyToId) => {
+  const handleSendAttachment = async (file, replyToId, attachmentType) => {
     const message = await messageService.sendAttachment(
       selectedConversation,
       file,
-      replyToId
+      replyToId,
+      attachmentType
     );
     setMessages((current) => (
       current.some((item) => item.id === message.id)
@@ -141,12 +158,17 @@ export default function Messages() {
     )));
   };
   const handleDelete = async (message) => {
-    if (!window.confirm("Delete this message?")) return;
+    if (!window.confirm(t("confirmUnsend"))) return;
     await messageService.deleteMessage(message.id);
     setMessages((current) => current.map((item) => (
       item.id === message.id
         ? { ...item, content: "", is_deleted: true }
         : item
+    )));
+  };
+  const handleConversationUpdated = (updated) => {
+    setConversations((current) => current.map((conversation) => (
+      conversation.id === updated.id ? updated : conversation
     )));
   };
   const activeConversation = conversations.find(
@@ -205,8 +227,8 @@ export default function Messages() {
               <button
                 className="chat-back-button"
                 type="button"
-                aria-label="Back to conversations"
-                title="Back to conversations"
+                aria-label={t("backToConversations")}
+                title={t("backToConversations")}
                 onClick={() => setSelectedConversation(null)}
               >
                 <ArrowLeft size={20} aria-hidden="true" />
@@ -215,22 +237,32 @@ export default function Messages() {
                 <strong>
                   {activeConversation?.is_group
                     || activeConversation?.conversation_type === "group"
-                    ? activeConversation.name || "Group conversation"
-                    : otherUser?.username || "Conversation"}
+                    ? activeConversation.name || t("groupConversation")
+                    : otherUser?.username || t("conversation")}
                 </strong>
                 {otherUser && (
                   <small className="chat-presence" aria-live="polite">
                     {otherUser.is_online === true ? (
                       <>
                         <span className="chat-presence-dot" aria-hidden="true" />
-                        Active
+                        {t("active")}
                       </>
                     ) : (
-                      formatLastSeen(otherUser.last_seen, lastSeenNow)
+                      formatLastSeen(otherUser.last_seen, lastSeenNow, t, language)
                     )}
                   </small>
                 )}
               </div>
+              {(activeConversation?.is_group
+                || activeConversation?.conversation_type === "group") && (
+                <button
+                  type="button"
+                  className="chat-add-member-button"
+                  onClick={() => setMemberModalOpen(true)}
+                >
+                  {t("addMember")}
+                </button>
+              )}
               {activeConversation
                 && !activeConversation.is_group
                 && activeConversation.conversation_type !== "group"
@@ -246,7 +278,7 @@ export default function Messages() {
             </header>
             {showVerificationWarning && (
               <p className="message-verification-warning" role="alert">
-                This is not a verified member. Trust this member at your own risk.
+                {t("messageVerificationWarning")}
               </p>
             )}
 
@@ -291,6 +323,18 @@ export default function Messages() {
         open={groupModalOpen}
         onClose={() => setGroupModalOpen(false)}
         onCreated={handleGroupCreated}
+      />
+      <GroupMemberModal
+        open={memberModalOpen}
+        onClose={() => setMemberModalOpen(false)}
+        conversation={activeConversation}
+        currentUser={user}
+        onUpdated={(conversation) => {
+          setConversations((current) => current.map((item) => (
+            item.id === conversation.id ? conversation : item
+          )));
+          setMemberModalOpen(false);
+        }}
       />
     </div>
   );

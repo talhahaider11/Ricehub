@@ -38,7 +38,7 @@ export default function AudioCallControls({
 
   const createPeerConnection = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
-      throw new Error("Audio calling is not supported on this device or browser.");
+      throw new Error(t("audioCallUnsupported"));
     }
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -55,7 +55,7 @@ export default function AudioCallControls({
         try {
           sendCallSignal(peerId, "ice_candidate", event.candidate.toJSON());
         } catch (signalError) {
-          setError(signalError.message || "Call signal could not be sent.");
+          setError(signalError.message || t("callSignalFailed"));
         }
       }
     };
@@ -64,13 +64,13 @@ export default function AudioCallControls({
         setCallState("connected");
       } else if (["failed", "disconnected", "closed"].includes(connection.connectionState)) {
         if (connection.connectionState !== "closed") {
-          setError("The audio call connection was lost.");
+          setError(t("callConnectionLost"));
           closeCall();
         }
       }
     };
     return connection;
-  }, [closeCall, peerId, sendCallSignal]);
+  }, [closeCall, peerId, sendCallSignal, t]);
 
   const flushPendingCandidates = useCallback(async (connection) => {
     const pending = pendingCandidatesRef.current.splice(0);
@@ -113,7 +113,7 @@ export default function AudioCallControls({
           closeCall();
         }
       } catch (signalError) {
-        setError(signalError.message || "Call setup failed.");
+        setError(signalError.message || t("callSetupFailed"));
         closeCall();
       } finally {
         clearCallSignal();
@@ -129,6 +129,7 @@ export default function AudioCallControls({
     flushPendingCandidates,
     peerId,
     sendCallSignal,
+    t,
   ]);
 
   useEffect(() => () => {
@@ -145,7 +146,7 @@ export default function AudioCallControls({
       sendCallSignal(peerId, "offer", connection.localDescription.toJSON());
       setCallState("calling");
     } catch (callError) {
-      setError(callError.message || "The audio call could not be started.");
+      setError(callError.message || t("callStartFailed"));
       closeCall();
     }
   };
@@ -161,7 +162,7 @@ export default function AudioCallControls({
       sendCallSignal(peerId, "answer", connection.localDescription.toJSON());
       setCallState("connecting");
     } catch (callError) {
-      setError(callError.message || "The incoming call could not be answered.");
+      setError(callError.message || t("incomingCallAnswerFailed"));
       closeCall();
     }
   };
@@ -171,7 +172,7 @@ export default function AudioCallControls({
       try {
         sendCallSignal(peerId, "hangup");
       } catch (signalError) {
-        setError(signalError.message || "Call could not be ended remotely.");
+        setError(signalError.message || t("callEndFailed"));
       }
     }
     closeCall();
@@ -186,14 +187,14 @@ export default function AudioCallControls({
   };
 
   return (
-    <section className="audio-call-controls" aria-label="Audio call">
+    <section className="audio-call-controls" aria-label={t("audioCall")}>
       {callState === "idle" && (
         <button
           type="button"
           disabled={disabled}
           onClick={() => void startCall()}
-          aria-label="Start audio call"
-          title="Start audio call"
+          aria-label={t("startAudioCall")}
+          title={t("startAudioCall")}
         >
           <Phone size={16} aria-hidden="true" />
         </button>
@@ -225,7 +226,7 @@ export default function AudioCallControls({
           </button>
         </>
       )}
-      <audio ref={remoteAudioRef} autoPlay aria-label="Remote call audio" />
+      <audio ref={remoteAudioRef} autoPlay aria-label={t("remoteCallAudio")} />
       {error && <span className="error" role="alert">{error}</span>}
     </section>
   );

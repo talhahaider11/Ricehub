@@ -8,21 +8,7 @@ from .views import (
 
 
 urlpatterns = [
-    path(
-        "",
-        PostListCreateView.as_view(),
-        name="post-list-create",
-    ),
-
-    path(
-        "<int:pk>/",
-        PostDetailView.as_view(),
-        name="post-detail",
-    ),
-
-    path(
-    "hashtags/search/",
-    HashtagSearchView.as_view(),
-    name="hashtag-search",
-),
+    path( "",PostListCreateView.as_view(),name="post-list-create",),
+    path("<int:pk>/",PostDetailView.as_view(),name="post-detail"),
+    path("hashtags/search/",HashtagSearchView.as_view(),name="hashtag-search",),
 ]

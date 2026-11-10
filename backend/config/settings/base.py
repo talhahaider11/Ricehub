@@ -4,6 +4,7 @@ from datetime import timedelta
 from importlib import import_module
 import dj_database_url
 from django.db.backends.base.base import BaseDatabaseWrapper
+import dj_database_url
 
 BaseDatabaseWrapper.check_database_version_supported = lambda self: None
 
@@ -209,8 +210,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 if dj_database_url is None and os.environ.get("DATABASE_URL"):
     raise RuntimeError("Install dj-database-url to use DATABASE_URL.")
 
-import os
-import dj_database_url
+
 
 # Load environment variables from .env file (if python-dotenv is installed)
 try:
@@ -243,10 +243,10 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME', 'ricehub'),
-            'USER': os.environ.get('DB_USER', 'ricehubuser'),
+            'NAME': os.environ.get('DB_NAME', ""),
+            'USER': os.environ.get('DB_USER', ""),
             'PASSWORD': os.environ.get('DB_PASSWORD'),
-            'HOST': os.environ.get('DB_HOST', '129.213.102.238'),
+            'HOST': os.environ.get('DB_HOST', " "),
             'PORT': os.environ.get('DB_PORT', '5432'),
             'CONN_MAX_AGE': 600,
             'CONN_HEALTH_CHECKS': True,

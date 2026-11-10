@@ -49,7 +49,7 @@ export default function MessageList({
           longPressTimer.current = window.setTimeout(() => {
             longPressTimer.current = null;
             setLongPressedMessageId(message.id);
-          }, 2000);
+          }, 550);
         };
         const cancelLongPress = () => {
           if (longPressTimer.current) {
@@ -73,6 +73,8 @@ export default function MessageList({
             onContextMenu={(event) => {
               if (!mine) return;
               event.preventDefault();
+              cancelLongPress();
+              setLongPressedMessageId(message.id);
             }}
           >
             <div className="message-bubble">
@@ -82,20 +84,41 @@ export default function MessageList({
                 </blockquote>
               )}
               {message.is_deleted
-                ? "This message was deleted."
+                ? t("messageDeleted")
                 : (
                   <>
                     {message.content && <p>{message.content}</p>}
                     {message.attachment_type === "audio" && message.attachment && (
                       <audio controls preload="metadata" src={message.attachment}>
-                        Audio playback is not supported by this browser.
+                        {t("audioUnsupported")}
                       </audio>
+                    )}
+                    {message.attachment_type === "image" && message.attachment && (
+                      <a href={message.attachment} target="_blank" rel="noreferrer">
+                        <img
+                          className="message-image-attachment"
+                          src={message.attachment}
+                          alt="Image attachment"
+                          loading="lazy"
+                        />
+                      </a>
+                    )}
+                    {message.attachment_type === "video" && message.attachment && (
+                      <video
+                        className="message-video-attachment"
+                        controls
+                        playsInline
+                        preload="metadata"
+                        src={message.attachment}
+                      >
+                        {t("videoUnsupported")}
+                      </video>
                     )}
                   </>
                 )}
             </div>
             {message.edited_at && !message.is_deleted && (
-              <small className="message-edited-label">Edited</small>
+              <small className="message-edited-label">{t("edited")}</small>
             )}
             {message.verification_warning && !mine && (
               <small className="message-verification-warning" role="alert">
@@ -104,7 +127,7 @@ export default function MessageList({
             )}
             {mine && lastOwnMessage?.id === message.id && (
               <small className="message-receipt">
-                {message.is_read ? "Seen" : "Sent"}
+                {message.is_read ? t("seen") : t("sent")}
               </small>
             )}
             {!message.is_deleted && (

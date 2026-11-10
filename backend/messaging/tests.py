@@ -43,16 +43,41 @@ class MessagingFeatureTests(APITestCase):
             status=FriendRequest.Status.ACCEPTED,
         )
 
-    def test_group_conversation_requires_existing_friend(self):
+    def test_group_conversation_can_include_a_non_friend(self):
         response = self.client.post(
             "/api/messages/conversations/group/",
             {"name": "Study group", "user_ids": [self.stranger.pk]},
             format="json",
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertFalse(
-            Conversation.objects.filter(
-                conversation_type=Conversation.ConversationType.GROUP
+        self.assertEqual(response.status_code, 201)
+        conversation = Conversation.objects.get(pk=response.data["id"])
+        self.assertTrue(
+            conversation.participants.filter(pk=self.stranger.pk).exists()
+        )
+
+    def test_group_member_can_add_another_user_by_id(self):
+        response = self.client.post(
+            "/api/messages/conversations/group/",
+            {"name": "Study group", "user_ids": [self.friend.pk]},
+            format="json",
+        )
+        conversation_id = response.data["id"]
+
+        added = self.client.post(
+            f"/api/messages/conversations/{conversation_id}/members/",
+            {"user_id": self.stranger.pk},
+            format="json",
+        )
+
+        self.assertEqual(added.status_code, 200)
+        conversation = Conversation.objects.get(pk=conversation_id)
+        self.assertTrue(
+            conversation.participants.filter(pk=self.stranger.pk).exists()
+        )
+        self.assertTrue(
+            ConversationMember.objects.filter(
+                conversation=conversation,
+                user=self.stranger,
             ).exists()
         )
 
@@ -147,6 +172,53 @@ class MessagingFeatureTests(APITestCase):
         message = Message.objects.get(pk=response.data["id"])
         self.assertEqual(message.sender, self.user)
         self.assertTrue(message.attachment.name.endswith(".webm"))
+
+    def test_image_and_video_uploads_create_typed_messages(self):
+        self.make_friends()
+        attachments = [
+            ("photo.png", b"image payload", "image/png", Message.AttachmentType.IMAGE),
+            ("clip.mp4", b"video payload", "video/mp4", Message.AttachmentType.VIDEO),
+        ]
+
+        for filename, payload, content_type, attachment_type in attachments:
+            with self.subTest(attachment_type=attachment_type):
+                upload = SimpleUploadedFile(
+                    filename,
+                    payload,
+                    content_type=content_type,
+                )
+                response = self.client.post(
+                    f"/api/messages/conversations/{self.conversation.pk}/messages/",
+                    {
+                        "content": "",
+                        "attachment": upload,
+                        "attachment_type": attachment_type,
+                    },
+                    format="multipart",
+                )
+
+                self.assertEqual(response.status_code, 201)
+                self.assertEqual(response.data["attachment_type"], attachment_type)
+
+    def test_image_upload_rejects_mismatched_mime_type(self):
+        self.make_friends()
+        upload = SimpleUploadedFile(
+            "photo.png",
+            b"not an image",
+            content_type="text/plain",
+        )
+
+        response = self.client.post(
+            f"/api/messages/conversations/{self.conversation.pk}/messages/",
+            {
+                "content": "",
+                "attachment": upload,
+                "attachment_type": Message.AttachmentType.IMAGE,
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
 
     def test_message_sender_can_edit_and_delete_own_message(self):
         message = Message.objects.create(

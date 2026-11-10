@@ -3,10 +3,13 @@ import Modal from "../common/Modal";
 import friendService from "../../services/friendService";
 import messageService from "../../services/messageService";
 import { getArrayResults } from "../../utils/arrayResults";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function CreateGroupModal({ open, onClose, onCreated }) {
+  const { t } = useLanguage();
   const [friends, setFriends] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [userId, setUserId] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -24,7 +27,7 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
       })
       .catch((loadError) => {
         console.error("Friends could not be loaded for group creation:", loadError);
-        if (active) setError("Friends could not be loaded.");
+        if (active) setError(t("friendsLoadFailed"));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -32,12 +35,31 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
     return () => {
       active = false;
     };
-  }, [open]);
+  }, [open, t]);
 
   const toggleMember = (userId) => {
     setSelectedIds((current) => current.includes(userId)
       ? current.filter((id) => id !== userId)
       : [...current, userId]);
+  };
+
+  const addUserId = () => {
+    const parsedId = Number(userId.trim());
+    if (!Number.isSafeInteger(parsedId) || parsedId <= 0) {
+      setError(t("enterValidUserId"));
+      return;
+    }
+    if (selectedIds.includes(parsedId)) {
+      setError(t("memberIdAlreadySelected"));
+      return;
+    }
+    if (selectedIds.length >= 99) {
+      setError(t("groupLimitError"));
+      return;
+    }
+    setSelectedIds((current) => [...current, parsedId]);
+    setUserId("");
+    setError("");
   };
 
   const createGroup = async (event) => {
@@ -52,6 +74,7 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
       );
       setName("");
       setSelectedIds([]);
+      setUserId("");
       onCreated(conversation);
     } catch (createError) {
       console.error("Group conversation could not be created:", createError);
@@ -70,10 +93,10 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Create group conversation">
+    <Modal open={open} onClose={onClose} title={t("createGroupConversation")}>
       <form className="create-group-form" onSubmit={createGroup}>
         <label>
-          Group name
+          {t("groupName")}
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -81,10 +104,23 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
             required
           />
         </label>
+        <div className="group-user-id-field">
+          <label htmlFor="create-group-user-id">{t("userId")}</label>
+          <div>
+            <input
+              id="create-group-user-id"
+              inputMode="numeric"
+              value={userId}
+              onChange={(event) => setUserId(event.target.value)}
+              placeholder={t("userId")}
+            />
+            <button type="button" onClick={addUserId}>{t("addUserId")}</button>
+          </div>
+        </div>
         <fieldset>
-          <legend>Select friends</legend>
-          {loading && <p>Loading friends...</p>}
-          {!loading && friends.length === 0 && <p>No friends available.</p>}
+          <legend>{t("selectFriends")}</legend>
+          {loading && <p>{t("loadingFriends")}</p>}
+          {!loading && friends.length === 0 && <p>{t("noFriends")}</p>}
           {friends.map((friend) => (
             <label className="group-friend-option" key={friend.id}>
               <input
@@ -96,12 +132,17 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
             </label>
           ))}
         </fieldset>
+        {selectedIds.length > 0 && (
+          <p className="group-selected-members">
+            {t("selectedMembers")}: {selectedIds.join(", ")}
+          </p>
+        )}
         {error && <p className="error" role="alert">{error}</p>}
         <button
           type="submit"
-          disabled={loading || creating || !name.trim() || !selectedIds.length}
+          disabled={creating || !name.trim() || !selectedIds.length}
         >
-          {creating ? "Creating..." : "Create group"}
+          {creating ? t("creating") : t("createGroup")}
         </button>
       </form>
     </Modal>

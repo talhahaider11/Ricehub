@@ -11,6 +11,7 @@ import {
   Moon,
   Settings,
   Shield,
+  Store,
   Sun,
   TrendingUp,
   UserPlus,
@@ -21,27 +22,30 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import Avatar from "../common/Avatar";
 import { useTheme } from "../../context/ThemeContext";
 import useAuth from "../../hooks/useAuth";
+import { useLanguage } from "../../context/LanguageContext";
 
 const primaryLinks = [
-  { label: "Home", path: "/", icon: Home },
-  { label: "Messages", path: "/messages", icon: MessageCircle },
-  { label: "Suggestions", path: "/suggestions", icon: UsersRound },
+  { label: "home", path: "/", icon: Home },
+  { label: "messages", path: "/messages", icon: MessageCircle },
+  { label: "suggestions", path: "/suggestions", icon: UsersRound },
 ];
 
 const additionalLinks = [
-  { label: "Discover", path: "/discover", icon: Compass },
-  { label: "Explore", path: "/explore", icon: TrendingUp },
-  { label: "Friend requests", path: "/friend-requests", icon: UserPlus },
-  { label: "Notifications", path: "/notifications", icon: Bell },
-  { label: "Get verified", path: "/billing", icon: Shield },
+  { label: "discover", path: "/discover", icon: Compass },
+  { label: "marketplace", path: "/marketplace", icon: Store },
+  { label: "explore", path: "/explore", icon: TrendingUp },
+  { label: "friendRequests", path: "/friend-requests", icon: UserPlus },
+  { label: "notifications", path: "/notifications", icon: Bell },
+  { label: "getVerified", path: "/billing", icon: Shield },
 ];
 
-function displayName(user) {
+function displayName(user, fallback) {
   const name = [user?.first_name, user?.last_name].filter(Boolean).join(" ");
-  return name || user?.username || "Your account";
+  return name || user?.username || fallback;
 }
 
 export default function MobileMenu({ onClose }) {
+  const { t } = useLanguage();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
@@ -118,7 +122,7 @@ export default function MobileMenu({ onClose }) {
     navigate("/login");
   };
 
-  const name = displayName(user);
+  const name = displayName(user, t("yourAccount"));
   const profilePath = `/profile/${user?.id}`;
 
   return (
@@ -126,7 +130,7 @@ export default function MobileMenu({ onClose }) {
       <button
         className="mobile-menu-backdrop"
         type="button"
-        aria-label="Close menu"
+        aria-label={t("closeMenu")}
         onClick={onClose}
       />
       <aside
@@ -135,21 +139,21 @@ export default function MobileMenu({ onClose }) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="RiceHub menu"
+        aria-label={t("riceHubMenu")}
       >
         <div className="mobile-menu-profile">
           <Link className="mobile-menu-account" to={profilePath} onClick={onClose}>
             <Avatar src={user?.profile_picture} name={name} size={42} />
             <span>
               <strong>{name}</strong>
-              <small>View your profile</small>
+              <small>{t("yourProfile")}</small>
             </span>
           </Link>
           <Link
             className="mobile-menu-profile-edit"
             to="/profile/edit"
             onClick={onClose}
-            aria-label="Edit profile"
+            aria-label={t("editProfile")}
           >
             <Settings size={18} />
           </Link>
@@ -157,35 +161,35 @@ export default function MobileMenu({ onClose }) {
             ref={closeButtonRef}
             className="mobile-menu-profile-edit"
             type="button"
-            aria-label="Close menu"
+            aria-label={t("closeMenu")}
             onClick={onClose}
           >
             <X size={18} />
           </button>
         </div>
 
-        <nav className="mobile-menu-links" aria-label="Main menu">
+        <nav className="mobile-menu-links" aria-label={t("mainMenu")}>
           {primaryLinks.map(({ label, path, icon: Icon }) => (
             <Link key={path} to={path} onClick={onClose}>
               <Icon size={21} />
-              <span>{label}</span>
+              <span>{t(label)}</span>
             </Link>
           ))}
         </nav>
 
         {expandedSections.more && (
           <div className="mobile-menu-extra-section">
-            <nav className="mobile-menu-links mobile-menu-extra" aria-label="More">
+            <nav className="mobile-menu-links mobile-menu-extra" aria-label={t("more")}>
               {additionalLinks.map(({ label, path, icon: Icon }) => (
                 <Link key={path} to={path} onClick={onClose}>
                   <Icon size={21} />
-                  <span>{label}</span>
+                  <span>{t(label)}</span>
                 </Link>
               ))}
               {user?.is_staff && (
                 <Link to="/admin" onClick={onClose}>
                   <Shield size={21} />
-                  <span>Administration dashboard</span>
+                  <span>{t("administration")}</span>
                 </Link>
               )}
             </nav>
@@ -195,7 +199,7 @@ export default function MobileMenu({ onClose }) {
               aria-expanded="true"
               onClick={() => toggleSection("more")}
             >
-              See less
+              {t("seeLess")}
               <ChevronDown size={18} aria-hidden="true" />
             </button>
           </div>
@@ -207,7 +211,7 @@ export default function MobileMenu({ onClose }) {
             aria-expanded="false"
             onClick={() => toggleSection("more")}
           >
-            See more
+            {t("seeMore")}
             <ChevronDown size={18} aria-hidden="true" />
           </button>
         )}
@@ -219,13 +223,13 @@ export default function MobileMenu({ onClose }) {
             aria-expanded={expandedSections.support}
             onClick={() => toggleSection("support")}
           >
-            <span><HelpCircle size={20} /> Help and support</span>
+            <span><HelpCircle size={20} /> {t("helpSupport")}</span>
             <ChevronDown size={18} aria-hidden="true" />
           </button>
           {expandedSections.support && (
             <div className="mobile-menu-help">
-              <p>Browse answers or report a problem.</p>
-              <Link to="/help-support" onClick={onClose}>Open Help and support</Link>
+              <p>{t("browseHelp")}</p>
+              <Link to="/help-support" onClick={onClose}>{t("openHelp")}</Link>
             </div>
           )}
         </section>
@@ -237,26 +241,26 @@ export default function MobileMenu({ onClose }) {
             aria-expanded={expandedSections.settings}
             onClick={() => toggleSection("settings")}
           >
-            <span><Settings size={20} /> Settings and privacy</span>
+            <span><Settings size={20} /> {t("settingsPrivacy")}</span>
             <ChevronDown size={18} aria-hidden="true" />
           </button>
           {expandedSections.settings && (
             <div className="mobile-menu-subitems">
               <Link to="/settings" onClick={onClose}>
                 <Settings size={19} />
-                <span>Settings</span>
+                <span>{t("settings")}</span>
               </Link>
               <Link to="/settings#privacy" onClick={onClose}>
                 <Shield size={19} />
-                <span>Privacy and audience</span>
+                <span>{t("privacyAudience")}</span>
               </Link>
               <Link to="/settings#security" onClick={onClose}>
                 <LockKeyhole size={19} />
-                <span>Security and login</span>
+                <span>{t("securityLogin")}</span>
               </Link>
               <button type="button" onClick={toggleTheme}>
                 {theme === "light" ? <Moon size={19} /> : <Sun size={19} />}
-                <span>Appearance · turn {theme === "light" ? "dark" : "light"} mode on</span>
+                <span>{t("appearance", { mode: t(theme === "light" ? "dark" : "light") })}</span>
               </button>
             </div>
           )}
@@ -264,9 +268,9 @@ export default function MobileMenu({ onClose }) {
 
         <button type="button" className="mobile-menu-logout" onClick={handleLogout}>
           <LogOut size={19} />
-          <span>Log out</span>
+          <span>{t("logOut")}</span>
         </button>
-        <footer className="mobile-menu-footer">RiceHub · Connect · Share · Belong</footer>
+        <footer className="mobile-menu-footer">{t("riceHubSlogan")}</footer>
       </aside>
     </>
   );

@@ -27,6 +27,7 @@ from .models import (
     MarketplaceListing,
     MarketplaceOrder,
 )
+from messaging.models import Conversation, ConversationMember
 from .serializers import (
     CommunitySerializer,
     CommunityPostSerializer,
@@ -64,11 +65,26 @@ class CommunityListCreateView(generics.ListCreateAPIView):
                 user=self.request.user,
                 role=CommunityMembership.Role.ADMIN,
             )
+            if community.kind == Community.Kind.GROUP:
+                conversation = Conversation.objects.create(
+                    conversation_type=Conversation.ConversationType.GROUP,
+                    name=community.name,
+                    created_by=self.request.user,
+                )
+                conversation.participants.add(self.request.user)
+                ConversationMember.objects.create(
+                    conversation=conversation,
+                    user=self.request.user,
+                    role=ConversationMember.Role.ADMIN,
+                )
+                community.conversation = conversation
+                community.save(update_fields=("conversation",))
 
 
 class CommunityMembershipView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, community_id):
         community = get_object_or_404(Community, pk=community_id)
         if community.owner_id in get_blocked_user_ids(request.user):
@@ -82,11 +98,18 @@ class CommunityMembershipView(APIView):
             community=community,
             user=request.user,
         )
+        if created and community.conversation_id:
+            community.conversation.participants.add(request.user)
+            ConversationMember.objects.create(
+                conversation=community.conversation,
+                user=request.user,
+            )
         return Response(
             {"member": True, "role": membership.role},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
+    @transaction.atomic
     def delete(self, request, community_id):
         community = get_object_or_404(Community, pk=community_id)
         membership = CommunityMembership.objects.filter(
@@ -100,6 +123,12 @@ class CommunityMembershipView(APIView):
             )
         if membership:
             membership.delete()
+            if community.conversation_id:
+                community.conversation.participants.remove(request.user)
+                ConversationMember.objects.filter(
+                    conversation=community.conversation,
+                    user=request.user,
+                ).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

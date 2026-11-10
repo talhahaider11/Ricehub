@@ -66,62 +66,29 @@ urlpatterns = [
         name="hashtag-detail",
     ),
     path("api/explore/", ExploreView.as_view(), name="explore"),
-
-    # API root
     path("api/", api_root, name="api-root"),
-
-    # Posts
     path("api/posts/", include("posts.urls")),
     path("api/billing/", include("billing.urls")),
     path("api/media/", include("media_app.urls")),
     path("api/feed/", include("feed.urls")),
     path("api/stories/", include("stories.urls")),
-
-    # Comments and reactions
     path("api/", include("comments.urls")),
     path("api/", include("reactions.urls")),
-
-    # Friends, messages, notifications
     path("api/friends/", include("friendships.urls")),
     path("api/messages/", include("messaging.urls")),
     path("api/notifications/", include("notifications.urls")),
-
-    # Search
     path("api/search/", include("search.urls")),
-
-    # Community
     path("api/community/", include("community.urls")),
-
-    # Moderation and staff dashboard APIs
     path("api/moderation/", include("moderation.urls")),
     path("api/admin/", include("administration.urls")),
-
-    # Authentication
     path("api/token/", LoginView.as_view(), name="token_obtain_pair"),
-    path(
-        "api/token/refresh/",
-        SecurityTokenRefreshView.as_view(),
-        name="token_refresh",
-    ),
+    path("api/token/refresh/",SecurityTokenRefreshView.as_view(),name="token_refresh",),
     path("api/auth/login/", LoginView.as_view(), name="auth-login"),
-    path(
-        "api/auth/refresh/",
-        SecurityTokenRefreshView.as_view(),
-        name="auth-refresh",
-    ),
-
-    # API documentation
+    path("api/auth/refresh/",SecurityTokenRefreshView.as_view(),name="auth-refresh",),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path(
-        "api/docs/",
-        SpectacularSwaggerView.as_view(url_name="schema"),
-        name="swagger-ui",
-    ),
-
-    # Health checks
+    path("api/docs/",SpectacularSwaggerView.as_view(url_name="schema"),name="swagger-ui",),
     path("api/health/", health_check, name="api-health"),
     path("health/", health_check, name="health_check"),
-    
 ]
 
 if settings.DEBUG:

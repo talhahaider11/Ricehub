@@ -177,6 +177,29 @@ class MessageSerializer(
                 raise serializers.ValidationError(
                     {"attachment": "Voice notes must be a supported audio file."}
                 )
+        elif attachment and attachment_type in {
+            Message.AttachmentType.IMAGE,
+            Message.AttachmentType.VIDEO,
+        }:
+            allowed_media = {
+                Message.AttachmentType.IMAGE: {
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".png": "image/png",
+                    ".webp": "image/webp",
+                },
+                Message.AttachmentType.VIDEO: {
+                    ".mp4": "video/mp4",
+                    ".webm": "video/webm",
+                    ".mov": "video/quicktime",
+                },
+            }
+            extension = PurePath(attachment.name).suffix.lower()
+            content_type = getattr(attachment, "content_type", "") or ""
+            if allowed_media[attachment_type].get(extension) != content_type:
+                raise serializers.ValidationError(
+                    {"attachment": "Choose a supported image or video file."}
+                )
         reply_to = attrs.get("reply_to")
         conversation_id = self.context.get("conversation_id")
         if (

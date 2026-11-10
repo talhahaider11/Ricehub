@@ -84,6 +84,8 @@ class Message(models.Model):
     class AttachmentType(models.TextChoices):
         FILE = "file", "File"
         AUDIO = "audio", "Voice note"
+        IMAGE = "image", "Image"
+        VIDEO = "video", "Video"
 
     conversation = models.ForeignKey(
         "Conversation",

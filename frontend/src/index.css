@@ -5699,6 +5699,14 @@ a {
 }
 
 @media (max-width: 768px) {
+  .navbar {
+    top: 3px;
+  }
+
+  .mobile-nav {
+    bottom: 3px;
+  }
+
   .navbar-inner {
     min-height: 64px;
     gap: 12px;
@@ -5725,6 +5733,19 @@ a {
   .mobile-nav {
     padding-bottom: env(safe-area-inset-bottom);
   }
+}
+
+.message-image-attachment,
+.message-video-attachment {
+  display: block;
+  width: min(100%, 360px);
+  max-height: 360px;
+  border-radius: 12px;
+  object-fit: contain;
+}
+
+.message-attachment-input {
+  display: none;
 }
 
 @media (max-width: 480px) {
@@ -6074,5 +6095,179 @@ a {
 
   .message-input-button-label {
     display: none;
+  }
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+.messages-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+}
+
+.messages-shell .app-body {
+  display: flex;
+  flex: 1 1 0;
+  height: 100%;
+  min-height: 0;
+}
+
+.messages-shell .main-content,
+.messages-shell .main-content > .page-transition,
+.messages-shell .messages-page {
+  height: 100%;
+  min-height: 0;
+}
+
+.messages-shell .messages-page.has-selected-conversation {
+  display: flex;
+  min-height: 0;
+}
+
+.messages-shell .chat-window {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+}
+
+.messages-shell .chat-header {
+  flex: 0 0 auto;
+}
+
+.messages-shell .message-list {
+  min-height: 0;
+  flex: 1 1 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.messages-shell .message-input {
+  flex: 0 0 auto;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  background: var(--surface);
+}
+
+.chat-add-member-button {
+  min-height: 38px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-secondary);
+  color: var(--text);
+}
+
+.chat-add-member-button:hover {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary);
+}
+
+.group-user-id-field > div,
+.group-user-id-form > div {
+  display: flex;
+  gap: 8px;
+}
+
+.group-user-id-field input,
+.group-user-id-form input {
+  min-width: 0;
+  flex: 1;
+}
+
+.group-user-id-field button,
+.group-user-id-form button {
+  flex: 0 0 auto;
+}
+
+.group-member-list {
+  display: grid;
+  max-height: 32vh;
+  gap: 6px;
+  overflow-y: auto;
+  padding-inline-start: 20px;
+}
+
+.message-share-notice {
+  color: var(--success);
+  font-size: 12px;
+}
+
+.social-hub,
+.social-section,
+.social-form,
+.social-card {
+  min-width: 0;
+}
+
+.social-search {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+}
+
+.social-search input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.social-card > img,
+.social-card > video {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
+
+html[dir="rtl"] .message-actions-menu {
+  right: auto;
+  left: auto;
+  inset-inline-start: 0;
+  text-align: start;
+}
+
+html[dir="rtl"] .message.mine .message-actions-menu {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+}
+
+html[dir="rtl"] .conversation {
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .messages-shell .messages-page.has-selected-conversation {
+    display: flex;
+  }
+
+  .messages-shell .chat-window {
+    min-height: 0;
+  }
+
+  .social-hub {
+    padding-inline: 0;
+  }
+
+  .social-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 420px) {
+  .chat-header {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+
+  .chat-add-member-button {
+    max-width: 108px;
+    padding-inline: 8px;
+    font-size: 12px;
   }
 }
