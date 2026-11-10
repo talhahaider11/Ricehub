@@ -1,3 +1,4 @@
+import json
 import logging
 
 from asgiref.sync import async_to_sync
@@ -11,6 +12,7 @@ from rest_framework import generics, status
 from config.permissions import IsActiveAndNotSuspended as IsAuthenticated
 from config.throttling import MessageRateThrottle
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.utils.encoders import JSONEncoder
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from redis.exceptions import RedisError
@@ -47,12 +49,19 @@ def broadcast_message_event(conversation_id, event_type, payload):
         )
         return
     try:
+        event_payload = json.loads(json.dumps(payload, cls=JSONEncoder))
         async_to_sync(channel_layer.group_send)(
             f"chat_{conversation_id}",
             {
                 "type": event_type,
-                **payload,
+                **event_payload,
             },
+        )
+    except (TypeError, ValueError):
+        logger.exception(
+            "Message event %s for conversation %s contained unsupported data.",
+            event_type,
+            conversation_id,
         )
     except (ChannelFull, RedisError):
         logger.exception(

@@ -1,3 +1,6 @@
+from datetime import datetime
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
@@ -172,6 +175,38 @@ class MessagingFeatureTests(APITestCase):
         message = Message.objects.get(pk=response.data["id"])
         self.assertEqual(message.sender, self.user)
         self.assertTrue(message.attachment.name.endswith(".webm"))
+
+    def test_sending_message_broadcasts_json_safe_timestamps(self):
+        self.make_friends()
+
+        class RecordingChannelLayer:
+            event = None
+
+            async def group_send(self, group, event):
+                self.event = event
+
+        channel_layer = RecordingChannelLayer()
+        with patch("messaging.views.get_channel_layer", return_value=channel_layer):
+            response = self.client.post(
+                f"/api/messages/conversations/{self.conversation.pk}/messages/",
+                {"content": "Hello"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsInstance(channel_layer.event["message"]["created_at"], str)
+        response_timestamp = response.data["created_at"]
+        if isinstance(response_timestamp, str):
+            response_timestamp = datetime.fromisoformat(
+                response_timestamp.replace("Z", "+00:00")
+            )
+        broadcast_timestamp = datetime.fromisoformat(
+            channel_layer.event["message"]["created_at"].replace("Z", "+00:00")
+        )
+        self.assertEqual(
+            broadcast_timestamp,
+            response_timestamp,
+        )
 
     def test_image_and_video_uploads_create_typed_messages(self):
         self.make_friends()
