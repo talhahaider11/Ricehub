@@ -5,7 +5,7 @@ import { useLanguage } from "../../context/LanguageContext";
 
 export default function SearchBar() {
   const { t } = useLanguage();
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const [query, setQuery] = useState(params.get("q") || "");
   const location = useLocation();
   const navigate = useNavigate();
@@ -15,17 +15,6 @@ export default function SearchBar() {
       setQuery(params.get("q") || "");
     }
   }, [location.pathname, params]);
-
-  const updateQuery = (value) => {
-    setQuery(value);
-    const nextParams = new URLSearchParams();
-    if (value) nextParams.set("q", value);
-    if (location.pathname === "/search") {
-      setParams(nextParams, { replace: true });
-    } else {
-      navigate(`/search${value ? `?q=${encodeURIComponent(value)}` : ""}`);
-    }
-  };
 
   return (
     <div className="navbar-search">
@@ -42,7 +31,7 @@ export default function SearchBar() {
           type="search"
           aria-label={t("searchUsersPosts")}
           value={query}
-          onChange={(event) => updateQuery(event.target.value)}
+          onChange={(event) => setQuery(event.target.value)}
           placeholder={t("searchRiceHub")}
         />
       </form>

@@ -44,7 +44,6 @@ export default function MessageList({
           String(currentUser?.id);
 
         const startLongPress = () => {
-          if (!mine) return;
           if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
           longPressTimer.current = window.setTimeout(() => {
             longPressTimer.current = null;
@@ -71,7 +70,6 @@ export default function MessageList({
             onPointerLeave={cancelLongPress}
             onPointerCancel={cancelLongPress}
             onContextMenu={(event) => {
-              if (!mine) return;
               event.preventDefault();
               cancelLongPress();
               setLongPressedMessageId(message.id);

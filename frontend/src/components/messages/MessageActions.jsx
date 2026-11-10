@@ -20,8 +20,8 @@ export default function MessageActions({
   const actionsRef = useRef(null);
 
   useEffect(() => {
-    if (own) setMenuOpen(open);
-  }, [open, own]);
+    setMenuOpen(open);
+  }, [open]);
 
   const closeMenu = useCallback(() => {
     setMenuOpen(false);

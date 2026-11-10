@@ -16,18 +16,18 @@ vi.mock("../common/Avatar", () => ({
 }));
 
 vi.mock("../media/MediaUploader", () => ({
-  default: () => null,
-}));
-
-vi.mock("../media/CameraCapture", () => ({
-  default: function CameraCaptureMock({ onCapture, disabled }) {
+  default: function MediaUploaderMock({ onUploaded }) {
     return (
       <button
         type="button"
-        disabled={disabled}
-        onClick={() => onCapture(new File(["captured"], "camera.jpg", { type: "image/jpeg" }))}
+        onClick={() => onUploaded([{
+          id: 21,
+          media_type: "image",
+          original_filename: "camera.jpg",
+          url: "/camera.jpg",
+        }])}
       >
-        Open camera
+        Add captured photo
       </button>
     );
   },
@@ -46,18 +46,15 @@ describe("CreatePost", () => {
     postService.create.mockResolvedValue({ id: 12 });
   });
 
-  it("adds a camera photo to the post submission", async () => {
+  it("adds uploaded camera media to the post submission", async () => {
     render(<CreatePost />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add captured photo" }));
     fireEvent.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() => expect(postService.create).toHaveBeenCalledOnce());
     const formData = postService.create.mock.calls[0][0];
-    expect(formData.get("image")).toMatchObject({
-      name: "camera.jpg",
-      type: "image/jpeg",
-    });
+    expect(formData.get("media_ids")).toBe("21");
     expect(formData.get("post_type")).toBe("post");
   });
 });

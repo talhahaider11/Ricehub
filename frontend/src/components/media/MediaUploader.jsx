@@ -1,13 +1,11 @@
 import { useState } from "react";
-import { Capacitor } from "@capacitor/core";
-import { ImagePlus, Video } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 
 import {
   MAX_POST_IMAGE_SIZE,
   MAX_POST_VIDEO_SIZE,
 } from "../../utils/constants";
 import { uploadMedia } from "../../services/mediaService";
-import { NativeMediaSource, pickPhoto } from "../../services/nativeMediaService";
 import { getMediaType } from "../../utils/media";
 import UploadProgress from "./UploadProgress";
 import CameraCapture from "./CameraCapture";
@@ -32,8 +30,6 @@ export default function MediaUploader({
   const [progress, setProgress] = useState(0);
   const [filename, setFilename] = useState("");
   const [error, setError] = useState("");
-  const isNative = Capacitor.isNativePlatform();
-
   async function uploadFiles(files) {
     if (!files.length) return;
     if (files.length > maxFiles) {
@@ -78,34 +74,6 @@ export default function MediaUploader({
     }
   }
 
-  async function chooseNativePhoto(source) {
-    setError("");
-    try {
-      const photo = await pickPhoto(source);
-      if (!photo) {
-        return;
-      }
-      if (!photo.webPath) {
-        throw new Error("The selected photo could not be opened.");
-      }
-      const response = await fetch(photo.webPath);
-      if (!response.ok) {
-        throw new Error("The selected photo could not be read.");
-      }
-      const blob = await response.blob();
-      const file = new File(
-        [blob],
-        `ricehub-photo-${Date.now()}.jpg`,
-        { type: blob.type || "image/jpeg" }
-      );
-      await uploadFiles([file]);
-    } catch (cameraError) {
-      if (cameraError.message !== "User cancelled photos app") {
-        setError(getErrorMessage(cameraError));
-      }
-    }
-  }
-
   return (
     <div className="media-uploader">
       <label className="media-uploader-file">
@@ -122,19 +90,6 @@ export default function MediaUploader({
           }}
         />
       </label>
-
-      {isNative && (
-        <div className="media-native-actions">
-          <button
-            type="button"
-            disabled={uploading || maxFiles <= 0}
-            onClick={() => void chooseNativePhoto(NativeMediaSource.PHOTOS)}
-          >
-            <ImagePlus size={17} /> Choose photo
-          </button>
-          <span><Video size={16} /> Video: use Add photos/videos</span>
-        </div>
-      )}
 
       {showCamera && (
         <CameraCapture

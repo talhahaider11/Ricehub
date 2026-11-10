@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import CreateGroupModal from "../components/messages/CreateGroupModal";
+import friendService from "../services/friendService";
 import messageService from "../services/messageService";
 import useMessages from "../hooks/useMessages";
 import useAuth from "../hooks/useAuth";
@@ -58,11 +59,32 @@ export default function Messages() {
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState(null);
   const [lastSeenNow, setLastSeenNow] = useState(() => Date.now());
+  const [onlineFriends, setOnlineFriends] = useState([]);
+  const [friendError, setFriendError] = useState("");
+  const [openingFriend, setOpeningFriend] = useState("");
 
   useEffect(() => {
     const timer = window.setInterval(() => setLastSeenNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    friendService.list()
+      .then((data) => {
+        if (!active) return;
+        const friends = getArrayResults(data, "Friends");
+        setOnlineFriends(friends.filter((friend) => friend.is_online === true));
+        setFriendError("");
+      })
+      .catch((loadError) => {
+        console.error("Online friends could not be loaded:", loadError);
+        if (active) setFriendError(t("friendsLoadFailed"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [t]);
 
   useEffect(() => {
     let active = true;
@@ -150,6 +172,37 @@ export default function Messages() {
     ]);
     setSelectedConversation(conversation.id);
     setGroupModalOpen(false);
+  };
+  const handleSelectFriend = async (friend) => {
+    if (!friend?.username || openingFriend) return;
+    const existing = conversations.find((conversation) => {
+      if (conversation.is_group || conversation.conversation_type === "group") return false;
+      const participant = conversation.other_user
+        || conversation.participants?.find(
+          (item) => String(item.id) !== String(user?.id)
+        );
+      return participant?.username === friend.username;
+    });
+    if (existing) {
+      setSelectedConversation(existing.id);
+      return;
+    }
+
+    setOpeningFriend(friend.username);
+    setFriendError("");
+    try {
+      const conversation = await messageService.createConversation(friend.username);
+      setConversations((current) => [
+        conversation,
+        ...current.filter((item) => String(item.id) !== String(conversation.id)),
+      ]);
+      setSelectedConversation(conversation.id);
+    } catch (openError) {
+      console.error("Conversation with online friend could not be opened:", openError);
+      setFriendError(t("conversationOpenFailed"));
+    } finally {
+      setOpeningFriend("");
+    }
   };
   const handleEdit = async (message, content) => {
     const updated = await messageService.editMessage(message.id, content);
@@ -317,6 +370,10 @@ export default function Messages() {
           onSelect={setSelectedConversation}
           currentUser={user}
           onCreateGroup={() => setGroupModalOpen(true)}
+          onlineFriends={onlineFriends}
+          onSelectFriend={handleSelectFriend}
+          openingFriend={openingFriend}
+          friendError={friendError}
         />
       )}
       <CreateGroupModal

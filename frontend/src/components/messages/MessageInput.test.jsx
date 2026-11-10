@@ -1,9 +1,22 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MessageInput from "./MessageInput";
 
 const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
 const secureContextDescriptor = Object.getOwnPropertyDescriptor(window, "isSecureContext");
+const createObjectURLDescriptor = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+const revokeObjectURLDescriptor = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+
+beforeEach(() => {
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: vi.fn(() => "blob:message-preview"),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: vi.fn(),
+  });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -18,10 +31,20 @@ afterEach(() => {
   } else {
     delete window.isSecureContext;
   }
+  if (createObjectURLDescriptor) {
+    Object.defineProperty(URL, "createObjectURL", createObjectURLDescriptor);
+  } else {
+    delete URL.createObjectURL;
+  }
+  if (revokeObjectURLDescriptor) {
+    Object.defineProperty(URL, "revokeObjectURL", revokeObjectURLDescriptor);
+  } else {
+    delete URL.revokeObjectURL;
+  }
 });
 
 describe("MessageInput", () => {
-  it("sends selected photo and video attachments with their media type", async () => {
+  it("previews a selected attachment and sends only after confirmation", async () => {
     const onSendAttachment = vi.fn().mockResolvedValue(undefined);
     render(<MessageInput onSend={vi.fn()} onSendAttachment={onSendAttachment} />);
     const file = new File(["photo"], "photo.png", { type: "image/png" });
@@ -30,12 +53,17 @@ describe("MessageInput", () => {
       target: { files: [file] },
     });
 
+    expect(await screen.findByRole("region", { name: "Attachment preview" }))
+      .toBeInTheDocument();
+    expect(onSendAttachment).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send attachment" }));
     await waitFor(() => {
       expect(onSendAttachment).toHaveBeenCalledWith(file, undefined, "image");
     });
   });
 
-  it("sends a photo captured from the in-app camera", async () => {
+  it("previews a photo captured from the in-app camera before sending", async () => {
     const track = { stop: vi.fn() };
     const stream = { getTracks: () => [track] };
     const getUserMedia = vi.fn().mockResolvedValue(stream);
@@ -61,6 +89,11 @@ describe("MessageInput", () => {
     Object.defineProperty(video, "videoWidth", { configurable: true, value: 640 });
     Object.defineProperty(video, "videoHeight", { configurable: true, value: 480 });
     fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+
+    expect(await screen.findByRole("region", { name: "Attachment preview" }))
+      .toBeInTheDocument();
+    expect(onSendAttachment).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Send attachment" }));
 
     await waitFor(() => {
       expect(onSendAttachment).toHaveBeenCalledOnce();

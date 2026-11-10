@@ -9,7 +9,7 @@ function CurrentLocation() {
 }
 
 describe("SearchBar", () => {
-  it("opens the focused search view as the user types", async () => {
+  it("keeps focus while typing and navigates when submitted", async () => {
     render(
       <MemoryRouter>
         <SearchBar />
@@ -17,14 +17,17 @@ describe("SearchBar", () => {
       </MemoryRouter>
     );
 
-    fireEvent.change(screen.getByRole("searchbox", { name: /users and posts/i }), {
+    const input = screen.getByRole("searchbox", { name: /users and posts/i });
+    input.focus();
+    fireEvent.change(input, {
       target: { value: "wheat" },
     });
 
-    await waitFor(() => {
-      expect(screen.getByLabelText("Current location")).toHaveTextContent(
-        "/search?q=wheat"
-      );
-    });
+    expect(screen.getByLabelText("Current location")).toHaveTextContent("/");
+    expect(input).toHaveFocus();
+
+    fireEvent.submit(input.closest("form"));
+    await waitFor(() => expect(screen.getByLabelText("Current location"))
+      .toHaveTextContent("/search?q=wheat"));
   });
 });

@@ -617,6 +617,16 @@ textarea:focus-visible {
   color: var(--muted);
 }
 
+.post-author-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.post-author-name .verified-badge {
+  margin-left: 0;
+}
+
 .post-content {
   white-space: pre-wrap;
   line-height: 1.55;
@@ -6098,6 +6108,177 @@ a {
   }
 }
 
+.online-friends {
+  padding: 12px 16px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.online-friends h3 {
+  margin: 0 0 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.online-friends-list {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 2px 1px 5px;
+  scrollbar-width: thin;
+}
+
+.online-friend {
+  display: grid;
+  flex: 0 0 60px;
+  justify-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.online-friend:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: var(--surface-secondary);
+}
+
+.online-friend:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.online-friend-avatar {
+  position: relative;
+}
+
+.online-friend-dot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: #20bf63;
+}
+
+.online-friend-name {
+  max-width: 60px;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.online-friends-empty,
+.online-friends-error {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.online-friends-error {
+  color: var(--danger);
+}
+
+.message-attachment-preview {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.message-attachment-preview img,
+.message-attachment-preview video {
+  display: block;
+  width: min(128px, 30vw);
+  max-height: 100px;
+  border-radius: 10px;
+  background: var(--surface-secondary);
+  object-fit: cover;
+}
+
+.message-attachment-preview audio {
+  width: min(320px, 62vw);
+  max-width: 100%;
+}
+
+.message-attachment-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.message-attachment-preview-actions button {
+  min-height: 38px;
+  border-radius: 10px;
+}
+
+.message-attachment-cancel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.message-attachment-send {
+  background: var(--primary);
+  color: #fff;
+}
+
+.message-bubble {
+  max-width: min(82vw, 500px);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.message-bubble audio,
+.message-bubble video {
+  display: block;
+  width: min(300px, calc(100vw - 120px));
+  max-width: 100%;
+}
+
+.messages-page .message-list {
+  box-sizing: border-box;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+  .message-actions .message-actions-trigger {
+    display: none;
+  }
+
+  .message-attachment-preview {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+}
+
+@media (max-width: 420px) {
+  .message-attachment-preview {
+    flex-wrap: wrap;
+  }
+
+  .message-attachment-preview-actions {
+    width: 100%;
+  }
+
+  .message-attachment-preview-actions button {
+    flex: 1;
+  }
+}
+
 #root {
   min-height: 100dvh;
 }
@@ -6119,18 +6300,6 @@ a {
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
-}
-
-.create-post-actions .camera-capture-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.create-post-actions .camera-capture-trigger:hover {
-  background: var(--surface-secondary);
 }
 
 .message-input .camera-capture-trigger {
@@ -6323,8 +6492,7 @@ a {
 [data-theme="light"] :is(
   .search-bar,
   .social-search input,
-  .admin-user-search input,
-  input[type="search"]
+  .admin-user-search input
 ) {
   border-color: #111;
   background-color: #111;
@@ -6333,8 +6501,7 @@ a {
 
 [data-theme="light"] :is(
   .social-search input,
-  .admin-user-search input,
-  input[type="search"]
+  .admin-user-search input
 )::placeholder,
 [data-theme="light"] .search-bar input::placeholder {
   color: #d1d5db;
@@ -6352,14 +6519,19 @@ a {
 [data-theme="dark"] :is(
   .search-bar,
   .social-search input,
-  .admin-user-search input,
-  input[type="search"]
+  .admin-user-search input
 ) {
   border-color: #fff;
 }
 
 [data-theme="dark"] .search-bar input {
   border-color: transparent;
+  background: transparent;
+}
+
+[data-theme="light"] .search-bar input {
+  border-color: transparent;
+  background: transparent;
 }
 
 [data-theme="dark"] .search-bar:focus-within {

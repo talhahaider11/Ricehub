@@ -169,11 +169,12 @@ export default function PostCard({
           >
             <Avatar user={post.author} />
             <span>
-              <strong>
-                {post.author?.first_name || post.author?.username}
-              </strong>
-              <VerifiedBadge verified={post.author?.is_verified} />
-              <small>@{post.author?.username}</small>
+              <span className="post-author-name">
+                <strong>
+                  {post.author?.first_name || post.author?.username}
+                </strong>
+                <VerifiedBadge verified={post.author?.is_verified} />
+              </span>
             </span>
           </Link>
         </div>

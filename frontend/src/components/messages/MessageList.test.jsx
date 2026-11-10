@@ -46,6 +46,37 @@ describe("MessageList", () => {
       .toBeInTheDocument();
   });
 
+  it("shows reply and share actions for an incoming message after a hold", () => {
+    vi.useFakeTimers();
+    Element.prototype.scrollIntoView = vi.fn();
+
+    render(
+      <MessageList
+        messages={[
+          {
+            id: 2,
+            content: "Their message",
+            sender: { id: 8 },
+          },
+        ]}
+        currentUser={{ id: 7 }}
+        onReply={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    fireEvent.pointerDown(screen.getByText("Their message").closest(".message"));
+    act(() => {
+      vi.advanceTimersByTime(550);
+    });
+
+    expect(screen.getByRole("menuitem", { name: "Reply" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Unsend" })).not.toBeInTheDocument();
+  });
+
   it("shows a single sent or seen receipt for the latest own message", () => {
     render(
       <MessageList

@@ -5,16 +5,24 @@ import Messages from "./Messages";
 
 const mocks = vi.hoisted(() => ({
   conversations: vi.fn(),
+  createConversation: vi.fn(),
+  friends: vi.fn(),
   useMessages: vi.fn(),
 }));
 
 vi.mock("../services/messageService", () => ({
   default: {
     conversations: mocks.conversations,
-    createConversation: vi.fn(),
+    createConversation: mocks.createConversation,
     sendAttachment: vi.fn(),
     editMessage: vi.fn(),
     deleteMessage: vi.fn(),
+  },
+}));
+
+vi.mock("../services/friendService", () => ({
+  default: {
+    list: mocks.friends,
   },
 }));
 
@@ -49,6 +57,7 @@ vi.mock("../components/messages/CreateGroupModal", () => ({
 describe("Messages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.friends.mockResolvedValue([]);
     mocks.conversations.mockResolvedValue([
       {
         id: 4,
@@ -98,5 +107,32 @@ describe("Messages", () => {
     expect(await screen.findByRole("heading", { name: "Messages" }))
       .toBeInTheDocument();
     expect(screen.queryByTestId("message-list")).not.toBeInTheDocument();
+  });
+
+  it("opens a new conversation with an online friend who has no chat yet", async () => {
+    mocks.friends.mockResolvedValue([
+    { id: 8, username: "friend-only", is_online: true },
+    ]);
+    mocks.createConversation.mockResolvedValue({
+    id: 9,
+    is_group: false,
+    conversation_type: "direct",
+    other_user: { id: 8, username: "friend-only", is_online: true },
+    });
+
+    render(
+    <MemoryRouter>
+      <Messages />
+    </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", {
+    name: "Start chat with friend-only",
+    }));
+
+    await waitFor(() => {
+    expect(mocks.createConversation).toHaveBeenCalledWith("friend-only");
+    expect(screen.getByTestId("message-list")).toBeInTheDocument();
+    });
   });
 });

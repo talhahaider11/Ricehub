@@ -14,7 +14,6 @@ import Button from "../common/Button";
 import MediaUploader from "../media/MediaUploader";
 import { deleteMedia } from "../../services/mediaService";
 import { MAX_POST_MEDIA_COUNT } from "../../utils/constants";
-import CameraCapture from "../media/CameraCapture";
 
 export default function CreatePost({
   onCreated,
@@ -25,8 +24,6 @@ export default function CreatePost({
   const [content, setContent] = useState("");
   const [visibility, setVisibility] = useState("public");
   const [postType, setPostType] = useState(initialPostType);
-  const [image, setImage] = useState(null);
-  const [video, setVideo] = useState(null);
   const [mediaAssets, setMediaAssets] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -40,8 +37,8 @@ export default function CreatePost({
   }, []);
 
   const canSubmit = postType === "reel"
-    ? video !== null || mediaAssets.some((asset) => asset.media_type === "video")
-    : content.trim().length > 0 || image !== null || video !== null || mediaAssets.length > 0;
+    ? mediaAssets.some((asset) => asset.media_type === "video")
+    : content.trim().length > 0 || mediaAssets.length > 0;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -51,8 +48,6 @@ export default function CreatePost({
     formData.append("content", content.trim());
     formData.append("visibility", visibility);
     formData.append("post_type", postType);
-    if (image) formData.append("image", image);
-    if (video) formData.append("video", video);
     mediaAssets.forEach((asset) => formData.append("media_ids", asset.id));
 
     try {
@@ -60,8 +55,6 @@ export default function CreatePost({
       setError("");
       const post = await postService.create(formData);
       setContent("");
-      setImage(null);
-      setVideo(null);
       setMediaAssets([]);
       setPostType("post");
       onCreated?.(post);
@@ -140,7 +133,6 @@ export default function CreatePost({
               role="menuitem"
               onClick={() => {
                 setPostType("reel");
-                setImage(null);
                 setCreateMenuOpen(false);
               }}
             >
@@ -152,7 +144,6 @@ export default function CreatePost({
 
       <MediaUploader
         maxFiles={MAX_POST_MEDIA_COUNT - mediaAssets.length}
-        showCamera={false}
         onUploaded={(uploaded) =>
           setMediaAssets((current) => [...current, ...uploaded])
         }
@@ -182,55 +173,11 @@ export default function CreatePost({
         </div>
       )}
 
-      {image && (
-        <div className="selected-file">
-          <img src={URL.createObjectURL(image)} alt="Selected preview" style={{maxWidth: 100}} />
-          <span>{image.name}</span>
-          <button type="button" onClick={() => setImage(null)} aria-label="Remove image">✕</button>
-        </div>
-      )}
-
       <div className="create-post-actions">
         <div className="left-actions">
           <button type="button" className="icon-button" aria-label="Add emoji" onClick={() => setShowEmoji(!showEmoji)}>
             <Smile size={20} />
           </button>
-
-          <label className="file-button icon-button" aria-label="Add image">
-            <ImageIcon size={20} /> Photo
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              hidden
-              disabled={postType === "reel"}
-              onChange={(e) => {
-                setImage(e.target.files?.[0] || null);
-                setVideo(null);
-              }}
-            />
-          </label>
-          <CameraCapture
-            className="icon-button"
-            disabled={submitting || postType === "reel"}
-            onCapture={(file) => {
-              setImage(file);
-              setVideo(null);
-              setError("");
-            }}
-          />
-          <label className="file-button icon-button" aria-label="Add short video">
-            <VideoIcon size={20} /> {postType === "reel" ? "Reel video" : "Video"}
-            <input
-              type="file"
-              accept="video/mp4,video/webm,video/quicktime"
-              hidden
-              required={false}
-              onChange={(e) => {
-                setVideo(e.target.files?.[0] || null);
-                setImage(null);
-              }}
-            />
-          </label>
 
           <select
             value={visibility}
@@ -242,10 +189,8 @@ export default function CreatePost({
             <option value="private">🔒 Only me</option>
           </select>
         </div>
-        {video && <p className="selected-file">{video.name} · max 100 MB</p>}
-
         <Button type="submit" disabled={!canSubmit || submitting}>
-          {submitting? "Posting..." : "Post"}
+          {submitting ? "Posting..." : "Post"}
         </Button>
       </div>
 
@@ -258,7 +203,7 @@ export default function CreatePost({
         </div>
       )}
 
-      {postType === "reel" && !video && (
+      {postType === "reel" && !mediaAssets.some((asset) => asset.media_type === "video") && (
         <p className="muted" role="status">Choose a video to publish a reel.</p>
       )}
       {error && <p className="error" role="alert">{error}</p>}

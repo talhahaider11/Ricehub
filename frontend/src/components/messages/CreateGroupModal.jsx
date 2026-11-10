@@ -4,13 +4,12 @@ import friendService from "../../services/friendService";
 import messageService from "../../services/messageService";
 import { getArrayResults } from "../../utils/arrayResults";
 import { useLanguage } from "../../context/LanguageContext";
-import { parseUserId } from "../../utils/userId";
+import UserLookupField from "./UserLookupField";
 
 export default function CreateGroupModal({ open, onClose, onCreated }) {
   const { t } = useLanguage();
   const [friends, setFriends] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [userId, setUserId] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -44,13 +43,8 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
       : [...current, userId]);
   };
 
-  const addUserId = () => {
-    const parsedId = parseUserId(userId);
-    if (parsedId === null) {
-      setError(t("enterValidUserId"));
-      return;
-    }
-    if (selectedIds.includes(parsedId)) {
+  const addMemberId = (memberId) => {
+    if (selectedIds.includes(memberId)) {
       setError(t("memberIdAlreadySelected"));
       return;
     }
@@ -58,8 +52,7 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
       setError(t("groupLimitError"));
       return;
     }
-    setSelectedIds((current) => [...current, parsedId]);
-    setUserId("");
+    setSelectedIds((current) => [...current, memberId]);
     setError("");
   };
 
@@ -75,7 +68,6 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
       );
       setName("");
       setSelectedIds([]);
-      setUserId("");
       onCreated(conversation);
     } catch (createError) {
       console.error("Group conversation could not be created:", createError);
@@ -105,19 +97,7 @@ export default function CreateGroupModal({ open, onClose, onCreated }) {
             required
           />
         </label>
-        <div className="group-user-id-field">
-          <label htmlFor="create-group-user-id">{t("userId")}</label>
-          <div>
-            <input
-              id="create-group-user-id"
-              inputMode="numeric"
-              value={userId}
-              onChange={(event) => setUserId(event.target.value)}
-              placeholder={t("userId")}
-            />
-            <button type="button" onClick={addUserId}>{t("addUserId")}</button>
-          </div>
-        </div>
+        <UserLookupField onSelect={addMemberId} disabled={creating} />
         <fieldset>
           <legend>{t("selectFriends")}</legend>
           {loading && <p>{t("loadingFriends")}</p>}

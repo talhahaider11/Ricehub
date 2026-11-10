@@ -22,6 +22,8 @@ export default function MessageInput({
   const [error, setError] = useState("");
   const [recording, setRecording] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState(null);
+  const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState("");
   const recorderRef = useRef(null);
   const streamRef = useRef(null);
   const recordingTimeoutRef = useRef(null);
@@ -34,6 +36,16 @@ export default function MessageInput({
     recorderRef.current?.stream?.getTracks().forEach((track) => track.stop());
     streamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
+
+  useEffect(() => {
+    if (!pendingAttachment) {
+      setAttachmentPreviewUrl("");
+      return undefined;
+    }
+    const previewUrl = URL.createObjectURL(pendingAttachment);
+    setAttachmentPreviewUrl(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [pendingAttachment]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -73,13 +85,17 @@ export default function MessageInput({
       ? "image"
       : VIDEO_TYPES.has(file.type)
         ? "video"
-        : null;
+        : file.type.startsWith("audio/")
+          ? "audio"
+          : null;
     if (!attachmentType) {
       setError(t("photoVideoTypeError"));
       return;
     }
     if (file.size > MAX_ATTACHMENT_SIZE) {
-      setError(t("photoVideoSizeError"));
+      setError(file.type.startsWith("audio/")
+        ? t("voiceSizeError")
+        : t("photoVideoSizeError"));
       return;
     }
 
@@ -88,17 +104,47 @@ export default function MessageInput({
       setError("");
       await onSendAttachment(file, replyTarget?.id, attachmentType);
       onCancelReply?.();
+      return true;
     } catch (sendError) {
-      setError(sendError.message || t("photoVideoSendFailed"));
+      setError(sendError.message || (
+        attachmentType === "audio" ? t("voiceSendFailed") : t("photoVideoSendFailed")
+      ));
+      return false;
     } finally {
       setSending(false);
+    }
+  };
+
+  const queueAttachmentFile = (file) => {
+    if (!file) return;
+    const supported = IMAGE_TYPES.has(file.type)
+      || VIDEO_TYPES.has(file.type)
+      || file.type.startsWith("audio/");
+    if (!supported) {
+      setError(t("photoVideoTypeError"));
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      setError(file.type.startsWith("audio/")
+        ? t("voiceSizeError")
+        : t("photoVideoSizeError"));
+      return;
+    }
+    setError("");
+    setPendingAttachment(file);
+  };
+
+  const confirmAttachment = async () => {
+    if (!pendingAttachment || sending || disabled) return;
+    if (await sendAttachmentFile(pendingAttachment)) {
+      setPendingAttachment(null);
     }
   };
 
   const sendSelectedAttachment = (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    void sendAttachmentFile(file);
+    queueAttachmentFile(file);
   };
 
   const startRecording = async () => {
@@ -149,15 +195,7 @@ export default function MessageInput({
                 ? "wav"
                 : "webm";
         const file = new File([blob], `voice-note.${extension}`, { type: blob.type });
-        try {
-          setSending(true);
-          await onSendAttachment?.(file, replyTarget?.id, "audio");
-          onCancelReply?.();
-        } catch (sendError) {
-          setError(sendError.message || t("voiceSendFailed"));
-        } finally {
-          setSending(false);
-        }
+        setPendingAttachment(file);
       };
       recorder.start();
       setRecording(true);
@@ -179,6 +217,39 @@ export default function MessageInput({
 
   return (
     <>
+      {pendingAttachment && (
+        <section className="message-attachment-preview" aria-label={pendingAttachment.type.startsWith("audio/") ? t("voiceMessagePreview") : t("attachmentPreview")}>
+          {pendingAttachment.type.startsWith("audio/") ? (
+            <audio controls preload="metadata" src={attachmentPreviewUrl}>
+              {t("audioUnsupported")}
+            </audio>
+          ) : pendingAttachment.type.startsWith("video/") ? (
+            <video controls playsInline preload="metadata" src={attachmentPreviewUrl}>
+              {t("videoUnsupported")}
+            </video>
+          ) : (
+            <img src={attachmentPreviewUrl} alt={t("attachmentPreview")} />
+          )}
+          <div className="message-attachment-preview-actions">
+            <button
+              type="button"
+              className="message-attachment-cancel"
+              disabled={sending}
+              onClick={() => setPendingAttachment(null)}
+            >
+              {t("cancelAttachment")}
+            </button>
+            <button
+              type="button"
+              className="message-attachment-send"
+              disabled={sending || disabled}
+              onClick={() => void confirmAttachment()}
+            >
+              {sending ? t("sending") : t("sendAttachment")}
+            </button>
+          </div>
+        </section>
+      )}
       {replyTarget && (
         <div className="message-reply-target">
           <span>{t("replyTo")} {replyTarget.content}</span>
@@ -209,7 +280,7 @@ export default function MessageInput({
         {onSendAttachment && (
           <CameraCapture
             disabled={disabled || sending || recording}
-            onCapture={sendAttachmentFile}
+            onCapture={queueAttachmentFile}
           />
         )}
         <input
