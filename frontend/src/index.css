@@ -6495,8 +6495,8 @@ a {
   .admin-user-search input
 ) {
   border-color: #111;
-  background-color: #111;
-  color: #fff;
+  background-color: white;
+  /* color: #fff; */
 }
 
 [data-theme="light"] :is(
@@ -6504,7 +6504,7 @@ a {
   .admin-user-search input
 )::placeholder,
 [data-theme="light"] .search-bar input::placeholder {
-  color: #d1d5db;
+  color: black;
   opacity: 1;
 }
 
