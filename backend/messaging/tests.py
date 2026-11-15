@@ -297,6 +297,31 @@ class MessagingFeatureTests(APITestCase):
             response_timestamp,
         )
 
+    def test_sending_message_succeeds_when_broadcast_connection_is_down(self):
+        self.make_friends()
+
+        class OfflineChannelLayer:
+            async def group_send(self, group, event):
+                raise OSError("Channel layer unavailable")
+
+        with patch(
+            "messaging.views.get_channel_layer",
+            return_value=OfflineChannelLayer(),
+        ):
+            response = self.client.post(
+                f"/api/messages/conversations/{self.conversation.pk}/messages/",
+                {"content": "Saved even when real-time is offline"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(
+            Message.objects.filter(
+                pk=response.data["id"],
+                content="Saved even when real-time is offline",
+            ).exists()
+        )
+
     def test_image_and_video_uploads_create_typed_messages(self):
         self.make_friends()
         attachments = [

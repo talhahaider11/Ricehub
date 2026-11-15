@@ -71,6 +71,17 @@ const messageService = {
     return response.data;
   },
 
+  async sendText(conversationId, content, replyToId) {
+    const response = await api.post(
+      `/messages/conversations/${conversationId}/messages/`,
+      {
+        content,
+        ...(replyToId ? { reply_to_id: replyToId } : {}),
+      }
+    );
+    return response.data;
+  },
+
   async sendAttachment(conversationId, file, replyToId, attachmentType = "audio") {
     const preparedFile = attachmentType === "image"
       ? await prepareImage(file)
@@ -82,8 +93,7 @@ const messageService = {
     if (replyToId) formData.append("reply_to_id", String(replyToId));
     const response = await api.post(
       `/messages/conversations/${conversationId}/messages/`,
-      formData,
-      { headers: { "Content-Type": "multipart/form-data" } }
+      formData
     );
     return response.data;
   },

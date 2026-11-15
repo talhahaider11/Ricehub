@@ -116,6 +116,50 @@ describe("MessageList", () => {
     expect(screen.queryByText("Sent")).not.toBeInTheDocument();
   });
 
+  it("renders image, video, and audio attachments in the conversation", () => {
+    const { container } = render(
+      <MessageList
+        messages={[
+          {
+            id: 1,
+            content: "",
+            sender: { id: 8 },
+            attachment: "/media/photo.jpg",
+            attachment_type: "image",
+            created_at: "2026-11-15T10:00:00Z",
+          },
+          {
+            id: 2,
+            content: "",
+            sender: { id: 8 },
+            attachment: "/media/clip.mp4",
+            attachment_type: "video",
+            created_at: "2026-11-15T10:01:00Z",
+          },
+          {
+            id: 3,
+            content: "",
+            sender: { id: 8 },
+            attachment: "/media/voice.webm",
+            attachment_type: "audio",
+            created_at: "2026-11-15T10:02:00Z",
+          },
+        ]}
+        currentUser={{ id: 7 }}
+        onReply={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    expect(container.querySelector(".message-image-attachment"))
+      .toHaveAttribute("src", "/media/photo.jpg");
+    expect(container.querySelector(".message-video-attachment"))
+      .toHaveAttribute("src", "/media/clip.mp4");
+    expect(container.querySelector(".message-bubble audio"))
+      .toHaveAttribute("src", "/media/voice.webm");
+  });
+
   it("shows the profile hero and places the trust warning beneath its profile link", () => {
     Element.prototype.scrollIntoView = vi.fn();
 

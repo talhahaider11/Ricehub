@@ -164,9 +164,12 @@ export default function Messages() {
     conversationHidden,
   } = useMessages(selectedConversation);
 
-  const handleSend = (content, replyToId) => {
-    sendMessage(content, replyToId);
-    sendTyping(false);
+  const handleSend = async (content, replyToId) => {
+    try {
+      await sendMessage(content, replyToId);
+    } finally {
+      sendTyping(false);
+    }
   };
   const handleSendAttachment = async (file, replyToId, attachmentType) => {
     const message = await messageService.sendAttachment(
@@ -442,20 +445,21 @@ export default function Messages() {
                 )}
             </header>
 
-            {messageError ? (
-              <ErrorState message={messageError} />
-            ) : (
-              <MessageList
-                messages={messages}
-                currentUser={user}
-                onReply={setReplyTarget}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                conversationPartner={isDirectConversation ? otherUser : null}
-                showVerificationWarning={showVerificationWarning}
-                latestConversationMessageId={latestConversationMessageId}
-              />
+            {messageError && (
+              <p className="message-connection-banner" role="alert">
+                {messageError}
+              </p>
             )}
+            <MessageList
+              messages={messages}
+              currentUser={user}
+              onReply={setReplyTarget}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              conversationPartner={isDirectConversation ? otherUser : null}
+              showVerificationWarning={showVerificationWarning}
+              latestConversationMessageId={latestConversationMessageId}
+            />
 
             <TypingIndicator
               username={activeConversation?.participants?.find(
@@ -467,7 +471,7 @@ export default function Messages() {
               onSend={handleSend}
               onSendAttachment={handleSendAttachment}
               onTyping={sendTyping}
-              disabled={!connected}
+              disabled={!selectedConversation}
               replyTarget={replyTarget}
               onCancelReply={() => setReplyTarget(null)}
             />

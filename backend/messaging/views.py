@@ -71,7 +71,7 @@ def broadcast_message_event(conversation_id, event_type, payload):
             event_type,
             conversation_id,
         )
-    except (ChannelFull, RedisError):
+    except (ChannelFull, RedisError, OSError, TimeoutError):
         logger.exception(
             "Message event %s for conversation %s could not be broadcast.",
             event_type,

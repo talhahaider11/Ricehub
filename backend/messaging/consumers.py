@@ -1,7 +1,10 @@
 import json
+import logging
 
 from channels.db import database_sync_to_async
+from channels.exceptions import ChannelFull
 from channels.generic.websocket import AsyncWebsocketConsumer
+from redis.exceptions import RedisError
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -12,6 +15,9 @@ from users.privacy import can_message_between
 
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
+
 class ChatConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
@@ -214,42 +220,46 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 return
             message, verification_warning = result
 
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    "type": "chat_message",
-                    "message": {
-                        "id": message.id,
-                        "conversation": (
-                            message.conversation_id
-                        ),
-                        "sender": message.sender_id,
-                        "reply_to": (
-                            {
-                                "id": message.reply_to_id,
-                                "content": (
-                                    "This message was deleted."
-                                    if message.reply_to.is_deleted
-                                    else message.reply_to.content
-                                ),
-                                "sender_id": message.reply_to.sender_id,
-                            }
-                            if message.reply_to_id
-                            else None
-                        ),
-                        "reply_to_id": message.reply_to_id,
-                        "sender_username": (
-                            self.user.username
-                        ),
-                        "verification_warning": verification_warning,
-                        "content": message.content,
-                        "created_at": (
-                            message.created_at.isoformat()
-                        ),
-                        "is_read": message.is_read,
-                    },
+            chat_event = {
+                "type": "chat_message",
+                "message": {
+                    "id": message.id,
+                    "conversation": (
+                        message.conversation_id
+                    ),
+                    "sender": message.sender_id,
+                    "reply_to": (
+                        {
+                            "id": message.reply_to_id,
+                            "content": (
+                                "This message was deleted."
+                                if message.reply_to.is_deleted
+                                else message.reply_to.content
+                            ),
+                            "sender_id": message.reply_to.sender_id,
+                        }
+                        if message.reply_to_id
+                        else None
+                    ),
+                    "reply_to_id": message.reply_to_id,
+                    "sender_username": self.user.username,
+                    "verification_warning": verification_warning,
+                    "content": message.content,
+                    "created_at": message.created_at.isoformat(),
+                    "is_read": message.is_read,
                 },
-            )
+            }
+            try:
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    chat_event,
+                )
+            except (ChannelFull, RedisError, OSError, TimeoutError):
+                logger.exception(
+                    "Message %s was saved but could not be broadcast.",
+                    message.id,
+                )
+                await self.chat_message(chat_event)
 
             return
 

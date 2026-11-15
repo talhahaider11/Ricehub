@@ -7,6 +7,19 @@ const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
+function getErrorMessage(error, fallback) {
+  const responseData = error?.response?.data;
+  const detail = responseData?.detail ?? responseData?.message;
+  if (typeof detail === "string" && detail.trim()) return detail;
+
+  const validationMessage = responseData && typeof responseData === "object"
+    ? Object.values(responseData)
+      .flat()
+      .find((value) => typeof value === "string" && value.trim())
+    : null;
+  return validationMessage || error?.message || fallback;
+}
+
 export default function MessageInput({
   onSend,
   onSendAttachment,
@@ -63,7 +76,7 @@ export default function MessageInput({
       onCancelReply?.();
       onTyping?.(false);
     } catch (sendError) {
-      setError(sendError.message || t("messageSendFailed"));
+      setError(getErrorMessage(sendError, t("messageSendFailed")));
     } finally {
       setSending(false);
     }
@@ -78,7 +91,7 @@ export default function MessageInput({
       onCancelReply?.();
       onTyping?.(false);
     } catch (sendError) {
-      setError(sendError.message || t("messageSendFailed"));
+      setError(getErrorMessage(sendError, t("messageSendFailed")));
     } finally {
       setSending(false);
     }
@@ -128,9 +141,9 @@ export default function MessageInput({
       onCancelReply?.();
       return true;
     } catch (sendError) {
-      setError(sendError.message || (
+      setError(getErrorMessage(sendError, (
         attachmentType === "audio" ? t("voiceSendFailed") : t("photoVideoSendFailed")
-      ));
+      )));
       return false;
     } finally {
       setSending(false);
@@ -318,9 +331,14 @@ export default function MessageInput({
           </button>
         )}
         {recording && (
-          <button type="button" onClick={stopRecording} aria-label={t("stopRecording")}>
+          <button
+            type="button"
+            className="message-recording-stop"
+            onClick={stopRecording}
+            aria-label={t("stopRecording")}
+          >
             <Square size={15} aria-hidden="true" />
-            {t("stopRecording")}
+            <span className="message-input-button-label">{t("stopRecording")}</span>
           </button>
         )}
         <div className="message-composer-field">

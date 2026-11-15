@@ -11,9 +11,27 @@ import { getArrayResults } from "../utils/arrayResults";
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 
+function mergeMessages(loadedMessages, currentMessages) {
+  const messagesById = new Map();
+  for (const message of loadedMessages) {
+    messagesById.set(String(message.id), message);
+  }
+  for (const message of currentMessages) {
+    messagesById.set(String(message.id), message);
+  }
+  return [...messagesById.values()].sort((left, right) => {
+    const leftTime = Date.parse(left.created_at || "");
+    const rightTime = Date.parse(right.created_at || "");
+    return Number.isFinite(leftTime) && Number.isFinite(rightTime)
+      ? leftTime - rightTime
+      : 0;
+  });
+}
+
 export default function useMessages(conversationId) {
   const { user } = useAuth();
   const socketRef = useRef(null);
+  const conversationIdRef = useRef(conversationId);
   const heartbeatRef = useRef(null);
   const reconnectRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
@@ -26,24 +44,31 @@ export default function useMessages(conversationId) {
   const [callSignal, setCallSignal] = useState(null);
   const [conversationHidden, setConversationHidden] = useState(false);
   const [error, setError] = useState("");
+  conversationIdRef.current = conversationId;
 
   const loadMessages = useCallback(async () => {
     if (!conversationId) return;
+    const requestConversationId = conversationId;
+    const isCurrentConversation = () => (
+      isMountedRef.current
+      && String(conversationIdRef.current) === String(requestConversationId)
+    );
     try {
       setLoading(true);
       setError("");
       const data = await messageService.messages(conversationId);
-      if (isMountedRef.current) {
-        setMessages(getArrayResults(data, "Messages").reverse());
+      if (isCurrentConversation()) {
+        const loadedMessages = getArrayResults(data, "Messages").reverse();
+        setMessages((current) => mergeMessages(loadedMessages, current));
         if (socketRef.current?.readyState === WebSocket.OPEN) {
           socketRef.current.send(JSON.stringify({ type: "read" }));
         }
       }
     } catch (loadError) {
       console.error("Messages could not be loaded:", loadError);
-      if (isMountedRef.current) setError("Messages could not be loaded.");
+      if (isCurrentConversation()) setError("Messages could not be loaded.");
     } finally {
-      if (isMountedRef.current) setLoading(false);
+      if (isCurrentConversation()) setLoading(false);
     }
   }, [conversationId]);
 
@@ -107,7 +132,8 @@ export default function useMessages(conversationId) {
             const message = data.message || data;
             setMessages((current) => {
               const exists = current.some(
-                (item) => item.id && message.id && item.id === message.id
+                (item) => item.id && message.id
+                  && String(item.id) === String(message.id)
               );
               return exists ? current : [...current, message];
             });
@@ -163,7 +189,9 @@ export default function useMessages(conversationId) {
         }
 
         if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-          setError("Chat connection was lost. Please reopen the conversation.");
+          setError(
+            "Real-time updates are unavailable. You can still send messages."
+          );
           return;
         }
         reconnectAttemptsRef.current += 1;
@@ -196,17 +224,28 @@ export default function useMessages(conversationId) {
     };
   }, [conversationId, loadMessages, user?.id]);
 
-  const sendMessage = useCallback((content, replyToId) => {
-    const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      throw new Error("Chat is not connected.");
+  const sendMessage = useCallback(async (content, replyToId) => {
+    if (!conversationId) {
+      throw new Error("Select a conversation before sending a message.");
     }
-    socket.send(JSON.stringify({
-      type: "message",
-      message: content,
-      ...(replyToId ? { reply_to_id: replyToId } : {}),
-    }));
-  }, []);
+
+    const message = await messageService.sendText(
+      conversationId,
+      content,
+      replyToId
+    );
+    if (
+      isMountedRef.current
+      && String(conversationIdRef.current) === String(conversationId)
+    ) {
+      setMessages((current) => (
+        current.some((item) => String(item.id) === String(message.id))
+          ? current
+          : [...current, message]
+      ));
+    }
+    return message;
+  }, [conversationId]);
 
   const sendTyping = useCallback((isTyping) => {
     const socket = socketRef.current;
