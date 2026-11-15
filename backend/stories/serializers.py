@@ -56,6 +56,8 @@ class StorySerializer(serializers.ModelSerializer):
     duration_seconds = serializers.SerializerMethodField()
     is_seen = serializers.BooleanField(source="seen_by_user", read_only=True)
     view_count = serializers.IntegerField(read_only=True)
+    is_liked = serializers.BooleanField(read_only=True)
+    like_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Story
@@ -73,6 +75,8 @@ class StorySerializer(serializers.ModelSerializer):
             "duration_seconds",
             "visibility",
             "view_count",
+            "like_count",
+            "is_liked",
             "is_seen",
             "created_at",
             "expires_at",
@@ -85,6 +89,8 @@ class StorySerializer(serializers.ModelSerializer):
             "media_type",
             "duration_seconds",
             "view_count",
+            "like_count",
+            "is_liked",
             "is_seen",
             "created_at",
             "expires_at",

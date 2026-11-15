@@ -12,6 +12,7 @@ from messaging.models import (
     ConversationMember,
     Message,
 )
+from users.models import ProfileVisibility
 from users.models import UserPrivacySettings
 
 
@@ -24,16 +25,21 @@ class MessagingFeatureTests(APITestCase):
             username="message-owner",
             email="owner@example.com",
             password="StrongPassword123",
+            is_verified=True,
         )
         self.friend = User.objects.create_user(
             username="message-friend",
             email="friend@example.com",
             password="StrongPassword123",
+            is_verified=True,
         )
+        self.friend.profile_visibility = ProfileVisibility.PUBLIC
+        self.friend.save(update_fields=["profile_visibility"])
         self.stranger = User.objects.create_user(
             username="message-stranger",
             email="stranger@example.com",
             password="StrongPassword123",
+            is_verified=True,
         )
         self.conversation = Conversation.objects.create()
         self.conversation.participants.add(self.user, self.friend)
@@ -104,6 +110,89 @@ class MessagingFeatureTests(APITestCase):
                 user=self.user,
             ).role,
             ConversationMember.Role.ADMIN,
+        )
+
+    def test_unverified_user_cannot_create_group(self):
+        self.user.is_verified = False
+        self.user.save(update_fields=["is_verified"])
+
+        response = self.client.post(
+            "/api/messages/conversations/group/",
+            {"name": "Study group", "user_ids": [self.friend.pk]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Only verified users", str(response.data))
+        self.assertFalse(
+            Conversation.objects.filter(name="Study group").exists()
+        )
+
+    def test_unverified_user_cannot_be_added_during_group_creation(self):
+        self.stranger.is_verified = False
+        self.stranger.save(update_fields=["is_verified"])
+
+        response = self.client.post(
+            "/api/messages/conversations/group/",
+            {"name": "Study group", "user_ids": [self.stranger.pk]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Only verified users", str(response.data))
+
+    def test_unverified_user_cannot_be_added_to_existing_group(self):
+        conversation = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.GROUP,
+            name="Study group",
+            created_by=self.user,
+        )
+        conversation.participants.add(self.user)
+        ConversationMember.objects.create(
+            conversation=conversation,
+            user=self.user,
+            role=ConversationMember.Role.ADMIN,
+        )
+        self.stranger.is_verified = False
+        self.stranger.save(update_fields=["is_verified"])
+
+        response = self.client.post(
+            f"/api/messages/conversations/{conversation.pk}/members/",
+            {"user_id": self.stranger.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Only verified users", str(response.data))
+        self.assertFalse(
+            conversation.participants.filter(pk=self.stranger.pk).exists()
+        )
+
+    def test_group_member_search_matches_name_username_and_id_only_if_verified(self):
+        self.friend.first_name = "Jasmine"
+        self.friend.last_name = "Rice"
+        self.friend.save(update_fields=["first_name", "last_name"])
+        self.stranger.is_verified = False
+        self.stranger.save(update_fields=["is_verified"])
+        endpoint = "/api/messages/group-members/search/"
+
+        by_name = self.client.get(endpoint, {"q": "Jasmine"})
+        by_username = self.client.get(endpoint, {"q": "message-friend"})
+        by_id = self.client.get(endpoint, {"q": str(self.friend.pk)})
+        unverified = self.client.get(endpoint, {"q": "message-stranger"})
+
+        for response in (by_name, by_username, by_id):
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(
+                self.friend.pk,
+                {user["id"] for user in response.data["results"]},
+            )
+        self.assertTrue(
+            all(user["is_verified"] for user in by_name.data["results"])
+        )
+        self.assertNotIn(
+            self.stranger.pk,
+            {user["id"] for user in unverified.data["results"]},
         )
 
     def test_message_reply_must_belong_to_same_conversation(self):
@@ -289,3 +378,77 @@ class MessagingFeatureTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 404)
+
+    def test_archive_state_is_private_to_each_conversation_member(self):
+        response = self.client.patch(
+            f"/api/messages/conversations/{self.conversation.pk}/archive/",
+            {"is_archived": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["is_archived"])
+        self.assertEqual(
+            self.client.get("/api/messages/conversations/").data["results"],
+            [],
+        )
+        archived = self.client.get(
+            "/api/messages/conversations/",
+            {"archived": "true"},
+        )
+        self.assertEqual(
+            [item["id"] for item in archived.data["results"]],
+            [self.conversation.pk],
+        )
+
+        self.client.force_authenticate(self.friend)
+        friend_conversations = self.client.get("/api/messages/conversations/")
+        self.assertEqual(
+            [item["id"] for item in friend_conversations.data["results"]],
+            [self.conversation.pk],
+        )
+        self.assertFalse(friend_conversations.data["results"][0]["is_archived"])
+
+    def test_delete_hides_conversation_only_for_requesting_user(self):
+        deleted = self.client.delete(
+            f"/api/messages/conversations/{self.conversation.pk}/delete/"
+        )
+
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(
+            self.client.get("/api/messages/conversations/").data["results"],
+            [],
+        )
+        membership = ConversationMember.objects.get(
+            conversation=self.conversation,
+            user=self.user,
+        )
+        self.assertIsNotNone(membership.deleted_at)
+
+        self.client.force_authenticate(self.friend)
+        friend_conversations = self.client.get("/api/messages/conversations/")
+        self.assertEqual(
+            [item["id"] for item in friend_conversations.data["results"]],
+            [self.conversation.pk],
+        )
+
+    def test_new_message_restores_a_deleted_conversation_for_members(self):
+        self.client.delete(
+            f"/api/messages/conversations/{self.conversation.pk}/delete/"
+        )
+        self.client.force_authenticate(self.friend)
+
+        with patch("messaging.views.get_channel_layer", return_value=None):
+            response = self.client.post(
+                f"/api/messages/conversations/{self.conversation.pk}/messages/",
+                {"content": "A new message"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.client.force_authenticate(self.user)
+        conversations = self.client.get("/api/messages/conversations/")
+        self.assertEqual(
+            [item["id"] for item in conversations.data["results"]],
+            [self.conversation.pk],
+        )

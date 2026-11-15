@@ -5,7 +5,7 @@ import MessageActions from "./MessageActions";
 describe("MessageActions", () => {
   const message = { id: 12, content: "Hello" };
 
-  it("keeps actions in a three-dot menu and replies from the menu", () => {
+  it("keeps Reply separate and shows Share in the three-dot menu", () => {
     const onReply = vi.fn();
 
     render(
@@ -18,13 +18,11 @@ describe("MessageActions", () => {
       />
     );
 
-    expect(screen.queryByRole("menuitem", { name: "Reply" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reply" }));
+    expect(onReply).toHaveBeenCalledWith(message);
     fireEvent.click(screen.getByRole("button", { name: "Message options" }));
     expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("menuitem", { name: "Reply" }));
-
-    expect(onReply).toHaveBeenCalledWith(message);
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
     expect(screen.queryByRole("menuitem", { name: "Edit" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Unsend" })).not.toBeInTheDocument();
   });

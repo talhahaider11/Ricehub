@@ -24,6 +24,7 @@ export default function useMessages(conversationId) {
   const [loading, setLoading] = useState(false);
   const [typingUser, setTypingUser] = useState(false);
   const [callSignal, setCallSignal] = useState(null);
+  const [conversationHidden, setConversationHidden] = useState(false);
   const [error, setError] = useState("");
 
   const loadMessages = useCallback(async () => {
@@ -33,7 +34,7 @@ export default function useMessages(conversationId) {
       setError("");
       const data = await messageService.messages(conversationId);
       if (isMountedRef.current) {
-        setMessages(getArrayResults(data, "Messages"));
+        setMessages(getArrayResults(data, "Messages").reverse());
         if (socketRef.current?.readyState === WebSocket.OPEN) {
           socketRef.current.send(JSON.stringify({ type: "read" }));
         }
@@ -54,6 +55,7 @@ export default function useMessages(conversationId) {
     setError("");
     setTypingUser(false);
     setCallSignal(null);
+    setConversationHidden(false);
     loadMessages();
 
     if (!conversationId) return () => { active = false; };
@@ -133,6 +135,11 @@ export default function useMessages(conversationId) {
             setMessages((current) => current.map((message) => (
               seenIds.has(message.id) ? { ...message, is_read: true } : message
             )));
+            return;
+          }
+          if (data.type === "conversation_hidden") {
+            setConversationHidden(true);
+            socket.close(4003, "Conversation hidden");
           }
         } catch (frameError) {
           console.error("Invalid message WebSocket frame:", frameError);
@@ -231,6 +238,7 @@ export default function useMessages(conversationId) {
     sendTyping,
     sendCallSignal,
     callSignal,
+    conversationHidden,
     clearCallSignal,
     typingUser,
     error,

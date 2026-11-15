@@ -3,12 +3,27 @@ import { prepareImage } from "./mediaService";
 import { ACCESS_TOKEN_KEY, WS_URL } from "../utils/constants";
 
 const messageService = {
-  async conversations() {
-    const response = await api.get(
-      "/messages/conversations/"
+  async conversations(params = {}) {
+    let response = await api.get(
+      "/messages/conversations/",
+      { params }
     );
+    const data = response.data;
+    if (!Array.isArray(data?.results) || !data.next) return data;
 
-    return response.data;
+    const results = [...data.results];
+    let next = data.next;
+    const visited = new Set();
+    while (next) {
+      if (visited.has(next)) {
+        throw new Error("Conversation pagination returned a repeated page.");
+      }
+      visited.add(next);
+      response = await api.get(next);
+      results.push(...(response.data.results || []));
+      next = response.data.next;
+    }
+    return { ...data, results, next: null };
   },
 
   async createConversation(username) {
@@ -38,11 +53,18 @@ const messageService = {
     return response.data;
   },
 
+  async searchGroupMembers(query = "") {
+    const response = await api.get("/messages/group-members/search/", {
+      params: query ? { q: query } : undefined,
+    });
+    return response.data;
+  },
+
   async messages(conversationId, page = 1) {
     const response = await api.get(
       `/messages/conversations/${conversationId}/messages/`,
       {
-        params: { page },
+        params: { page, page_size: 50 },
       }
     );
 
@@ -85,6 +107,21 @@ const messageService = {
   async deleteMessage(messageId) {
     const response = await api.delete(
       `/messages/messages/${messageId}/delete/`
+    );
+    return response.data;
+  },
+
+  async archiveConversation(conversationId, isArchived) {
+    const response = await api.patch(
+      `/messages/conversations/${conversationId}/archive/`,
+      { is_archived: isArchived }
+    );
+    return response.data;
+  },
+
+  async deleteConversation(conversationId) {
+    const response = await api.delete(
+      `/messages/conversations/${conversationId}/delete/`
     );
     return response.data;
   },

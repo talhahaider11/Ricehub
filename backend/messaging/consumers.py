@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from .models import Conversation, ConversationMember, Message
+from .services import restore_conversation_memberships
 from users.privacy import can_message_between
 
 
@@ -273,6 +274,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
             "message_id": event["message_id"],
         })
 
+    async def conversation_hidden(self, event):
+        if event["user_id"] != self.user.id:
+            return
+        await self.send_json({
+            "type": "conversation_hidden",
+            "conversation_id": self.conversation_id,
+        })
+
     async def typing_event(
         self,
         event,
@@ -319,6 +328,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
         if not conversation:
             return False
+        membership = ConversationMember.objects.filter(
+            conversation=conversation,
+            user=self.user,
+        ).first()
+        if membership and membership.deleted_at:
+            return False
         if conversation.conversation_type == Conversation.ConversationType.GROUP:
             return True
         other_user = conversation.participants.exclude(pk=self.user.pk).first()
@@ -337,6 +352,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             .first()
         )
         if not conversation:
+            return False
+        membership = ConversationMember.objects.filter(
+            conversation=conversation,
+            user=self.user,
+        ).first()
+        if membership and membership.deleted_at:
             return False
         other_user = conversation.participants.exclude(pk=self.user.pk).first()
         return bool(
@@ -362,6 +383,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             other_user = other_users.first()
             if not other_user or not can_message_between(self.user, other_user):
                 return None
+        membership = ConversationMember.objects.filter(
+            conversation=conversation,
+            user=self.user,
+        ).first()
+        if membership and membership.deleted_at:
+            return None
         reply_to = None
         if reply_to_id is not None:
             reply_to = Message.objects.filter(
@@ -378,6 +405,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             reply_to=reply_to,
         )
 
+        restore_conversation_memberships(conversation)
         conversation.save()
 
         verification_warning = not self.user.is_verified
@@ -395,6 +423,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             .first()
         )
         if not conversation:
+            return False
+        membership = ConversationMember.objects.filter(
+            conversation=conversation,
+            user=self.user,
+        ).first()
+        if membership and membership.deleted_at:
             return False
         if conversation.conversation_type == Conversation.ConversationType.GROUP:
             return True
@@ -430,6 +464,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             .first()
         )
         if not conversation:
+            return {"enabled": False, "message_ids": []}
+        membership = ConversationMember.objects.filter(
+            conversation=conversation,
+            user=self.user,
+        ).first()
+        if membership and membership.deleted_at:
             return {"enabled": False, "message_ids": []}
         if conversation.conversation_type == Conversation.ConversationType.DIRECT:
             other_user = conversation.participants.exclude(pk=self.user.pk).first()

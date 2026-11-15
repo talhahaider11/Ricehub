@@ -54,16 +54,18 @@ describe("storyService", () => {
     });
   });
 
-  it("exposes view, delete and viewers endpoints", async () => {
+  it("exposes view, like, delete and viewers endpoints", async () => {
     api.post.mockResolvedValue({ data: { message: "Story marked as viewed." } });
     api.get.mockResolvedValue({ data: { results: [] } });
     api.delete.mockResolvedValue({ status: 204 });
 
     await storyService.markViewed(9);
+    await storyService.toggleLike(9);
     await storyService.viewers(9);
     await storyService.remove(9);
 
     expect(api.post).toHaveBeenCalledWith("/stories/9/view/");
+    expect(api.post).toHaveBeenCalledWith("/stories/9/like/");
     expect(api.get).toHaveBeenCalledWith("/stories/9/viewers/");
     expect(api.delete).toHaveBeenCalledWith("/stories/9/delete/");
   });

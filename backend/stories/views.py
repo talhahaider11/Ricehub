@@ -13,10 +13,10 @@ from friendships.services import get_friend_ids
 from users.models import ProfileVisibility
 from users.privacy import get_blocked_user_ids, get_muted_user_ids
 
-from .models import Story, StoryView
+from .models import Story, StoryLike, StoryView
 from .permissions import can_view_story
 from .serializers import StorySerializer
-from .services import mark_story_viewed
+from .services import delete_story, mark_story_viewed
 
 ACTIVE_STORY_LIMIT = 100
 
@@ -72,6 +72,13 @@ class StoryListCreateView(generics.ListCreateAPIView):
                     )
                 ),
                 view_count=Count("views", distinct=True),
+                is_liked=Exists(
+                    StoryLike.objects.filter(
+                        story_id=OuterRef("pk"),
+                        user=user,
+                    )
+                ),
+                like_count=Count("likes", distinct=True),
             )
             .order_by("seen_by_user", "created_at", "pk")
         )
@@ -116,17 +123,22 @@ class StoryDetailView(APIView):
             viewer=request.user,
         ).exists()
         story.view_count = story.views.count()
+        story.is_liked = StoryLike.objects.filter(
+            story=story,
+            user=request.user,
+        ).exists()
+        story.like_count = StoryLike.objects.filter(story=story).count()
         return Response(
             StorySerializer(story, context={"request": request}).data
         )
 
     def delete(self, request, story_id):
         story = get_object_or_404(
-            Story.all_objects,
+            Story.objects.active(),
             pk=story_id,
             author=request.user,
         )
-        story.delete()
+        delete_story(story)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -165,7 +177,15 @@ class StoryViewerListView(APIView):
             .exclude(viewer_id__in=blocked_ids)
             .filter(viewer__is_active=True, viewer__is_suspended=False)
             .select_related("viewer")
-            .order_by("-viewed_at")
+            .annotate(
+                is_liked=Exists(
+                    StoryLike.objects.filter(
+                        story=story,
+                        user_id=OuterRef("viewer_id"),
+                    )
+                )
+            )
+            .order_by("-is_liked", "-viewed_at")
         )
         results = []
         for view in views:
@@ -181,6 +201,40 @@ class StoryViewerListView(APIView):
                     "last_name": viewer.last_name,
                     "avatar": avatar,
                     "viewed_at": view.viewed_at,
+                    "is_liked": view.is_liked,
                 }
             )
         return Response({"results": results})
+
+
+class StoryLikeToggleView(APIView):
+    permission_classes = [IsActiveAndNotSuspended]
+
+    def post(self, request, story_id):
+        with transaction.atomic():
+            story = get_object_or_404(
+                Story.objects.active()
+                .select_for_update()
+                .select_related("author"),
+                pk=story_id,
+            )
+            if not can_view_story(request.user, story):
+                raise PermissionDenied("You cannot view this story.")
+            if story.author_id == request.user.pk:
+                raise ValidationError("You cannot like your own story.")
+
+            like = StoryLike.objects.filter(
+                story=story,
+                user=request.user,
+            )
+            if like.exists():
+                like.delete()
+                is_liked = False
+            else:
+                StoryLike.objects.create(story=story, user=request.user)
+                is_liked = True
+
+            like_count = StoryLike.objects.filter(story=story).count()
+        return Response(
+            {"is_liked": is_liked, "like_count": like_count}
+        )

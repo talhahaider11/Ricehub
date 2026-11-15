@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, Mic, Square } from "lucide-react";
+import { ImagePlus, Mic, Send, Smile, Square, ThumbsUp } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 import CameraCapture from "../media/CameraCapture";
 
@@ -25,6 +25,7 @@ export default function MessageInput({
   const [pendingAttachment, setPendingAttachment] = useState(null);
   const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState("");
   const recorderRef = useRef(null);
+  const messageInputRef = useRef(null);
   const streamRef = useRef(null);
   const recordingTimeoutRef = useRef(null);
   const attachmentInputRef = useRef(null);
@@ -66,6 +67,27 @@ export default function MessageInput({
     } finally {
       setSending(false);
     }
+  };
+
+  const sendLike = async () => {
+    if (disabled || sending) return;
+    try {
+      setSending(true);
+      setError("");
+      await onSend("👍", replyTarget?.id);
+      onCancelReply?.();
+      onTyping?.(false);
+    } catch (sendError) {
+      setError(sendError.message || t("messageSendFailed"));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const addEmoji = () => {
+    setMessage((current) => `${current}🙂`);
+    messageInputRef.current?.focus();
+    onTyping?.(true);
   };
 
   const stopRecording = () => {
@@ -267,6 +289,12 @@ export default function MessageInput({
           tabIndex={-1}
         />
         {onSendAttachment && (
+          <CameraCapture
+            disabled={disabled || sending || recording}
+            onCapture={queueAttachmentFile}
+          />
+        )}
+        {onSendAttachment && (
           <button
             type="button"
             disabled={disabled || sending || recording}
@@ -277,26 +305,6 @@ export default function MessageInput({
             <ImagePlus size={16} aria-hidden="true" />
           </button>
         )}
-        {onSendAttachment && (
-          <CameraCapture
-            disabled={disabled || sending || recording}
-            onCapture={queueAttachmentFile}
-          />
-        )}
-        <input
-          value={message}
-          onChange={(event) => {
-            setMessage(event.target.value);
-            onTyping?.(Boolean(event.target.value.trim()));
-          }}
-          placeholder={t("writeMessage")}
-          maxLength={5000}
-          disabled={disabled || sending || recording}
-          aria-label={t("writeMessage")}
-        />
-        <button type="submit" disabled={disabled || sending || recording || !message.trim()}>
-          {sending ? t("sending") : t("send")}
-        </button>
         {onSendAttachment && !recording && (
           <button
             type="button"
@@ -313,6 +321,52 @@ export default function MessageInput({
           <button type="button" onClick={stopRecording} aria-label={t("stopRecording")}>
             <Square size={15} aria-hidden="true" />
             {t("stopRecording")}
+          </button>
+        )}
+        <div className="message-composer-field">
+          <input
+            ref={messageInputRef}
+            value={message}
+            onChange={(event) => {
+              setMessage(event.target.value);
+              onTyping?.(Boolean(event.target.value.trim()));
+            }}
+            placeholder={t("messagePlaceholder")}
+            maxLength={5000}
+            disabled={disabled || sending || recording}
+            aria-label={t("writeMessage")}
+          />
+          <button
+            type="button"
+            className="message-emoji-button"
+            aria-label={t("addEmoji")}
+            title={t("addEmoji")}
+            disabled={disabled || sending || recording}
+            onClick={addEmoji}
+          >
+            <Smile size={19} aria-hidden="true" />
+          </button>
+        </div>
+        {message.trim() ? (
+          <button
+            type="submit"
+            className="message-send-button"
+            aria-label={t("send")}
+            title={t("send")}
+            disabled={disabled || sending || recording}
+          >
+            <Send size={18} aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="message-send-button message-like-button"
+            aria-label={t("like")}
+            title={t("like")}
+            disabled={disabled || sending || recording}
+            onClick={() => void sendLike()}
+          >
+            <ThumbsUp size={19} aria-hidden="true" />
           </button>
         )}
         {error && <span className="error" role="alert">{error}</span>}

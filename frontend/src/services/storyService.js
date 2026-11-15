@@ -27,6 +27,11 @@ const storyService = {
     return response.data;
   },
 
+  async toggleLike(storyId) {
+    const response = await api.post(`/stories/${storyId}/like/`);
+    return response.data;
+  },
+
   async remove(storyId) {
     return api.delete(`/stories/${storyId}/delete/`);
   },
@@ -42,6 +47,7 @@ export const {
   createStory,
   get: getStory,
   markViewed: markStoryViewed,
+  toggleLike: toggleStoryLike,
   remove: deleteStory,
 } = storyService;
 

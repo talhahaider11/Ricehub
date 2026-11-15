@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Heart,
+  Trash2,
+} from "lucide-react";
 import Avatar from "../components/common/Avatar";
+import Modal from "../components/common/Modal";
 import StoryProgress from "../components/stories/StoryProgress";
 import storyService from "../services/storyService";
 import { getMediaUrl } from "../utils/constants";
@@ -16,7 +24,16 @@ export default function StoryViewer() {
   const { user } = useAuth();
   const [stories, setStories] = useState([]);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [progress, setProgress] = useState(0);
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [likePending, setLikePending] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const [viewers, setViewers] = useState([]);
+  const [viewersLoading, setViewersLoading] = useState(false);
+  const [viewersError, setViewersError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -64,6 +81,8 @@ export default function StoryViewer() {
   const currentIndex =
     group?.stories.findIndex((story) => String(story.id) === String(id)) ?? -1;
   const story = group?.stories[currentIndex];
+  const isOwner = story
+    && String(story.author?.id) === String(user?.id);
 
   const close = useCallback(() => navigate("/", { replace: true }), [navigate]);
   const move = useCallback((offset) => {
@@ -95,6 +114,74 @@ export default function StoryViewer() {
         });
     }
   }, [story, user?.id]);
+
+  useEffect(() => {
+    setIsLiked(Boolean(story?.is_liked));
+    setLikeCount(story?.like_count || 0);
+    setActionError("");
+    setViewersOpen(false);
+    setViewers([]);
+  }, [story?.id]);
+
+  const toggleLike = async () => {
+    if (!story || likePending) return;
+    setLikePending(true);
+    setActionError("");
+    try {
+      const result = await storyService.toggleLike(story.id);
+      setIsLiked(Boolean(result.is_liked));
+      setLikeCount(result.like_count || 0);
+    } catch (likeError) {
+      console.error("Story like could not be updated:", likeError);
+      setActionError("Your like could not be updated.");
+    } finally {
+      setLikePending(false);
+    }
+  };
+
+  const deleteStory = async () => {
+    if (!story || !isOwner || deletePending) return;
+    setDeletePending(true);
+    setActionError("");
+    try {
+      await storyService.remove(story.id);
+      setStories((current) =>
+        current.filter((item) => String(item.id) !== String(story.id))
+      );
+      window.dispatchEvent(new Event("ricehub:stories-updated"));
+      const remainingStories = group.stories.filter(
+        (item) => String(item.id) !== String(story.id)
+      );
+      const nextStory = remainingStories[currentIndex]
+        || remainingStories[currentIndex - 1];
+      if (nextStory) {
+        navigate(`/stories/${nextStory.id}`, { replace: true });
+      } else {
+        close();
+      }
+    } catch (deleteError) {
+      console.error("Story could not be deleted:", deleteError);
+      setActionError("This story could not be deleted.");
+    } finally {
+      setDeletePending(false);
+    }
+  };
+
+  const showViewers = async () => {
+    if (!story || !isOwner) return;
+    setViewersOpen(true);
+    setViewersLoading(true);
+    setViewersError("");
+    try {
+      const result = await storyService.viewers(story.id);
+      setViewers(getArrayResults(result, "Story viewers"));
+    } catch (viewersLoadError) {
+      console.error("Story viewers could not be loaded:", viewersLoadError);
+      setViewersError("The viewers list could not be loaded.");
+    } finally {
+      setViewersLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!story || story.media_type === "video") return undefined;
@@ -135,13 +222,51 @@ export default function StoryViewer() {
           />
           <header>
             <Avatar user={story.author} size={40} />
-            <div>
+            <div className="story-fullscreen-author">
               <strong>{story.author?.first_name || story.author?.username}</strong>
               <time dateTime={story.created_at}>
                 {new Date(story.created_at).toLocaleTimeString()}
               </time>
             </div>
+            <div className="story-fullscreen-actions">
+              {isOwner ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={showViewers}
+                    aria-label={`Seen by ${story.view_count || 0}`}
+                    title="Seen by"
+                  >
+                    <Eye size={18} />
+                    <span>{story.view_count || 0}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deleteStory}
+                    disabled={deletePending}
+                    aria-label="Delete story"
+                    title="Delete story"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={isLiked ? "is-liked" : ""}
+                  onClick={toggleLike}
+                  disabled={likePending}
+                  aria-label={isLiked ? "Unlike story" : "Like story"}
+                  aria-pressed={isLiked}
+                  title={isLiked ? "Unlike story" : "Like story"}
+                >
+                  <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
+                  <span>{likeCount}</span>
+                </button>
+              )}
+            </div>
           </header>
+          {actionError && <p className="story-action-error" role="alert">{actionError}</p>}
           {mediaUrl && (isVideo
             ? (
               <video
@@ -179,6 +304,41 @@ export default function StoryViewer() {
           ><ChevronRight /></button>
         </article>
       )}
+      <Modal
+        open={viewersOpen}
+        onClose={() => setViewersOpen(false)}
+        title={`Seen by ${story?.view_count || 0}`}
+      >
+        {viewersLoading && <p>Loading viewers...</p>}
+        {viewersError && <p role="alert">{viewersError}</p>}
+        {!viewersLoading && !viewersError && viewers.length === 0 && (
+          <p>No viewers yet.</p>
+        )}
+        {!viewersLoading && !viewersError && viewers.length > 0 && (
+          <ul className="story-viewers-list">
+            {viewers.map((viewer) => (
+              <li key={viewer.id}>
+                <Avatar
+                  src={viewer.avatar}
+                  name={[viewer.first_name, viewer.last_name]
+                    .filter(Boolean)
+                    .join(" ") || viewer.username}
+                  size={38}
+                />
+                <span>{viewer.first_name || viewer.username}</span>
+                {viewer.is_liked && (
+                  <Heart
+                    className="story-viewer-like"
+                    size={18}
+                    fill="currentColor"
+                    aria-label="Liked this story"
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
     </main>
   );
 }

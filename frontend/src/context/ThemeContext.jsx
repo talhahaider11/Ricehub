@@ -7,13 +7,18 @@ import {
 
 const ThemeContext = createContext(null);
 
+function getStoredTheme() {
+  const storedTheme = localStorage.getItem("theme");
+  return storedTheme === "dark" ? "dark" : "light";
+}
+
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem("theme") || "light";
-  });
+  const [theme, setTheme] = useState(getStoredTheme);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    root.classList.toggle("dark", theme === "dark");
     localStorage.setItem("theme", theme);
   }, [theme]);
 

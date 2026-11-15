@@ -10,6 +10,9 @@ vi.mock("../services/storyService", () => ({
   default: {
     list: vi.fn(),
     markViewed: vi.fn(),
+    toggleLike: vi.fn(),
+    remove: vi.fn(),
+    viewers: vi.fn(),
   },
 }));
 
@@ -22,6 +25,12 @@ describe("StoryViewer", () => {
     vi.clearAllMocks();
     useAuth.mockReturnValue({ user: { id: 1 } });
     storyService.markViewed.mockResolvedValue({});
+    storyService.toggleLike.mockResolvedValue({
+      is_liked: true,
+      like_count: 1,
+    });
+    storyService.remove.mockResolvedValue({});
+    storyService.viewers.mockResolvedValue({ results: [] });
     storyService.list.mockResolvedValue({
       results: [
         {
@@ -77,6 +86,75 @@ describe("StoryViewer", () => {
 
     await screen.findByText("First story");
     expect(storyService.markViewed).toHaveBeenCalledWith(4);
+  });
+
+  it("lets a viewer like and unlike a story", async () => {
+    storyService.toggleLike
+      .mockResolvedValueOnce({ is_liked: true, like_count: 1 })
+      .mockResolvedValueOnce({ is_liked: false, like_count: 0 });
+    render(
+      <MemoryRouter initialEntries={["/stories/4"]}>
+        <Routes>
+          <Route path="/stories/:id" element={<StoryViewer />} />
+          <Route path="/" element={<p>Story viewer closed</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByText("First story");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Like story" }));
+      await storyService.toggleLike.mock.results[0].value;
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Unlike story" }));
+      await storyService.toggleLike.mock.results[1].value;
+    });
+
+    expect(storyService.toggleLike).toHaveBeenNthCalledWith(1, 4);
+    expect(storyService.toggleLike).toHaveBeenNthCalledWith(2, 4);
+  });
+
+  it("shows owner controls and removes a deleted story immediately", async () => {
+    storyService.list.mockResolvedValue({
+      results: [
+        {
+          id: 4,
+          author: { id: 1, username: "owner" },
+          caption: "My story",
+          view_count: 1,
+          created_at: "2026-11-02T10:00:00Z",
+        },
+      ],
+    });
+    storyService.viewers.mockResolvedValue({
+      results: [
+        {
+          id: 2,
+          username: "liker",
+          is_liked: true,
+          viewed_at: "2026-11-02T10:01:00Z",
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/stories/4"]}>
+        <Routes>
+          <Route path="/stories/:id" element={<StoryViewer />} />
+          <Route path="/" element={<p>Story viewer closed</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByText("My story");
+    fireEvent.click(screen.getByRole("button", { name: "Seen by 1" }));
+    expect(await screen.findByText("liker")).toBeInTheDocument();
+    expect(screen.getByLabelText("Liked this story")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete story" }));
+    expect(await screen.findByText("Story viewer closed")).toBeInTheDocument();
+    expect(storyService.remove).toHaveBeenCalledWith(4);
   });
 
   it("uses video duration for progress and advances when playback ends", async () => {

@@ -1,4 +1,5 @@
 from datetime import timedelta
+from urllib.parse import urlparse
 
 from django.contrib.auth import get_user_model
 from django.conf import settings
@@ -10,7 +11,7 @@ from friendships.models import FriendRequest
 from media_app.models import MediaAsset
 from users.models import BlockedUser, ProfileVisibility
 
-from .models import Story, StoryView
+from .models import Story, StoryLike, StoryView
 
 
 User = get_user_model()
@@ -41,7 +42,9 @@ class StoryAPITests(APITestCase):
             author=self.author,
             text="Expired",
             visibility=Story.Visibility.PUBLIC,
-            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        Story.all_objects.filter(pk=expired_story.pk).update(
+            created_at=timezone.now() - timedelta(hours=24, seconds=1),
         )
 
         response = self.client.get("/api/stories/")
@@ -159,7 +162,9 @@ class StoryAPITests(APITestCase):
             author=self.author,
             text="Expired",
             visibility=Story.Visibility.PUBLIC,
-            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        Story.all_objects.filter(pk=story.pk).update(
+            created_at=timezone.now() - timedelta(hours=24, seconds=1),
         )
 
         response = self.client.get(f"/api/stories/{story.pk}/")
@@ -234,6 +239,71 @@ class StoryAPITests(APITestCase):
         self.assertEqual(viewers_response.status_code, 404)
         self.assertTrue(Story.all_objects.filter(pk=story.pk).exists())
 
+    def test_owner_can_delete_only_an_active_story(self):
+        story = Story.objects.create(author=self.author, text="Active")
+        self.client.force_authenticate(self.author)
+
+        response = self.client.delete(f"/api/stories/{story.pk}/delete/")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Story.all_objects.filter(pk=story.pk).exists())
+
+        expired_story = Story.all_objects.create(
+            author=self.author,
+            text="Expired",
+        )
+        Story.all_objects.filter(pk=expired_story.pk).update(
+            created_at=timezone.now() - timedelta(hours=24, seconds=1),
+        )
+        response = self.client.delete(
+            f"/api/stories/{expired_story.pk}/delete/",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_story_like_toggle_is_unique_and_excludes_owner(self):
+        story = Story.objects.create(
+            author=self.author,
+            text="Likeable",
+            visibility=Story.Visibility.PUBLIC,
+        )
+        like_url = f"/api/stories/{story.pk}/like/"
+
+        first_like = self.client.post(like_url)
+        second_like = self.client.post(like_url)
+
+        self.assertEqual(first_like.status_code, 200)
+        self.assertEqual(first_like.data, {"is_liked": True, "like_count": 1})
+        self.assertEqual(second_like.data, {"is_liked": False, "like_count": 0})
+        self.assertFalse(StoryLike.objects.filter(story=story).exists())
+
+        self.client.force_authenticate(self.author)
+        owner_like = self.client.post(like_url)
+        self.assertEqual(owner_like.status_code, 400)
+
+    def test_viewers_are_sorted_with_likers_first(self):
+        story = Story.objects.create(author=self.author, text="Viewed")
+        recent_viewer = User.objects.create_user(
+            username="recent-story-viewer",
+            email="recent-story-viewer@example.com",
+            password="test-password",
+        )
+        for viewer in (self.viewer, recent_viewer):
+            StoryView.objects.create(story=story, viewer=viewer)
+        StoryLike.objects.create(story=story, user=self.viewer)
+        self.client.force_authenticate(self.author)
+
+        response = self.client.get(f"/api/stories/{story.pk}/viewers/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [entry["id"] for entry in response.data["results"]],
+            [self.viewer.pk, recent_viewer.pk],
+        )
+        self.assertEqual(
+            [entry["is_liked"] for entry in response.data["results"]],
+            [True, False],
+        )
+
     def test_owner_can_delete_story_without_deleting_its_media_asset(self):
         asset = MediaAsset.objects.create(
             owner=self.author,
@@ -291,7 +361,11 @@ class StoryAPITests(APITestCase):
         story = Story.objects.get(pk=response.data["id"])
         self.assertEqual(story.media_asset_id, image.pk)
         self.assertEqual(response.data["media_type"], "image")
-        self.assertTrue(response.data["media_url"].endswith("media/test.jpg"))
+        self.assertTrue(
+            urlparse(response.data["media_url"]).path.endswith(
+                "media/test.jpg",
+            )
+        )
         self.assertIn("thumbnail_url", response.data)
 
     def test_create_story_rejects_another_users_media_asset(self):
@@ -339,7 +413,9 @@ class StoryAPITests(APITestCase):
             author=self.viewer,
             text="Expired",
             media_asset=image,
-            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        Story.all_objects.filter(pk=expired_story.pk).update(
+            created_at=timezone.now() - timedelta(hours=24, seconds=1),
         )
         StoryView.objects.create(story=expired_story, viewer=self.author)
 

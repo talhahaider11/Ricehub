@@ -65,6 +65,8 @@ class ConversationMember(models.Model):
         default=Role.MEMBER,
     )
     is_muted = models.BooleanField(default=False)
+    is_archived = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     last_read_at = models.DateTimeField(null=True, blank=True)
 

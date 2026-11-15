@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Search, UserPlus } from "lucide-react";
 import Avatar from "../common/Avatar";
+import VerifiedBadge from "../common/VerifiedBadge";
 import { useLanguage } from "../../context/LanguageContext";
-import userService from "../../services/userService";
+import messageService from "../../services/messageService";
 import { getArrayResults } from "../../utils/arrayResults";
 import { parseUserId } from "../../utils/userId";
 
@@ -16,72 +17,54 @@ export default function UserLookupField({ onSelect, disabled = false }) {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const searchVersion = useRef(0);
 
-  const searchUsers = async (event) => {
-    event.preventDefault();
-    const value = query.trim();
-    if (!value) {
-      setError(t("enterUserIdOrName"));
-      return;
-    }
-
-    const numericId = parseUserId(value);
-    if (numericId !== null) {
-      onSelect(numericId);
-      setQuery("");
+  const searchUsers = useCallback(async (value) => {
+    const searchTerm = value.trim();
+    const numericId = parseUserId(searchTerm);
+    if (!searchTerm || (searchTerm.length < 2 && numericId === null)) {
       setMatches([]);
-      setError("");
-      return;
-    }
-    if (value.length < 2) {
-      setError(t("enterUserIdOrName"));
+      setLoading(false);
       return;
     }
 
+    const version = ++searchVersion.current;
     setLoading(true);
     setError("");
     try {
-      const normalizedValue = value.replace(/^@/, "").toLocaleLowerCase();
-      const terms = value.split(/\s+/).filter((term) => term.length >= 2);
-      const resultSets = await Promise.all(
-        terms.map((term) => userService.search(term))
+      const results = await messageService.searchGroupMembers(
+      numericId === null
+        ? searchTerm.replace(/^@/, "")
+        : String(numericId)
       );
-      const usersById = resultSets.map((results) => (
-        new Map(
-          getArrayResults(results, "Group member search")
-            .map((user) => [user.id, user])
-        )
-      ));
-      const users = usersById.length > 1
-        ? [...usersById[0].values()].filter((user) => (
-          usersById.slice(1).every((results) => results.has(user.id))
-        ))
-        : [...(usersById[0]?.values() || [])];
-      const exactMatches = users.filter((user) => {
-        const name = displayName(user).toLocaleLowerCase();
-        return user.username.toLocaleLowerCase() === normalizedValue
-          || name === normalizedValue;
-      });
-      const results = exactMatches.length ? exactMatches : users;
-
-      if (results.length === 1) {
-        onSelect(results[0].id);
-        setQuery("");
-        setMatches([]);
-      } else if (results.length > 1) {
-        setMatches(results);
-      } else {
-        setError(t("groupUserNotFound"));
-      }
+      if (version !== searchVersion.current) return;
+      const verifiedUsers = getArrayResults(
+        results,
+        "Group member search"
+      ).filter((user) => user.is_verified);
+      setMatches(verifiedUsers);
+      if (verifiedUsers.length === 0) setError(t("groupUserNotFound"));
     } catch (searchError) {
+      if (version !== searchVersion.current) return;
       console.error("Group member search failed:", searchError);
       setError(t("groupUserSearchFailed"));
     } finally {
-      setLoading(false);
+      if (version === searchVersion.current) setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void searchUsers(query);
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      searchVersion.current += 1;
+    };
+  }, [query, searchUsers]);
 
   const selectUser = (user) => {
+    searchVersion.current += 1;
     onSelect(user.id);
     setQuery("");
     setMatches([]);
@@ -90,21 +73,33 @@ export default function UserLookupField({ onSelect, disabled = false }) {
 
   return (
     <div className="group-user-lookup">
-      <form className="group-user-id-field" onSubmit={searchUsers}>
+      <div className="group-user-id-field">
         <label htmlFor="group-user-lookup">{t("userIdOrName")}</label>
         <div>
           <input
             id="group-user-lookup"
             value={query}
             onChange={(event) => {
+              searchVersion.current += 1;
               setQuery(event.target.value);
+              setMatches([]);
               setError("");
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void searchUsers(query);
+              }
             }}
             placeholder={t("userIdOrName")}
             autoComplete="off"
-            disabled={disabled || loading}
+            disabled={disabled}
           />
-          <button type="submit" disabled={disabled || loading || !query.trim()}>
+          <button
+            type="button"
+            onClick={() => void searchUsers(query)}
+            disabled={disabled || loading || !query.trim()}
+          >
             {loading ? t("searching") : (
               <>
                 <Search size={16} aria-hidden="true" />
@@ -113,7 +108,7 @@ export default function UserLookupField({ onSelect, disabled = false }) {
             )}
           </button>
         </div>
-      </form>
+      </div>
       {matches.length > 0 && (
         <div className="group-user-matches" role="listbox" aria-label={t("matchingUsers")}>
           {matches.map((user) => (
@@ -129,6 +124,7 @@ export default function UserLookupField({ onSelect, disabled = false }) {
                 <strong>{displayName(user)}</strong>
                 <small>@{user.username} · ID {user.id}</small>
               </span>
+              <VerifiedBadge verified={user.is_verified} />
               <UserPlus size={18} aria-hidden="true" />
             </button>
           ))}

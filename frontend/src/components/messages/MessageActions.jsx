@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, Reply, Share2 } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 
 export default function MessageActions({
@@ -101,9 +101,32 @@ export default function MessageActions({
   };
 
   if (message.is_deleted) return null;
+  const isShareable = Boolean(
+    message.attachment || /https?:\/\/\S+/i.test(message.content || "")
+  );
 
   return (
     <div className="message-actions" ref={actionsRef}>
+      <button
+        className="message-reply-trigger"
+        type="button"
+        aria-label={t("reply")}
+        title={t("reply")}
+        onClick={() => onReply(message)}
+      >
+        <Reply size={16} aria-hidden="true" />
+      </button>
+      {isShareable && (
+        <button
+          className="message-share-quick"
+          type="button"
+          aria-label={t("share")}
+          title={t("share")}
+          onClick={() => void shareMessage()}
+        >
+          <Share2 size={16} aria-hidden="true" />
+        </button>
+      )}
       {!editing && (
         <button
           className="message-actions-trigger"
@@ -124,21 +147,13 @@ export default function MessageActions({
           role="menu"
           aria-label={t("messageOptions")}
         >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              closeMenu();
-              onReply(message);
-            }}
-          >
-            {t("reply")}
-          </button>
           {own && (
             <>
-              <button type="button" role="menuitem" onClick={startEditing}>
-                {t("edit")}
-              </button>
+              {message.content && (
+                <button type="button" role="menuitem" onClick={startEditing}>
+                  {t("edit")}
+                </button>
+              )}
               <button
                 type="button"
                 role="menuitem"

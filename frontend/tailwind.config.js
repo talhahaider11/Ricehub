@@ -4,6 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
+        app: "var(--bg-app)",
+        surface: "var(--bg-surface)",
+        header: "var(--bg-header)",
+        footer: "var(--bg-footer)",
+        text: {
+          primary: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+        },
+        accent: {
+          primary: "var(--accent-primary)",
+          secondary: "var(--accent-secondary)",
+          highlight: "var(--accent-highlight)",
+        },
+        border: {
+          subtle: "var(--border-subtle)",
+        },
         brand: {
           50: "#eef2ff",
           100: "#e0e7ff",

@@ -6,6 +6,7 @@ from channels.exceptions import ChannelFull
 from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from rest_framework import generics, status
@@ -25,13 +26,20 @@ from .models import (
 from .serializers import (
     ConversationSerializer,
     MessageSerializer,
+    MessageSenderSerializer,
 )
-from .services import get_or_create_conversation
+from .services import (
+    ensure_conversation_memberships,
+    get_or_create_conversation,
+    restore_conversation_memberships,
+)
 from .permissions import is_conversation_member
 from users.privacy import (
     can_message_between,
     get_blocked_user_ids,
 )
+from friendships.services import get_friend_ids
+from search.services import search_users
 
 
 User = get_user_model()
@@ -82,18 +90,37 @@ class ConversationListCreateView(
     serializer_class = ConversationSerializer
 
     def get_queryset(self):
-
+        user_conversations = Conversation.objects.filter(
+            participants=self.request.user
+        )
+        ensure_conversation_memberships(
+            user_conversations,
+            self.request.user,
+        )
+        archived = self.request.query_params.get("archived", "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
         return (
-            Conversation.objects
+            user_conversations
             .filter(
-                participants=self.request.user
+                memberships__user=self.request.user,
+                memberships__is_archived=archived,
+                memberships__deleted_at__isnull=True,
             )
             .exclude(
                 participants__id__in=get_blocked_user_ids(self.request.user)
             )
             .distinct()
             .prefetch_related(
-                "participants"
+                "participants",
+                Prefetch(
+                    "memberships",
+                    queryset=ConversationMember.objects.filter(
+                        user=self.request.user
+                    ),
+                ),
             )
             .order_by("-updated_at")
         )
@@ -144,6 +171,15 @@ class ConversationListCreateView(
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        ensure_conversation_memberships(
+            Conversation.objects.filter(pk=conversation.pk),
+            request.user,
+        )
+        ConversationMember.objects.filter(
+            conversation=conversation,
+            user=request.user,
+        ).update(is_archived=False, deleted_at=None)
+
         serializer = self.get_serializer(
             conversation
         )
@@ -164,6 +200,11 @@ class GroupConversationCreateView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        if not request.user.is_verified:
+            raise ValidationError(
+                {"detail": "Only verified users can create group conversations."}
+            )
+
         name = request.data.get("name")
         user_ids = request.data.get("user_ids")
         if not isinstance(name, str) or not name.strip():
@@ -196,6 +237,10 @@ class GroupConversationCreateView(APIView):
         )
         if len(members) != len(selected_ids):
             raise ValidationError({"user_ids": "One or more selected members are unavailable."})
+        if any(not member.is_verified for member in members):
+            raise ValidationError(
+                {"user_ids": "Only verified users can be added to a group."}
+            )
         blocked_ids = get_blocked_user_ids(request.user)
         if selected_ids.intersection(blocked_ids):
             raise ValidationError({"user_ids": "Blocked users cannot be added to a group."})
@@ -227,6 +272,54 @@ class GroupConversationCreateView(APIView):
             ).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class GroupMemberSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        if query:
+            if query.isdecimal() and len(query) < 19:
+                users = User.objects.filter(
+                    pk=int(query),
+                    is_active=True,
+                    is_suspended=False,
+                    is_verified=True,
+                ).exclude(
+                    pk=request.user.pk,
+                ).exclude(
+                    pk__in=get_blocked_user_ids(request.user),
+                ).order_by("username")
+            else:
+                terms = query.split()
+                users = search_users(request.user, terms[0]).filter(
+                    is_verified=True,
+                )
+                for term in terms[1:]:
+                    users = users.filter(
+                        pk__in=search_users(
+                            request.user,
+                            term,
+                        ).values("pk")
+                    )
+                users = users.distinct().order_by("username")
+        else:
+            users = User.objects.filter(
+                pk__in=get_friend_ids(request.user),
+                is_active=True,
+                is_suspended=False,
+                is_verified=True,
+            ).exclude(
+                pk__in=get_blocked_user_ids(request.user),
+            ).order_by("username")
+
+        results = MessageSenderSerializer(
+            users[:25],
+            many=True,
+            context={"request": request},
+        ).data
+        return Response({"results": results})
 
 
 class GroupConversationMemberAddView(APIView):
@@ -263,6 +356,10 @@ class GroupConversationMemberAddView(APIView):
         ).first()
         if not member:
             raise ValidationError({"user_id": "User ID was not found or is unavailable."})
+        if not member.is_verified:
+            raise ValidationError(
+                {"user_id": "Only verified users can be added to a group."}
+            )
         if member.pk in get_blocked_user_ids(request.user):
             raise ValidationError({"user_id": "Blocked users cannot be added to a group."})
 
@@ -301,18 +398,31 @@ class ConversationDetailView(
     serializer_class = ConversationSerializer
 
     def get_queryset(self):
-
+        user_conversations = Conversation.objects.filter(
+            participants=self.request.user
+        )
+        ensure_conversation_memberships(
+            user_conversations,
+            self.request.user,
+        )
         return (
-            Conversation.objects
+            user_conversations
             .filter(
-                participants=self.request.user
+                memberships__user=self.request.user,
+                memberships__deleted_at__isnull=True,
             )
             .exclude(
                 participants__id__in=get_blocked_user_ids(self.request.user)
             )
             .distinct()
             .prefetch_related(
-                "participants"
+                "participants",
+                Prefetch(
+                    "memberships",
+                    queryset=ConversationMember.objects.filter(
+                        user=self.request.user
+                    ),
+                ),
             )
         )
 
@@ -367,7 +477,7 @@ class MessageListCreateView(
                 "reply_to",
             )
             .prefetch_related("conversation__participants")
-            .order_by("created_at")
+            .order_by("-created_at", "-pk")
         )
 
     def get_serializer_context(self):
@@ -398,6 +508,8 @@ class MessageListCreateView(
             raise PermissionDenied(
                 "You are not part of this conversation."
             )
+        if not is_conversation_member(self.request.user, conversation_id):
+            raise PermissionDenied("This conversation is no longer available.")
         other_user = (
             conversation.participants.exclude(pk=self.request.user.pk).first()
             if conversation.conversation_type == Conversation.ConversationType.DIRECT
@@ -413,6 +525,7 @@ class MessageListCreateView(
             conversation=conversation,
         )
 
+        restore_conversation_memberships(conversation)
         conversation.save()
         message_data = MessageSerializer(
             serializer.instance,
@@ -447,6 +560,11 @@ class MarkConversationReadView(APIView):
                 {
                     "detail": "Conversation not found."
                 },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not is_conversation_member(request.user, conversation_id):
+            return Response(
+                {"detail": "Conversation not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         other_user = (
@@ -575,4 +693,69 @@ class DeleteMessageView(APIView):
                 "message_deleted",
                 {"message_id": message.pk},
             )
+        return Response({"success": True}, status=status.HTTP_200_OK)
+
+
+class ConversationArchiveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, conversation_id):
+        is_archived = request.data.get("is_archived")
+        if not isinstance(is_archived, bool):
+            raise ValidationError(
+                {"is_archived": "Provide true or false."}
+            )
+        conversation = Conversation.objects.filter(
+            pk=conversation_id,
+            participants=request.user,
+        ).first()
+        if not conversation or not is_conversation_member(
+            request.user,
+            conversation_id,
+        ):
+            return Response(
+                {"detail": "Conversation not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        membership, _ = ConversationMember.objects.get_or_create(
+            conversation=conversation,
+            user=request.user,
+        )
+        membership.is_archived = is_archived
+        membership.save(update_fields=["is_archived"])
+        return Response(
+            ConversationSerializer(
+                conversation,
+                context={"request": request},
+            ).data
+        )
+
+
+class ConversationDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, conversation_id):
+        conversation = Conversation.objects.filter(
+            pk=conversation_id,
+            participants=request.user,
+        ).first()
+        if not conversation or not is_conversation_member(
+            request.user,
+            conversation_id,
+        ):
+            return Response(
+                {"detail": "Conversation not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        membership, _ = ConversationMember.objects.get_or_create(
+            conversation=conversation,
+            user=request.user,
+        )
+        membership.deleted_at = timezone.now()
+        membership.save(update_fields=["deleted_at"])
+        broadcast_message_event(
+            conversation.pk,
+            "conversation_hidden",
+            {"user_id": request.user.pk},
+        )
         return Response({"success": True}, status=status.HTTP_200_OK)

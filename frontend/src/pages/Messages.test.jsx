@@ -8,12 +8,16 @@ const mocks = vi.hoisted(() => ({
   createConversation: vi.fn(),
   friends: vi.fn(),
   useMessages: vi.fn(),
+  archiveConversation: vi.fn(),
+  deleteConversation: vi.fn(),
 }));
 
 vi.mock("../services/messageService", () => ({
   default: {
     conversations: mocks.conversations,
     createConversation: mocks.createConversation,
+    archiveConversation: mocks.archiveConversation,
+    deleteConversation: mocks.deleteConversation,
     sendAttachment: vi.fn(),
     editMessage: vi.fn(),
     deleteMessage: vi.fn(),
@@ -27,7 +31,14 @@ vi.mock("../services/friendService", () => ({
 }));
 
 vi.mock("../hooks/useAuth", () => ({
-  default: () => ({ user: { id: 1, username: "me", is_email_verified: true } }),
+  default: () => ({
+    user: {
+      id: 1,
+      username: "me",
+      is_email_verified: true,
+      is_verified: true,
+    },
+  }),
 }));
 
 vi.mock("../hooks/useMessages", () => ({
@@ -35,7 +46,15 @@ vi.mock("../hooks/useMessages", () => ({
 }));
 
 vi.mock("../components/messages/MessageList", () => ({
-  default: () => <div data-testid="message-list" />,
+  default: ({ showVerificationWarning }) => (
+    <div data-testid="message-list">
+      {showVerificationWarning && (
+        <p role="alert">
+          ⚠️ This user is unverified. Trust this person at your own risk.
+        </p>
+      )}
+    </div>
+  ),
 }));
 
 vi.mock("../components/messages/MessageInput", () => ({
@@ -58,17 +77,19 @@ describe("Messages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.friends.mockResolvedValue([]);
-    mocks.conversations.mockResolvedValue([
-      {
-        id: 4,
-        is_group: false,
-        conversation_type: "direct",
-        participants: [
-          { id: 1, username: "me" },
-          { id: 2, username: "talha2", is_online: true },
-        ],
-      },
-    ]);
+    mocks.conversations.mockImplementation((params = {}) => Promise.resolve(
+      params.archived ? [] : [
+        {
+          id: 4,
+          is_group: false,
+          conversation_type: "direct",
+          participants: [
+            { id: 1, username: "me" },
+            { id: 2, username: "talha2", is_online: true, is_verified: true },
+          ],
+        },
+      ]
+    ));
     mocks.useMessages.mockReturnValue({
       messages: [],
       setMessages: vi.fn(),
@@ -90,7 +111,9 @@ describe("Messages", () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: /talha2/ }));
+    fireEvent.click(await screen.findByRole("button", {
+      name: "Open conversation with talha2",
+    }));
 
     await waitFor(() => {
       expect(screen.getByTestId("message-list")).toBeInTheDocument();
@@ -104,35 +127,122 @@ describe("Messages", () => {
       .not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Back to conversations" }));
-    expect(await screen.findByRole("heading", { name: "Messages" }))
+    expect(await screen.findByRole("heading", { name: "Chats" }))
       .toBeInTheDocument();
     expect(screen.queryByTestId("message-list")).not.toBeInTheDocument();
   });
 
   it("opens a new conversation with an online friend who has no chat yet", async () => {
     mocks.friends.mockResolvedValue([
-    { id: 8, username: "friend-only", is_online: true },
+      { id: 8, username: "friend-only", is_online: true },
     ]);
     mocks.createConversation.mockResolvedValue({
-    id: 9,
-    is_group: false,
-    conversation_type: "direct",
-    other_user: { id: 8, username: "friend-only", is_online: true },
+      id: 9,
+      is_group: false,
+      conversation_type: "direct",
+      other_user: { id: 8, username: "friend-only", is_online: true },
     });
 
     render(
-    <MemoryRouter>
-      <Messages />
-    </MemoryRouter>
+      <MemoryRouter>
+        <Messages />
+      </MemoryRouter>
     );
 
     fireEvent.click(await screen.findByRole("button", {
-    name: "Start chat with friend-only",
+      name: "Start chat with friend-only",
     }));
 
     await waitFor(() => {
-    expect(mocks.createConversation).toHaveBeenCalledWith("friend-only");
-    expect(screen.getByTestId("message-list")).toBeInTheDocument();
+      expect(mocks.createConversation).toHaveBeenCalledWith("friend-only");
+      expect(screen.getByTestId("message-list")).toBeInTheDocument();
     });
+  });
+
+  it("shows a warning banner for an unverified direct-message partner", async () => {
+    mocks.conversations.mockResolvedValue([
+      {
+        id: 12,
+        is_group: false,
+        conversation_type: "direct",
+        participants: [
+          { id: 1, username: "me", is_verified: true },
+          { id: 2, username: "unverified-person", is_verified: false },
+        ],
+      },
+    ]);
+
+    render(
+      <MemoryRouter>
+        <Messages />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", {
+      name: "Open conversation with unverified-person",
+    }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "⚠️ This user is unverified. Trust this person at your own risk."
+    );
+  });
+
+  it("does not show the direct-message warning in a group conversation", async () => {
+    mocks.conversations.mockResolvedValue([
+      {
+        id: 13,
+        is_group: true,
+        conversation_type: "group",
+        name: "Group",
+        participants: [
+          { id: 1, username: "me", is_verified: true },
+          { id: 2, username: "unverified-person", is_verified: false },
+        ],
+      },
+    ]);
+
+    render(
+      <MemoryRouter>
+        <Messages />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", {
+      name: "Open conversation with Group",
+    }));
+
+    expect(await screen.findByTestId("message-list")).toBeInTheDocument();
+    expect(screen.queryByText(/This user is unverified/)).not.toBeInTheDocument();
+  });
+
+  it("opens archived chats separately from the inbox", async () => {
+    mocks.conversations.mockImplementation((params = {}) => Promise.resolve(
+      params.archived
+        ? [{
+          id: 22,
+          is_archived: true,
+          is_group: false,
+          conversation_type: "direct",
+          participants: [
+            { id: 1, username: "me" },
+            { id: 9, username: "archived-friend" },
+          ],
+        }]
+        : []
+    ));
+
+    render(
+      <MemoryRouter>
+        <Messages />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Archived/ }));
+
+    expect(await screen.findByRole("heading", { name: "Archived" }))
+      .toBeInTheDocument();
+    expect(await screen.findByRole("button", {
+      name: "Open conversation with archived-friend",
+    })).toBeInTheDocument();
   });
 });

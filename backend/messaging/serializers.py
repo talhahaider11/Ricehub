@@ -241,6 +241,7 @@ class ConversationSerializer(
 
     unread_count = serializers.SerializerMethodField()
     is_group = serializers.SerializerMethodField()
+    is_archived = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
@@ -253,6 +254,7 @@ class ConversationSerializer(
             "participants",
             "last_message",
             "unread_count",
+            "is_archived",
             "created_at",
             "updated_at",
         ]
@@ -294,3 +296,10 @@ class ConversationSerializer(
             )
             .count()
         )
+
+    def get_is_archived(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return False
+        membership = obj.memberships.filter(user=request.user).first()
+        return bool(membership and membership.is_archived)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { ArrowLeft, UsersRound } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import CreateGroupModal from "../components/messages/CreateGroupModal";
 import friendService from "../services/friendService";
 import messageService from "../services/messageService";
@@ -16,6 +16,7 @@ import ErrorState from "../components/common/ErrorState";
 import { getArrayResults } from "../utils/arrayResults";
 import GroupMemberModal from "../components/messages/GroupMemberModal";
 import { useLanguage } from "../context/LanguageContext";
+import Avatar from "../components/common/Avatar";
 
 function formatLastSeen(lastSeen, now, t, language) {
   if (!lastSeen) return "";
@@ -51,7 +52,10 @@ export default function Messages() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
+  const [archivedConversations, setArchivedConversations] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -60,8 +64,10 @@ export default function Messages() {
   const [replyTarget, setReplyTarget] = useState(null);
   const [lastSeenNow, setLastSeenNow] = useState(() => Date.now());
   const [onlineFriends, setOnlineFriends] = useState([]);
+  const [friends, setFriends] = useState([]);
   const [friendError, setFriendError] = useState("");
   const [openingFriend, setOpeningFriend] = useState("");
+  const [conversationActionError, setConversationActionError] = useState("");
 
   useEffect(() => {
     const timer = window.setInterval(() => setLastSeenNow(Date.now()), 60_000);
@@ -74,6 +80,7 @@ export default function Messages() {
       .then((data) => {
         if (!active) return;
         const friends = getArrayResults(data, "Friends");
+        setFriends(friends);
         setOnlineFriends(friends.filter((friend) => friend.is_online === true));
         setFriendError("");
       })
@@ -128,6 +135,15 @@ export default function Messages() {
       .finally(() => {
         if (active) setLoading(false);
       });
+    messageService.conversations({ archived: true })
+      .then((data) => {
+        if (!active) return;
+        setArchivedConversations(getArrayResults(data, "Archived conversations"));
+      })
+      .catch((archiveLoadError) => {
+        console.error("Archived conversations could not be loaded:", archiveLoadError);
+        if (active) setConversationActionError(t("conversationLoadFailed"));
+      });
 
     return () => {
       active = false;
@@ -145,6 +161,7 @@ export default function Messages() {
     sendCallSignal,
     callSignal,
     clearCallSignal,
+    conversationHidden,
   } = useMessages(selectedConversation);
 
   const handleSend = (content, replyToId) => {
@@ -175,7 +192,7 @@ export default function Messages() {
   };
   const handleSelectFriend = async (friend) => {
     if (!friend?.username || openingFriend) return;
-    const existing = conversations.find((conversation) => {
+    const existing = [...conversations, ...archivedConversations].find((conversation) => {
       if (conversation.is_group || conversation.conversation_type === "group") return false;
       const participant = conversation.other_user
         || conversation.participants?.find(
@@ -219,12 +236,65 @@ export default function Messages() {
         : item
     )));
   };
-  const handleConversationUpdated = (updated) => {
-    setConversations((current) => current.map((conversation) => (
-      conversation.id === updated.id ? updated : conversation
-    )));
+  const handleArchiveConversation = async (conversation, isArchived) => {
+    setConversationActionError("");
+    try {
+      const updated = await messageService.archiveConversation(
+        conversation.id,
+        isArchived
+      );
+      if (isArchived) {
+        setConversations((current) => current.filter((item) => item.id !== conversation.id));
+        setArchivedConversations((current) => [
+          updated,
+          ...current.filter((item) => item.id !== conversation.id),
+        ]);
+      } else {
+        setArchivedConversations((current) => current.filter((item) => item.id !== conversation.id));
+        setConversations((current) => [
+          updated,
+          ...current.filter((item) => item.id !== conversation.id),
+        ]);
+      }
+    } catch (actionError) {
+      console.error("Conversation archive state could not be updated:", actionError);
+      setConversationActionError(t("conversationActionFailed"));
+    }
   };
-  const activeConversation = conversations.find(
+  const handleDeleteConversation = async (conversation) => {
+    if (!window.confirm(t("confirmDeleteConversation"))) return;
+    setConversationActionError("");
+    try {
+      await messageService.deleteConversation(conversation.id);
+      setConversations((current) => current.filter((item) => item.id !== conversation.id));
+      setArchivedConversations((current) => current.filter((item) => item.id !== conversation.id));
+    } catch (actionError) {
+      console.error("Conversation could not be deleted:", actionError);
+      setConversationActionError(t("conversationActionFailed"));
+    }
+  };
+  const handleShowArchived = async () => {
+    setConversationActionError("");
+    try {
+      const data = await messageService.conversations({ archived: true });
+      setArchivedConversations(getArrayResults(data, "Archived conversations"));
+      setShowArchived(true);
+    } catch (archiveLoadError) {
+      console.error("Archived conversations could not be loaded:", archiveLoadError);
+      setConversationActionError(t("conversationLoadFailed"));
+    }
+  };
+  useEffect(() => {
+    if (!conversationHidden) return;
+    setConversations((current) => current.filter(
+      (conversation) => conversation.id !== selectedConversation
+    ));
+    setArchivedConversations((current) => current.filter(
+      (conversation) => conversation.id !== selectedConversation
+    ));
+    setSelectedConversation(null);
+  }, [conversationHidden, selectedConversation]);
+  const activeConversation = [...conversations, ...archivedConversations].find(
     (conversation) => conversation.id === selectedConversation
   );
   const otherUser =
@@ -236,10 +306,15 @@ export default function Messages() {
     if (!selectedConversation) return undefined;
     let active = true;
     const refreshPresence = () => {
-      messageService.conversations()
+      messageService.conversations({ archived: showArchived })
         .then((data) => {
           if (!active) return;
-          setConversations(getArrayResults(data, "Conversations"));
+          const items = getArrayResults(data, "Conversations");
+          if (showArchived) {
+            setArchivedConversations(items);
+          } else {
+            setConversations(items);
+          }
           setLastSeenNow(Date.now());
         })
         .catch((refreshError) => {
@@ -251,12 +326,32 @@ export default function Messages() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [selectedConversation]);
-  const showVerificationWarning = Boolean(
-    user &&
-      otherUser?.is_email_verified &&
-      !user.is_email_verified
+  }, [selectedConversation, showArchived]);
+  const isDirectConversation = Boolean(
+    activeConversation
+    && !activeConversation.is_group
+    && activeConversation.conversation_type !== "group"
   );
+  const showVerificationWarning = Boolean(
+    isDirectConversation && otherUser?.is_verified === false
+  );
+  const loadedLastMessage = messages[messages.length - 1];
+  const loadedLastMessageTime = Date.parse(loadedLastMessage?.created_at || "");
+  const listedLastMessage = activeConversation?.last_message;
+  const listedLastMessageTime = Date.parse(listedLastMessage?.created_at || "");
+  const latestConversationMessageId = loadedLastMessage
+    && (
+      !listedLastMessage
+      || (
+        Number.isFinite(loadedLastMessageTime)
+        && (
+          !Number.isFinite(listedLastMessageTime)
+          || loadedLastMessageTime >= listedLastMessageTime
+        )
+      )
+    )
+    ? loadedLastMessage.id
+    : listedLastMessage?.id;
 
   if (loading) {
     return <Loader />;
@@ -286,19 +381,36 @@ export default function Messages() {
               >
                 <ArrowLeft size={20} aria-hidden="true" />
               </button>
+              <span className="chat-header-avatar">
+                {activeConversation?.is_group
+                  || activeConversation?.conversation_type === "group" ? (
+                    <span className="chat-group-avatar">
+                      <UsersRound size={20} aria-hidden="true" />
+                    </span>
+                  ) : (
+                    <>
+                      <Avatar user={otherUser} size="medium" />
+                      {otherUser?.is_online === true && (
+                        <span className="chat-header-online-dot" aria-hidden="true" />
+                      )}
+                    </>
+                  )}
+              </span>
               <div className="chat-header-identity">
                 <strong>
                   {activeConversation?.is_group
                     || activeConversation?.conversation_type === "group"
                     ? activeConversation.name || t("groupConversation")
-                    : otherUser?.username || t("conversation")}
+                    : [otherUser?.first_name, otherUser?.last_name]
+                      .filter(Boolean)
+                      .join(" ") || otherUser?.username || t("conversation")}
                 </strong>
                 {otherUser && (
                   <small className="chat-presence" aria-live="polite">
                     {otherUser.is_online === true ? (
                       <>
                         <span className="chat-presence-dot" aria-hidden="true" />
-                        {t("active")}
+                        {t("activeNow")}
                       </>
                     ) : (
                       formatLastSeen(otherUser.last_seen, lastSeenNow, t, language)
@@ -329,11 +441,6 @@ export default function Messages() {
                   />
                 )}
             </header>
-            {showVerificationWarning && (
-              <p className="message-verification-warning" role="alert">
-                {t("messageVerificationWarning")}
-              </p>
-            )}
 
             {messageError ? (
               <ErrorState message={messageError} />
@@ -344,6 +451,9 @@ export default function Messages() {
                 onReply={setReplyTarget}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                conversationPartner={isDirectConversation ? otherUser : null}
+                showVerificationWarning={showVerificationWarning}
+                latestConversationMessageId={latestConversationMessageId}
               />
             )}
 
@@ -365,15 +475,29 @@ export default function Messages() {
         </main>
       ) : (
         <ConversationList
-          conversations={conversations}
+          conversations={showArchived ? archivedConversations : conversations}
           selectedId={selectedConversation}
           onSelect={setSelectedConversation}
           currentUser={user}
           onCreateGroup={() => setGroupModalOpen(true)}
           onlineFriends={onlineFriends}
+          friends={friends}
           onSelectFriend={handleSelectFriend}
           openingFriend={openingFriend}
           friendError={friendError}
+          actionError={conversationActionError}
+          archived={showArchived}
+          archiveCount={archivedConversations.length}
+          onShowArchived={handleShowArchived}
+          onBack={() => {
+            if (showArchived) {
+              setShowArchived(false);
+            } else {
+              navigate(-1);
+            }
+          }}
+          onArchive={handleArchiveConversation}
+          onDelete={handleDeleteConversation}
         />
       )}
       <CreateGroupModal

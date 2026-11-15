@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MessageList from "./MessageList";
 
@@ -7,7 +8,7 @@ describe("MessageList", () => {
     vi.useRealTimers();
   });
 
-  it("shows actions for the user's message after a short hold", () => {
+  it("shows the requested actions for the user's message after a two-second hold", () => {
     vi.useFakeTimers();
     Element.prototype.scrollIntoView = vi.fn();
 
@@ -28,11 +29,11 @@ describe("MessageList", () => {
       />
     );
 
-    const message = screen.getByText("My message").closest(".message");
-    fireEvent.pointerDown(message);
+    const bubble = screen.getByText("My message").closest(".message-bubble");
+    fireEvent.pointerDown(bubble, { pointerType: "touch" });
 
     act(() => {
-      vi.advanceTimersByTime(549);
+      vi.advanceTimersByTime(1999);
     });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
@@ -42,11 +43,10 @@ describe("MessageList", () => {
     expect(screen.getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Unsend" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Message options" }))
-      .toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Reply" })).not.toBeInTheDocument();
   });
 
-  it("shows reply and share actions for an incoming message after a hold", () => {
+  it("shows Share for an incoming message after a hold and preserves Reply separately", () => {
     vi.useFakeTimers();
     Element.prototype.scrollIntoView = vi.fn();
 
@@ -66,13 +66,16 @@ describe("MessageList", () => {
       />
     );
 
-    fireEvent.pointerDown(screen.getByText("Their message").closest(".message"));
+    fireEvent.pointerDown(
+      screen.getByText("Their message").closest(".message-bubble"),
+      { pointerType: "touch" }
+    );
     act(() => {
-      vi.advanceTimersByTime(550);
+      vi.advanceTimersByTime(2000);
     });
 
-    expect(screen.getByRole("menuitem", { name: "Reply" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reply" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Edit" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Unsend" })).not.toBeInTheDocument();
   });
@@ -93,5 +96,52 @@ describe("MessageList", () => {
 
     expect(screen.getByText("Seen")).toBeInTheDocument();
     expect(screen.queryByText("Sent")).not.toBeInTheDocument();
+  });
+
+  it("hides the previous Sent or Seen receipt as soon as the other person replies", () => {
+    render(
+      <MessageList
+        messages={[
+          { id: 1, content: "My message", sender: { id: 7 }, is_read: true },
+          { id: 2, content: "Their reply", sender: { id: 8 }, is_read: false },
+        ]}
+        currentUser={{ id: 7 }}
+        onReply={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Seen")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sent")).not.toBeInTheDocument();
+  });
+
+  it("shows the profile hero and places the trust warning beneath its profile link", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <MessageList
+          messages={[]}
+          currentUser={{ id: 7 }}
+          onReply={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+          conversationPartner={{
+            id: 8,
+            username: "friend",
+            first_name: "New",
+            last_name: "Friend",
+          }}
+          showVerificationWarning
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("heading", { name: "New Friend" })).toBeInTheDocument();
+    const profileLink = screen.getByRole("link", { name: "View profile" });
+    expect(profileLink).toHaveAttribute("href", "/profile/8");
+    expect(profileLink.compareDocumentPosition(screen.getByRole("alert")) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
   });
 });
