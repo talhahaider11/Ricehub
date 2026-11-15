@@ -7841,3 +7841,258 @@ body {
     padding-inline-start: 11px;
   }
 }
+
+/* One-to-one call screen */
+.audio-call-controls {
+  position: relative;
+}
+
+.audio-call-controls > .call-setup-permission-help {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 25;
+  width: min(320px, calc(100vw - 28px));
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+}
+
+.call-setup-permission-help p {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+.call-setup-permission-help button,
+.call-permission-help button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--accent-primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.call-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 18px;
+  overflow: hidden;
+  padding: max(20px, env(safe-area-inset-top)) clamp(16px, 5vw, 48px) max(20px, env(safe-area-inset-bottom));
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(16, 185, 129, 0.13), transparent 58%),
+    #0b1120;
+  color: #f1f5f9;
+  color-scheme: dark;
+}
+
+.call-screen-header {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.call-screen-header h2 {
+  margin: 0;
+  font-size: clamp(20px, 4vw, 28px);
+  font-weight: 700;
+}
+
+.call-screen-header p,
+.call-screen-waiting p {
+  margin: 6px 0 0;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.call-screen-stage {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  place-items: center;
+}
+
+.call-screen-waiting {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.call-screen-waiting .avatar {
+  width: clamp(100px, 24vw, 156px) !important;
+  height: clamp(100px, 24vw, 156px) !important;
+  border: 4px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+}
+
+.call-screen-waiting audio {
+  display: none;
+}
+
+.call-screen-video .call-screen-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.call-remote-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #080d18;
+}
+
+.call-local-video {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: grid;
+  width: clamp(84px, 22vw, 160px);
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 16px;
+  background: #131c31;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
+}
+
+.call-local-video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.call-local-video .avatar {
+  width: 48px !important;
+  height: 48px !important;
+}
+
+.call-local-video > span {
+  position: absolute;
+  right: 7px;
+  bottom: 6px;
+  left: 7px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 5px #000;
+}
+
+.call-screen-controls {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 78px));
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+}
+
+.call-screen-controls button {
+  display: flex;
+  min-width: 0;
+  min-height: 70px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 4px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 20px;
+  background: rgba(30, 41, 59, 0.9);
+  color: #f1f5f9;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.call-screen-controls button:hover,
+.call-screen-controls button.is-active {
+  background: #334155;
+}
+
+.call-screen-controls .call-control-end,
+.call-screen-controls .call-control-decline {
+  border-color: #ef4444;
+  background: #dc2626;
+  color: #fff;
+}
+
+.call-screen-controls .call-control-answer {
+  border-color: #059669;
+  background: #059669;
+  color: #fff;
+}
+
+.call-screen-controls .call-control-end:hover,
+.call-screen-controls .call-control-decline:hover {
+  background: #b91c1c;
+}
+
+.call-screen-controls .call-control-answer:hover {
+  background: #047857;
+}
+
+.call-screen-error,
+.call-permission-help {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 560px);
+  justify-self: center;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.48);
+  border-radius: 12px;
+  background: rgba(120, 53, 15, 0.45);
+  color: #fef3c7;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.call-permission-help {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.call-permission-help p {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .call-screen {
+    gap: 14px;
+    padding-inline: 12px;
+  }
+
+  .call-screen-controls {
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(60px, 72px));
+  }
+
+  .call-screen-controls button {
+    min-height: 66px;
+    border-radius: 18px;
+  }
+}

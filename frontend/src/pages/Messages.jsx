@@ -437,6 +437,8 @@ export default function Messages() {
                 && otherUser && (
                   <AudioCallControls
                     peerId={otherUser.id}
+                    peer={otherUser}
+                    currentUser={user}
                     disabled={!connected}
                     callSignal={callSignal}
                     sendCallSignal={sendCallSignal}
