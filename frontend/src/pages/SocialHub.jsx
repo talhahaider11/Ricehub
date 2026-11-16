@@ -48,6 +48,10 @@ export default function SocialHub() {
   const [orders, setOrders] = useState([]);
   const [expandedCommunityId, setExpandedCommunityId] = useState(null);
   const [communityPosts, setCommunityPosts] = useState([]);
+  const [managedCommunityId, setManagedCommunityId] = useState(null);
+  const [communityMembers, setCommunityMembers] = useState([]);
+  const [communityMembersLoading, setCommunityMembersLoading] = useState(false);
+  const [communityMembersError, setCommunityMembersError] = useState("");
   const communityPostsRef = useRef(null);
   const [communityPostText, setCommunityPostText] = useState("");
   const [storyViewers, setStoryViewers] = useState({});
@@ -145,6 +149,8 @@ export default function SocialHub() {
   }, [activeTab, search, t]);
 
   const loadCommunityPosts = async (communityId) => {
+    setManagedCommunityId(null);
+    setCommunityMembers([]);
     setExpandedCommunityId(communityId);
     setCommunityPosts([]);
     setError("");
@@ -163,6 +169,37 @@ export default function SocialHub() {
     params.set("community", String(communityId));
     setSearchParams(params);
     loadCommunityPosts(communityId);
+  };
+
+  const loadCommunityMembers = async (communityId) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", "Groups & Pages");
+    params.delete("community");
+    setSearchParams(params);
+    setExpandedCommunityId(null);
+    setCommunityPosts([]);
+    setManagedCommunityId(communityId);
+    setCommunityMembers([]);
+    setCommunityMembersError("");
+    setCommunityMembersLoading(true);
+    setError("");
+    try {
+      const data = await communityService.communityMembers(communityId);
+      setCommunityMembers(getArrayResults(data, "Community members"));
+    } catch (loadError) {
+      console.error("Community members could not be loaded:", loadError);
+      setCommunityMembersError(
+        loadError.response?.data?.detail || t("communityMembersLoadFailed")
+      );
+    } finally {
+      setCommunityMembersLoading(false);
+    }
+  };
+
+  const closeCommunityMembers = () => {
+    setManagedCommunityId(null);
+    setCommunityMembers([]);
+    setCommunityMembersError("");
   };
 
   const closeCommunityPosts = () => {
@@ -218,6 +255,31 @@ export default function SocialHub() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const removeCommunityMember = (member) => {
+    if (managedCommunityId == null) return;
+    const communityId = managedCommunityId;
+    return perform(async () => {
+      await communityService.removeCommunityMember(
+        communityId,
+        member.user_id
+      );
+      socialHubCache.delete("Groups & Pages");
+      setCommunityMembers((current) => current.filter(
+        (item) => String(item.user_id) !== String(member.user_id)
+      ));
+      setCommunities((current) => current.map((community) => (
+        String(community.id) === String(communityId)
+          ? {
+            ...community,
+            member_count: Number.isFinite(Number(community.member_count))
+              ? Math.max(0, Number(community.member_count) - 1)
+              : community.member_count,
+          }
+          : community
+      )));
+    }, t("communityMemberRemoved"));
   };
 
   const createCommunity = (event) => {
@@ -284,6 +346,10 @@ export default function SocialHub() {
       setListingImage(null);
     }, t("listingPublished"));
   };
+
+  const managedCommunity = communities.find(
+    (item) => String(item.id) === String(managedCommunityId)
+  );
 
   return (
     <div className="page-container social-hub">
@@ -444,7 +510,17 @@ export default function SocialHub() {
                   </button>
                 )}
                 {community.membership_role === "admin"
-                  ? <button type="button" className="btn btn-secondary" onClick={() => openCommunityPosts(community.id)}>{t("managePosts")}</button>
+                  ? <>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => loadCommunityMembers(community.id)}
+                      disabled={communityMembersLoading}
+                    >
+                      {t("manageMembers")}
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => openCommunityPosts(community.id)}>{t("managePosts")}</button>
+                  </>
                   : community.membership_role
                     ? <><button type="button" className="btn btn-secondary" onClick={() => openCommunityPosts(community.id)}>{t("communityViewPosts")}</button><button type="button" className="btn btn-secondary" disabled={saving} onClick={() => perform(async () => {
                       await communityService.leaveCommunity(community.id);
@@ -462,6 +538,78 @@ export default function SocialHub() {
               </article>
             ))}
           </div>
+          {managedCommunityId && (
+            <section className="card social-form community-members-panel">
+              <div className="social-actions">
+                <h2>
+                  {t("communityMembers")}
+                  {managedCommunity?.name
+                    ? ` · ${managedCommunity.name}`
+                    : ""}
+                </h2>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={closeCommunityMembers}
+                >
+                  {t("close")}
+                </button>
+              </div>
+              {communityMembersLoading && <p>{t("loadingCommunityMembers")}</p>}
+              {communityMembersError && (
+                <p className="settings-error" role="alert">
+                  {communityMembersError}
+                </p>
+              )}
+              {!communityMembersLoading && !communityMembersError
+                && communityMembers.length === 0 && (
+                  <p className="social-empty">{t("noCommunityMembers")}</p>
+                )}
+              {!communityMembersLoading && !communityMembersError
+                && communityMembers.length > 0 && (
+                  <ul className="community-member-list">
+                    {communityMembers.map((member) => {
+                      const isOwner = String(managedCommunity?.owner?.id)
+                        === String(user?.id);
+                      const isProtectedMember =
+                        String(member.user_id) === String(user?.id)
+                        || String(member.user_id) === String(managedCommunity?.owner?.id);
+                      const canRemove = !isProtectedMember
+                        && (member.role !== "admin" || isOwner);
+                      const displayName = [
+                        member.first_name,
+                        member.last_name,
+                      ].filter(Boolean).join(" ") || member.username;
+                      return (
+                        <li key={member.user_id} className="community-member-row">
+                          <span>
+                            <strong>{displayName}</strong>
+                            <small>
+                              @{member.username} · {t(
+                                member.role === "admin"
+                                  ? "communityAdmin"
+                                  : "communityMember"
+                              )}
+                            </small>
+                          </span>
+                          {canRemove && (
+                            <button
+                              type="button"
+                              className="btn btn-danger"
+                              disabled={saving}
+                              aria-label={`${t("removeMember")} @${member.username}`}
+                              onClick={() => removeCommunityMember(member)}
+                            >
+                              {t("removeMember")}
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+            </section>
+          )}
           {expandedCommunityId && (
             <section className="card social-form" ref={communityPostsRef} id="community-posts">
               <div className="social-actions">

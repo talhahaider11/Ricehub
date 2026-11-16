@@ -3,6 +3,8 @@ from django.urls import path
 from .views import (
     CommunityListCreateView,
     CommunityDetailView,
+    CommunityMemberListView,
+    CommunityMemberRemoveView,
     CommunityMembershipView,
     CommunityPostDetailView,
     CommunityPostCommentListCreateView,
@@ -30,6 +32,8 @@ urlpatterns = [
     path("stories/<int:story_id>/views/",StoryViewListCreateView.as_view(),name="story-views",),
     path("communities/", CommunityListCreateView.as_view(), name="community-list-create"),
     path("communities/<int:community_id>/", CommunityDetailView.as_view(), name="community-detail"),
+    path("communities/<int:community_id>/members/", CommunityMemberListView.as_view(), name="community-members"),
+    path("communities/<int:community_id>/members/<int:user_id>/", CommunityMemberRemoveView.as_view(), name="community-member-remove"),
     path("communities/<int:community_id>/membership/",CommunityMembershipView.as_view(),name="community-membership",),
     path("communities/<int:community_id>/posts/",CommunityPostListCreateView.as_view(),name="community-post-list-create",),
     path("community-posts/<int:post_id>/like/", CommunityPostLikeView.as_view(), name="community-post-like"),

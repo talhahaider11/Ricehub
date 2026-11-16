@@ -21,6 +21,8 @@ vi.mock("../services/communityService", () => ({
     updateCommunity: vi.fn(),
     joinCommunity: vi.fn(),
     leaveCommunity: vi.fn(),
+    communityMembers: vi.fn(),
+    removeCommunityMember: vi.fn(),
     events: vi.fn(),
     invitations: vi.fn(),
     listings: vi.fn(),
@@ -107,6 +109,60 @@ describe("SocialHub route tabs", () => {
         visibility: "public",
       }
     ));
+  });
+
+  it("lets a community admin view members and remove a regular member", async () => {
+    communityService.communities.mockResolvedValue([{
+      id: 35,
+      owner: { id: 7, username: "current-user" },
+      name: "Rice sellers",
+      description: "",
+      kind: "group",
+      visibility: "public",
+      member_count: 2,
+      membership_role: "admin",
+    }]);
+    communityService.communityMembers.mockResolvedValue([
+      {
+        user_id: 7,
+        username: "current-user",
+        first_name: "Current",
+        last_name: "User",
+        role: "admin",
+      },
+      {
+        user_id: 8,
+        username: "seller-to-remove",
+        first_name: "Seller",
+        last_name: "Member",
+        role: "member",
+      },
+    ]);
+    communityService.removeCommunityMember.mockResolvedValue({});
+
+    render(
+      <MemoryRouter initialEntries={["/discover?tab=Groups%20%26%20Pages"]}>
+        <Routes>
+          <Route path="/discover" element={<SocialHub />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", { name: "Rice sellers" }))
+      .toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Manage members" }));
+    await waitFor(() => expect(
+      communityService.communityMembers
+    ).toHaveBeenCalledWith(35));
+    expect(await screen.findByText("Seller Member")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove @seller-to-remove" })
+    );
+
+    await waitFor(() => expect(
+      communityService.removeCommunityMember
+    ).toHaveBeenCalledWith(35, 8));
+    expect(await screen.queryByText("Seller Member")).not.toBeInTheDocument();
   });
 
   it("opens a page's post manager and lets its verified owner publish", async () => {

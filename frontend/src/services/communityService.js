@@ -43,6 +43,14 @@ const communityService = {
   async leaveCommunity(id) {
     return api.delete(`/community/communities/${id}/membership/`);
   },
+  async communityMembers(id) {
+    return (await api.get(`/community/communities/${id}/members/`)).data;
+  },
+  async removeCommunityMember(communityId, userId) {
+    return api.delete(
+      `/community/communities/${communityId}/members/${userId}/`
+    );
+  },
   async events() {
     return (await api.get("/community/events/")).data;
   },

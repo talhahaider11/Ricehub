@@ -3,8 +3,30 @@ import { useCallback, useEffect, useState } from "react";
 import storyService from "../services/storyService";
 import { getArrayResults } from "../utils/arrayResults";
 
-export default function useStories(authorId) {
-  const [stories, setStories] = useState([]);
+const STORY_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
+function getActiveStories(items, authorId) {
+  const now = Date.now();
+  return items.filter((story) => {
+    if (
+      authorId != null
+      && String(story.author?.id) !== String(authorId)
+    ) return false;
+
+    const expiresAt = story.expires_at
+      ? new Date(story.expires_at).getTime()
+      : new Date(story.created_at).getTime() + STORY_LIFETIME_MS;
+    return !Number.isFinite(expiresAt) || expiresAt >= now;
+  });
+}
+
+export default function useStories(authorId, initialStories = []) {
+  const [stories, setStories] = useState(() => (
+    getActiveStories(
+      Array.isArray(initialStories) ? initialStories : [],
+      authorId
+    )
+  ));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -12,7 +34,10 @@ export default function useStories(authorId) {
     setLoading(true);
     try {
       const data = await storyService.list(authorId);
-      setStories(getArrayResults(data, "Stories"));
+      setStories(getActiveStories(
+        getArrayResults(data, "Stories"),
+        authorId
+      ));
       setError("");
     } catch (loadError) {
       console.error("Stories could not be loaded:", loadError);

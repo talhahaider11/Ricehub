@@ -117,7 +117,12 @@ export default function StoryViewer() {
   const isVideo = story?.media_type === "video"
     || /\.(mp4|webm|mov)(?:$|\?)/i.test(mediaUrl || "");
 
-  const close = useCallback(() => navigate("/", { replace: true }), [navigate]);
+  const close = useCallback((storiesToReturn = stories) => {
+    navigate("/", {
+      replace: true,
+      state: { stories: storiesToReturn },
+    });
+  }, [navigate, stories]);
   const move = useCallback((offset) => {
     if (!group || currentIndex < 0) return;
     const nextInGroup = group.stories[currentIndex + offset];
@@ -212,21 +217,21 @@ export default function StoryViewer() {
         current.filter((item) => String(item.id) !== String(story.id))
       );
       window.dispatchEvent(new Event("ricehub:stories-updated"));
+      const remaining = stories.filter(
+        (item) => String(item.id) !== String(story.id)
+      );
       const remainingStories = group.stories.filter(
         (item) => String(item.id) !== String(story.id)
       );
       const nextStory = remainingStories[currentIndex]
         || remainingStories[currentIndex - 1];
       if (nextStory) {
-        const remaining = stories.filter(
-          (item) => String(item.id) !== String(story.id)
-        );
         navigate(`/stories/${nextStory.id}`, {
           replace: true,
           state: { stories: remaining },
         });
       } else {
-        close();
+        close(remaining);
       }
     } catch (deleteError) {
       console.error("Story could not be deleted:", deleteError);
@@ -331,9 +336,25 @@ export default function StoryViewer() {
 
   return (
     <main className="story-fullscreen" aria-label={t("storyViewer")}>
-      <button className="story-fullscreen-close" onClick={close} aria-label={t("closeStory")}>
-        <X size={24} />
-      </button>
+      <div className="story-fullscreen-top-actions">
+        {story && (
+          <button
+            type="button"
+            className="story-fullscreen-pause"
+            onClick={togglePlayback}
+            aria-label={t(isPaused ? "resumeStory" : "pauseStory")}
+            aria-pressed={isPaused}
+            title={t(isPaused ? "resumeStory" : "pauseStory")}
+          >
+            {isPaused
+              ? <Play size={18} fill="currentColor" />
+              : <Pause size={18} />}
+          </button>
+        )}
+        <button className="story-fullscreen-close" onClick={() => close()} aria-label={t("closeStory")}>
+          <X size={24} />
+        </button>
+      </div>
       {error && <p role="alert">{error}</p>}
       {!error && stories.length > 0 && !story && <p>{t("storyUnavailable")}</p>}
       {!error && stories.length === 0 && <p>{t("storyLoading")}</p>}
@@ -353,17 +374,6 @@ export default function StoryViewer() {
               </time>
             </div>
             <div className="story-fullscreen-actions">
-              <button
-                type="button"
-                onClick={togglePlayback}
-                aria-label={t(isPaused ? "resumeStory" : "pauseStory")}
-                aria-pressed={isPaused}
-                title={t(isPaused ? "resumeStory" : "pauseStory")}
-              >
-                {isPaused
-                  ? <Play size={18} fill="currentColor" />
-                  : <Pause size={18} />}
-              </button>
               {isOwner ? (
                 <>
                   <button
@@ -461,7 +471,7 @@ export default function StoryViewer() {
                     setReplyText(event.target.value);
                     setReplyStatus("");
                   }}
-                  placeholder={t("replyToStory")}
+                  placeholder={t("reply")}
                   aria-label={t("replyToStory")}
                   maxLength={1000}
                 />

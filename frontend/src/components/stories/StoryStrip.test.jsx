@@ -91,6 +91,37 @@ describe("StoryStrip", () => {
     expect(screen.getByText("Cached stories 1")).toBeInTheDocument();
   });
 
+  it("shows cached active stories immediately while refreshing the list", () => {
+    storyService.list.mockReturnValue(new Promise(() => {}));
+
+    render(
+      <MemoryRouter
+        initialEntries={[{
+          pathname: "/",
+          state: {
+            stories: [
+              {
+                id: 21,
+                author: { id: 7, username: "cached-author" },
+                created_at: new Date().toISOString(),
+                is_seen: false,
+              },
+            ],
+          },
+        }]}
+      >
+        <Routes>
+          <Route path="/" element={<StoryStrip />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("button", {
+      name: "View cached-author's story",
+    })).toBeInTheDocument();
+    expect(storyService.list).toHaveBeenCalledOnce();
+  });
+
   it("groups stories by author and opens the first unseen story", async () => {
     storyService.list.mockResolvedValue({
       results: [

@@ -32,6 +32,7 @@ from .models import (
 from messaging.models import Conversation, ConversationMember
 from .serializers import (
     CommunitySerializer,
+    CommunityMembershipSerializer,
     CommunityPostSerializer,
     CommunityPostCommentSerializer,
     CommunityUpdateSerializer,
@@ -115,6 +116,68 @@ class CommunityDetailView(generics.RetrieveUpdateAPIView):
         if community.owner_id != self.request.user.pk and not is_admin:
             raise PermissionDenied("Only a community admin can edit this page.")
         serializer.save()
+
+
+def get_community_admin(request, community_id):
+    community = get_object_or_404(
+        Community.objects.select_related("owner"),
+        pk=community_id,
+    )
+    is_admin = (
+        community.owner_id == request.user.pk
+        or CommunityMembership.objects.filter(
+            community=community,
+            user=request.user,
+            role=CommunityMembership.Role.ADMIN,
+        ).exists()
+    )
+    if not is_admin:
+        raise PermissionDenied("Only community admins can manage members.")
+    return community
+
+
+class CommunityMemberListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, community_id):
+        community = get_community_admin(request, community_id)
+        memberships = CommunityMembership.objects.filter(
+            community=community,
+        ).select_related("user").order_by("created_at", "id")
+        serializer = CommunityMembershipSerializer(memberships, many=True)
+        return Response(serializer.data)
+
+
+class CommunityMemberRemoveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def delete(self, request, community_id, user_id):
+        community = get_community_admin(request, community_id)
+        if user_id == community.owner_id:
+            raise ValidationError({"user_id": "The community owner cannot be removed."})
+        if user_id == request.user.pk:
+            raise ValidationError({"user_id": "Use the leave action to remove yourself."})
+
+        membership = get_object_or_404(
+            CommunityMembership.objects.select_related("user"),
+            community=community,
+            user_id=user_id,
+        )
+        if (
+            membership.role == CommunityMembership.Role.ADMIN
+            and request.user.pk != community.owner_id
+        ):
+            raise PermissionDenied("Only the community owner can remove another admin.")
+
+        membership.delete()
+        if community.conversation_id:
+            community.conversation.participants.remove(membership.user)
+            ConversationMember.objects.filter(
+                conversation=community.conversation,
+                user=membership.user,
+            ).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class CommunityMembershipView(APIView):

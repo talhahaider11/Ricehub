@@ -2,9 +2,11 @@ import api from "./api";
 import { prepareImage } from "./mediaService";
 import { ACCESS_TOKEN_KEY, WS_URL } from "../utils/constants";
 
+const MAX_PARALLEL_CONVERSATION_PAGES = 4;
+
 const messageService = {
   async conversations(params = {}) {
-    let response = await api.get(
+    const response = await api.get(
       "/messages/conversations/",
       { params }
     );
@@ -12,17 +14,64 @@ const messageService = {
     if (!Array.isArray(data?.results) || !data.next) return data;
 
     const results = [...data.results];
-    let next = data.next;
-    const visited = new Set();
-    while (next) {
-      if (visited.has(next)) {
-        throw new Error("Conversation pagination returned a repeated page.");
-      }
-      visited.add(next);
-      response = await api.get(next);
-      results.push(...(response.data.results || []));
-      next = response.data.next;
+    const pageSize = Number(params.page_size) || data.results.length;
+    const count = Number(data.count);
+    let nextUrl;
+    try {
+      nextUrl = new URL(data.next, api.defaults?.baseURL || window.location.origin);
+    } catch {
+      nextUrl = null;
     }
+
+    const nextPageValue = nextUrl?.searchParams.get("page");
+    const nextPage = Number(nextPageValue);
+    const totalPages = Math.ceil(count / pageSize);
+    if (
+      !nextUrl
+      || !Number.isFinite(count)
+      || pageSize <= 0
+      || !nextPageValue
+      || !Number.isFinite(nextPage)
+      || !Number.isInteger(nextPage)
+      || nextPage < 2
+      || totalPages < nextPage
+    ) {
+      let next = data.next;
+      const visited = new Set();
+      while (next) {
+        if (visited.has(next)) {
+          throw new Error("Conversation pagination returned a repeated page.");
+        }
+        visited.add(next);
+        const pageResponse = await api.get(next);
+        results.push(...(pageResponse.data.results || []));
+        next = pageResponse.data.next;
+      }
+      return { ...data, results, next: null };
+    }
+
+    const pageUrls = [];
+    for (let page = nextPage; page <= totalPages; page += 1) {
+      const pageUrl = new URL(nextUrl);
+      pageUrl.searchParams.set("page", String(page));
+      pageUrls.push(pageUrl.toString());
+    }
+
+    for (
+      let index = 0;
+      index < pageUrls.length;
+      index += MAX_PARALLEL_CONVERSATION_PAGES
+    ) {
+      const pageResponses = await Promise.all(
+        pageUrls
+          .slice(index, index + MAX_PARALLEL_CONVERSATION_PAGES)
+          .map((url) => api.get(url))
+      );
+      pageResponses.forEach((pageResponse) => {
+        results.push(...(pageResponse.data.results || []));
+      });
+    }
+
     return { ...data, results, next: null };
   },
 

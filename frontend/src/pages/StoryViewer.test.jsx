@@ -1,6 +1,13 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import storyService from "../services/storyService";
 import messageService from "../services/messageService";
@@ -27,6 +34,11 @@ vi.mock("../services/messageService", () => ({
 vi.mock("../hooks/useAuth", () => ({
   default: vi.fn(),
 }));
+
+function HomeCacheProbe() {
+  const location = useLocation();
+  return <p>Home story cache: {location.state?.stories?.length || 0}</p>;
+}
 
 describe("StoryViewer", () => {
   beforeEach(() => {
@@ -136,7 +148,7 @@ describe("StoryViewer", () => {
     );
 
     await screen.findByText("First story");
-    fireEvent.change(screen.getByRole("textbox", { name: "Reply to story..." }), {
+    fireEvent.change(screen.getByPlaceholderText("Reply"), {
       target: { value: "Nice update!" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Send story reply" }));
@@ -174,6 +186,32 @@ describe("StoryViewer", () => {
 
     expect(await screen.findByText("Cached story")).toBeInTheDocument();
     expect(storyService.list).not.toHaveBeenCalled();
+  });
+
+  it("returns active stories to Home so the strip can render without waiting", async () => {
+    const stories = [
+      {
+        id: 4,
+        author: { id: 2, username: "author" },
+        caption: "Cached story",
+        created_at: new Date().toISOString(),
+      },
+    ];
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: "/stories/4", state: { stories } }]}
+      >
+        <Routes>
+          <Route path="/stories/:id" element={<StoryViewer />} />
+          <Route path="/" element={<HomeCacheProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Cached story")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close story" }));
+
+    expect(await screen.findByText("Home story cache: 1")).toBeInTheDocument();
   });
 
   it("shows owner controls and removes a deleted story immediately", async () => {
@@ -332,9 +370,14 @@ describe("StoryViewer", () => {
       expect(progressBar).toHaveAttribute("aria-valuenow", "20");
 
       fireEvent.click(screen.getByAltText("Story"));
-      expect(document.querySelector(
-        ".story-fullscreen-actions button[aria-label='Resume story']"
-      )).toBeInTheDocument();
+      const topActions = document.querySelector(".story-fullscreen-top-actions");
+      const resumeButton = within(topActions).getByRole("button", {
+        name: "Resume story",
+      });
+      expect(resumeButton).toBeInTheDocument();
+      expect(resumeButton.parentElement).toHaveClass("story-fullscreen-top-actions");
+      expect(screen.getByRole("button", { name: "Close story" }).parentElement)
+        .toBe(resumeButton.parentElement);
       await act(async () => {
         vi.advanceTimersByTime(2000);
       });

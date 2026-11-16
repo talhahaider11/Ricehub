@@ -16,7 +16,7 @@ describe("MessageList", () => {
     vi.useRealTimers();
   });
 
-  it("shows the requested actions in the mobile menu after a 1.5-second touch hold", () => {
+  it("shows the requested actions in the mobile menu after a 0.5-second touch hold", () => {
     vi.useFakeTimers();
     Element.prototype.scrollIntoView = vi.fn();
 

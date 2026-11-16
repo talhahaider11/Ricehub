@@ -18,6 +18,7 @@ from .models import (
     Story,
     StoryView,
 )
+from messaging.models import Conversation, ConversationMember
 
 
 User = get_user_model()
@@ -326,6 +327,109 @@ class CommunityFeatureTests(APITestCase):
             public_group.conversation.participants.filter(pk=self.user.pk).exists()
         )
         self.assertEqual(denied.status_code, 403)
+
+    def test_community_admin_can_list_and_remove_members_from_group_chat(self):
+        community = Community.objects.create(
+            owner=self.other,
+            name="Managed group",
+            kind=Community.Kind.GROUP,
+        )
+        CommunityMembership.objects.create(
+            community=community,
+            user=self.other,
+            role=CommunityMembership.Role.ADMIN,
+        )
+        CommunityMembership.objects.create(
+            community=community,
+            user=self.user,
+        )
+        conversation = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.GROUP,
+            created_by=self.other,
+        )
+        community.conversation = conversation
+        community.save(update_fields=["conversation"])
+        conversation.participants.add(self.other, self.user)
+        ConversationMember.objects.create(
+            conversation=conversation,
+            user=self.other,
+            role=ConversationMember.Role.ADMIN,
+        )
+        ConversationMember.objects.create(
+            conversation=conversation,
+            user=self.user,
+        )
+        members_url = f"/api/community/communities/{community.id}/members/"
+
+        self.client.force_authenticate(self.user)
+        denied_list = self.client.get(members_url)
+        denied_remove = self.client.delete(f"{members_url}{self.user.id}/")
+        self.assertEqual(denied_list.status_code, 403)
+        self.assertEqual(denied_remove.status_code, 403)
+
+        self.client.force_authenticate(self.other)
+        members = self.client.get(members_url)
+        self.assertEqual(members.status_code, 200)
+        self.assertEqual(
+            {item["user_id"] for item in members.data},
+            {self.other.id, self.user.id},
+        )
+        self.assertEqual(
+            next(item for item in members.data if item["user_id"] == self.user.id)["role"],
+            CommunityMembership.Role.MEMBER,
+        )
+
+        removed = self.client.delete(f"{members_url}{self.user.id}/")
+        self.assertEqual(removed.status_code, 204)
+        self.assertFalse(
+            CommunityMembership.objects.filter(
+                community=community,
+                user=self.user,
+            ).exists()
+        )
+        self.assertFalse(conversation.participants.filter(pk=self.user.pk).exists())
+        self.assertFalse(
+            ConversationMember.objects.filter(
+                conversation=conversation,
+                user=self.user,
+            ).exists()
+        )
+
+    def test_community_admin_cannot_remove_another_admin_or_the_owner(self):
+        community = Community.objects.create(
+            owner=self.other,
+            name="Protected admins",
+            kind=Community.Kind.GROUP,
+        )
+        CommunityMembership.objects.create(
+            community=community,
+            user=self.other,
+            role=CommunityMembership.Role.ADMIN,
+        )
+        CommunityMembership.objects.create(
+            community=community,
+            user=self.user,
+            role=CommunityMembership.Role.ADMIN,
+        )
+        members_url = f"/api/community/communities/{community.id}/members/"
+
+        owner_removal = self.client.delete(f"{members_url}{self.other.id}/")
+        third_admin = User.objects.create_user(
+            username="third-community-admin",
+            email="third-admin@example.com",
+            password="StrongPassword123",
+        )
+        CommunityMembership.objects.create(
+            community=community,
+            user=third_admin,
+            role=CommunityMembership.Role.ADMIN,
+        )
+        other_admin_removal = self.client.delete(
+            f"{members_url}{third_admin.id}/"
+        )
+
+        self.assertEqual(owner_removal.status_code, 400)
+        self.assertEqual(other_admin_removal.status_code, 403)
 
     def test_creator_becomes_group_admin(self):
         response = self.client.post(

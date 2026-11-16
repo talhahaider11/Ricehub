@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Avatar from "../common/Avatar";
 import StoryAvatar from "./StoryAvatar";
 import useStories from "../../hooks/useStories";
@@ -10,8 +10,12 @@ export default function StoryStrip({
   excludeUserId,
   onlyUserId,
 }) {
+  const location = useLocation();
   const navigate = useNavigate();
-  const { stories, loading, error } = useStories(onlyUserId);
+  const { stories, loading, error } = useStories(
+    onlyUserId,
+    location.state?.stories
+  );
 
   const visibleStories = stories.filter((story) => {
     if (onlyUserId != null) return String(story.author?.id) === String(onlyUserId);
