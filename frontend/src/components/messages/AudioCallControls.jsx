@@ -5,6 +5,7 @@ import {
   MicOff,
   Phone,
   PhoneOff,
+  RefreshCw,
   Video,
   VideoOff,
   Volume2,
@@ -38,6 +39,9 @@ export default function AudioCallControls({
   const localStreamRef = useRef(null);
   const incomingOfferRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
+  const callStageRef = useRef(null);
+  const localVideoContainerRef = useRef(null);
+  const localVideoDragRef = useRef(null);
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -51,6 +55,9 @@ export default function AudioCallControls({
   const [callDuration, setCallDuration] = useState(0);
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState("user");
+  const [cameraSwitching, setCameraSwitching] = useState(false);
+  const [localVideoPosition, setLocalVideoPosition] = useState(null);
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [error, setError] = useState("");
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -72,6 +79,10 @@ export default function AudioCallControls({
     if (!preserveCallMode) setCallMode(null);
     setMuted(false);
     setCameraOff(false);
+    setCameraFacing("user");
+    setCameraSwitching(false);
+    setLocalVideoPosition(null);
+    localVideoDragRef.current = null;
     setSpeakerEnabled(true);
     setPermissionDenied(false);
     setCallState("idle");
@@ -320,6 +331,114 @@ export default function AudioCallControls({
     setCameraOff(nextCameraOff);
   };
 
+  const handleLocalVideoPointerDown = (event) => {
+    if (event.button > 0 || !callStageRef.current || !localVideoContainerRef.current) {
+      return;
+    }
+
+    const stageRect = callStageRef.current.getBoundingClientRect();
+    const videoRect = localVideoContainerRef.current.getBoundingClientRect();
+    localVideoDragRef.current = {
+      pointerId: event.pointerId,
+      pointerX: Number.isFinite(event.clientX) ? event.clientX : 0,
+      pointerY: Number.isFinite(event.clientY) ? event.clientY : 0,
+      left: videoRect.left - stageRect.left,
+      top: videoRect.top - stageRect.top,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleLocalVideoPointerMove = (event) => {
+    const drag = localVideoDragRef.current;
+    const stage = callStageRef.current;
+    const preview = localVideoContainerRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !stage || !preview) return;
+
+    const maxLeft = Math.max(0, stage.clientWidth - preview.offsetWidth);
+    const maxTop = Math.max(0, stage.clientHeight - preview.offsetHeight);
+    const pointerX = Number.isFinite(event.clientX) ? event.clientX : drag.pointerX;
+    const pointerY = Number.isFinite(event.clientY) ? event.clientY : drag.pointerY;
+    setLocalVideoPosition({
+      left: Math.min(maxLeft, Math.max(0, drag.left + pointerX - drag.pointerX)),
+      top: Math.min(maxTop, Math.max(0, drag.top + pointerY - drag.pointerY)),
+    });
+  };
+
+  const handleLocalVideoPointerEnd = (event) => {
+    if (localVideoDragRef.current?.pointerId !== event.pointerId) return;
+    localVideoDragRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+
+  const moveLocalVideoWithKeyboard = (event) => {
+    const preview = localVideoContainerRef.current;
+    const stage = callStageRef.current;
+    if (!preview || !stage || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+      return;
+    }
+
+    event.preventDefault();
+    const rect = preview.getBoundingClientRect();
+    const stageRect = stage.getBoundingClientRect();
+    const currentLeft = localVideoPosition?.left ?? rect.left - stageRect.left;
+    const currentTop = localVideoPosition?.top ?? rect.top - stageRect.top;
+    const offset = event.shiftKey ? 20 : 8;
+    const maxLeft = Math.max(0, stage.clientWidth - preview.offsetWidth);
+    const maxTop = Math.max(0, stage.clientHeight - preview.offsetHeight);
+    setLocalVideoPosition({
+      left: Math.min(maxLeft, Math.max(0, currentLeft
+        + (event.key === "ArrowRight" ? offset : event.key === "ArrowLeft" ? -offset : 0))),
+      top: Math.min(maxTop, Math.max(0, currentTop
+        + (event.key === "ArrowDown" ? offset : event.key === "ArrowUp" ? -offset : 0))),
+    });
+  };
+
+  const switchCamera = async () => {
+    const stream = localStreamRef.current;
+    const connection = peerConnectionRef.current;
+    if (!stream || !connection || cameraSwitching) return;
+
+    const nextFacing = cameraFacing === "user" ? "environment" : "user";
+    let replacementStream;
+    let replacedTrack = false;
+    setCameraSwitching(true);
+    setError("");
+    try {
+      replacementStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { exact: nextFacing } },
+      });
+      if (peerConnectionRef.current !== connection || localStreamRef.current !== stream) {
+        replacementStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      const replacementTrack = replacementStream.getVideoTracks()[0];
+      const videoSender = connection.getSenders().find((sender) => sender.track?.kind === "video");
+      if (!replacementTrack || !videoSender) {
+        throw new Error(t("callCameraSwitchFailed"));
+      }
+
+      replacementTrack.enabled = !cameraOff;
+      const oldVideoTracks = stream.getVideoTracks();
+      const updatedStream = new MediaStream([
+        ...stream.getAudioTracks(),
+        replacementTrack,
+      ]);
+      await videoSender.replaceTrack(replacementTrack);
+      replacedTrack = true;
+      localStreamRef.current = updatedStream;
+      setLocalStream(updatedStream);
+      oldVideoTracks.forEach((track) => track.stop());
+      setCameraFacing(nextFacing);
+    } catch {
+      if (!replacedTrack) replacementStream?.getTracks().forEach((track) => track.stop());
+      setError(t("callCameraSwitchFailed"));
+    } finally {
+      setCameraSwitching(false);
+    }
+  };
+
   const callName = [
     peer?.first_name,
     peer?.last_name,
@@ -380,7 +499,7 @@ export default function AudioCallControls({
             </div>
           </header>
 
-          <main className="call-screen-stage">
+          <main className="call-screen-stage" ref={callStageRef}>
             {callMode === "video" ? (
               <>
                 {remoteStream ? (
@@ -398,7 +517,26 @@ export default function AudioCallControls({
                   </div>
                 )}
                 {localStream && (
-                  <div className="call-local-video">
+                  <div
+                    ref={localVideoContainerRef}
+                    className="call-local-video"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={t("moveLocalVideo")}
+                    onPointerDown={handleLocalVideoPointerDown}
+                    onPointerMove={handleLocalVideoPointerMove}
+                    onPointerUp={handleLocalVideoPointerEnd}
+                    onPointerCancel={handleLocalVideoPointerEnd}
+                    onKeyDown={moveLocalVideoWithKeyboard}
+                    style={localVideoPosition
+                      ? {
+                        left: localVideoPosition.left,
+                        top: localVideoPosition.top,
+                        right: "auto",
+                        bottom: "auto",
+                      }
+                      : undefined}
+                  >
                     {cameraOff ? (
                       <Avatar user={currentUser} size="medium" />
                     ) : (
@@ -425,22 +563,21 @@ export default function AudioCallControls({
                 />
               </div>
             )}
+            {error && <p className="call-screen-error" role="alert">{error}</p>}
+            {permissionDenied && (
+              <div className="message-permission-help call-permission-help" role="group">
+                <p>{t("callMediaPermissionSteps")}</p>
+                <button
+                  type="button"
+                  onClick={() => callState === "incoming"
+                    ? void acceptCall()
+                    : void startCall(callMode)}
+                >
+                  {t("requestCallPermissionAgain")}
+                </button>
+              </div>
+            )}
           </main>
-
-          {error && <p className="call-screen-error" role="alert">{error}</p>}
-          {permissionDenied && (
-            <div className="message-permission-help call-permission-help" role="group">
-              <p>{t("callMediaPermissionSteps")}</p>
-              <button
-                type="button"
-                onClick={() => callState === "incoming"
-                  ? void acceptCall()
-                  : void startCall(callMode)}
-              >
-                {t("requestCallPermissionAgain")}
-              </button>
-            </div>
-          )}
 
           <footer className="call-screen-controls">
             {callState === "incoming" ? (
@@ -493,18 +630,29 @@ export default function AudioCallControls({
                   <span>{t("speaker")}</span>
                 </button>
                 {callMode === "video" && (
-                  <button
-                    type="button"
-                    className={cameraOff ? "is-active" : ""}
-                    onClick={toggleCamera}
-                    aria-label={cameraOff ? t("cameraOn") : t("cameraOff")}
-                    aria-pressed={cameraOff}
-                  >
-                    {cameraOff
-                      ? <VideoOff size={22} aria-hidden="true" />
-                      : <Video size={22} aria-hidden="true" />}
-                    <span>{cameraOff ? t("cameraOn") : t("cameraOff")}</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className={cameraOff ? "is-active" : ""}
+                      onClick={toggleCamera}
+                      aria-label={cameraOff ? t("cameraOn") : t("cameraOff")}
+                      aria-pressed={cameraOff}
+                    >
+                      {cameraOff
+                        ? <VideoOff size={22} aria-hidden="true" />
+                        : <Video size={22} aria-hidden="true" />}
+                      <span>{cameraOff ? t("cameraOn") : t("cameraOff")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void switchCamera()}
+                      disabled={cameraSwitching}
+                      aria-label={t(cameraFacing === "user" ? "switchToBackCamera" : "switchToFrontCamera")}
+                    >
+                      <RefreshCw size={22} aria-hidden="true" />
+                      <span>{t(cameraFacing === "user" ? "switchToBackCamera" : "switchToFrontCamera")}</span>
+                    </button>
+                  </>
                 )}
                 <button
                   type="button"

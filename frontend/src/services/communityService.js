@@ -23,6 +23,17 @@ const communityService = {
   async createCommunityPost(id, content) {
     return (await api.post(`/community/communities/${id}/posts/`, { content })).data;
   },
+  async toggleCommunityPostLike(id) {
+    return (await api.post(`/community/community-posts/${id}/like/`)).data;
+  },
+  async communityPostComments(id) {
+    return (await api.get(`/community/community-posts/${id}/comments/`)).data;
+  },
+  async createCommunityPostComment(id, content) {
+    return (await api.post(`/community/community-posts/${id}/comments/`, {
+      content,
+    })).data;
+  },
   async removeCommunityPost(id) {
     return api.delete(`/community/community-posts/${id}/`);
   },

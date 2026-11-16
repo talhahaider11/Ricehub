@@ -9,6 +9,9 @@ import { useLanguage } from "../../context/LanguageContext";
 import Avatar from "../common/Avatar";
 import { Link } from "react-router-dom";
 
+const MESSAGE_ACTION_HOLD_MS = 1500;
+const LONG_PRESS_MOVE_THRESHOLD = 12;
+
 function getTimestamp(value, language) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return null;
@@ -42,12 +45,14 @@ export default function MessageList({
   const bottomRef =
     useRef(null);
   const longPressTimer = useRef(null);
+  const longPressOrigin = useRef(null);
   const [longPressedMessageId, setLongPressedMessageId] = useState(null);
 
   useEffect(() => () => {
     if (longPressTimer.current) {
       window.clearTimeout(longPressTimer.current);
     }
+    longPressOrigin.current = null;
   }, []);
 
   useEffect(() => {
@@ -65,6 +70,54 @@ export default function MessageList({
     && String(latestMessage.sender?.id ?? latestMessage.sender)
       === String(currentUser?.id)
   );
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    longPressOrigin.current = null;
+  };
+
+  const startLongPress = (event, messageId) => {
+    if (
+      !event.target.closest?.(".message-bubble")
+      || (event.type === "pointerdown" && event.pointerType === "mouse")
+      || longPressTimer.current
+    ) return;
+
+    const touchPoint = event.touches?.[0];
+    const x = Number.isFinite(event.clientX)
+      ? event.clientX
+      : touchPoint?.clientX || 0;
+    const y = Number.isFinite(event.clientY)
+      ? event.clientY
+      : touchPoint?.clientY || 0;
+    longPressOrigin.current = { x, y };
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTimer.current = null;
+      longPressOrigin.current = null;
+      window.navigator.vibrate?.(30);
+      setLongPressedMessageId(messageId);
+    }, MESSAGE_ACTION_HOLD_MS);
+  };
+
+  const moveLongPress = (event) => {
+    if (!longPressTimer.current || !longPressOrigin.current) return;
+    const touchPoint = event.touches?.[0];
+    const x = Number.isFinite(event.clientX)
+      ? event.clientX
+      : touchPoint?.clientX || 0;
+    const y = Number.isFinite(event.clientY)
+      ? event.clientY
+      : touchPoint?.clientY || 0;
+    if (
+      Math.abs(x - longPressOrigin.current.x) > LONG_PRESS_MOVE_THRESHOLD
+      || Math.abs(y - longPressOrigin.current.y) > LONG_PRESS_MOVE_THRESHOLD
+    ) {
+      cancelLongPress();
+    }
+  };
 
   let previousDay = "";
 
@@ -97,24 +150,6 @@ export default function MessageList({
           String(message.sender?.id ?? message.sender) ===
           String(currentUser?.id);
 
-        const startLongPress = (event) => {
-          if (
-            !event.target.closest(".message-bubble")
-            || event.pointerType === "mouse"
-            || longPressTimer.current
-          ) return;
-          longPressTimer.current = window.setTimeout(() => {
-            longPressTimer.current = null;
-            window.navigator.vibrate?.(30);
-            setLongPressedMessageId(message.id);
-          }, 2000);
-        };
-        const cancelLongPress = () => {
-          if (longPressTimer.current) {
-            window.clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
-          }
-        };
         const timestamp = getTimestamp(message.created_at, language);
         const showDateSeparator = timestamp && timestamp.day !== previousDay;
         if (timestamp) previousDay = timestamp.day;
@@ -132,10 +167,13 @@ export default function MessageList({
                 mine ? "mine" : "",
                 longPressedMessageId === message.id ? "is-action-selected" : "",
               ].filter(Boolean).join(" ")}
-              onPointerDown={startLongPress}
+              onPointerDown={(event) => startLongPress(event, message.id)}
+              onPointerMove={moveLongPress}
               onPointerUp={cancelLongPress}
               onPointerCancel={cancelLongPress}
-              onTouchStart={startLongPress}
+              onPointerLeave={cancelLongPress}
+              onTouchStart={(event) => startLongPress(event, message.id)}
+              onTouchMove={moveLongPress}
               onTouchEnd={cancelLongPress}
               onTouchCancel={cancelLongPress}
             >

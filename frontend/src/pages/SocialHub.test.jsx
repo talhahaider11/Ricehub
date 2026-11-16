@@ -5,7 +5,7 @@ import SocialHub from "./SocialHub";
 import communityService from "../services/communityService";
 
 vi.mock("../hooks/useAuth", () => ({
-  default: () => ({ user: { id: 7 } }),
+  default: () => ({ user: { id: 7, is_verified: true } }),
 }));
 
 vi.mock("../services/communityService", () => ({
@@ -14,6 +14,10 @@ vi.mock("../services/communityService", () => ({
     communities: vi.fn(),
     communityPosts: vi.fn(),
     createCommunityPost: vi.fn(),
+    toggleCommunityPostLike: vi.fn(),
+    communityPostComments: vi.fn(),
+    createCommunityPostComment: vi.fn(),
+    removeCommunityPost: vi.fn(),
     updateCommunity: vi.fn(),
     joinCommunity: vi.fn(),
     leaveCommunity: vi.fn(),
@@ -105,6 +109,43 @@ describe("SocialHub route tabs", () => {
     ));
   });
 
+  it("opens a page's post manager and lets its verified owner publish", async () => {
+    communityService.communities.mockResolvedValue([{
+      id: 22,
+      owner: { id: 7, username: "current-user" },
+      name: "Verified owner's page",
+      description: "",
+      kind: "page",
+      visibility: "public",
+      member_count: 1,
+      membership_role: "admin",
+    }]);
+    communityService.communityPosts.mockResolvedValue([]);
+    communityService.createCommunityPost.mockResolvedValue({ id: 31 });
+
+    render(
+      <MemoryRouter initialEntries={["/discover?tab=Groups%20%26%20Pages"]}>
+        <Routes>
+          <Route path="/discover" element={<SocialHub />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", {
+      name: "Verified owner's page",
+    })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Manage posts" }));
+    await waitFor(() => expect(communityService.communityPosts).toHaveBeenCalled());
+    const composer = await screen.findByPlaceholderText("Write a post for members");
+    fireEvent.change(composer, { target: { value: "Fresh rice available" } });
+    fireEvent.click(screen.getByRole("button", { name: "Publish to page" }));
+
+    await waitFor(() => expect(communityService.createCommunityPost).toHaveBeenCalledWith(
+      22,
+      "Fresh rice available"
+    ));
+  });
+
   it("lets non-members view public community posts without showing a post composer", async () => {
     communityService.communities.mockResolvedValue([{
       id: 19,
@@ -121,7 +162,20 @@ describe("SocialHub route tabs", () => {
       author: { id: 8, username: "page-owner" },
       content: "Visible public post",
       image: null,
+      likes_count: 0,
+      comments_count: 0,
+      is_liked: false,
     }]);
+    communityService.toggleCommunityPostLike.mockResolvedValue({
+      is_liked: true,
+      likes_count: 1,
+    });
+    communityService.communityPostComments.mockResolvedValue([]);
+    communityService.createCommunityPostComment.mockResolvedValue({
+      id: 44,
+      author: { id: 7, username: "current-user" },
+      content: "Interested!",
+    });
 
     render(
       <MemoryRouter initialEntries={["/discover?tab=Groups%20%26%20Pages"]}>
@@ -135,5 +189,16 @@ describe("SocialHub route tabs", () => {
 
     expect(await screen.findByText("Visible public post")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Write a post for members")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Like (0)" }));
+    await waitFor(() => expect(communityService.toggleCommunityPostLike)
+      .toHaveBeenCalledWith(21));
+    fireEvent.click(screen.getByRole("button", { name: "Comment (0)" }));
+    const commentBox = await screen.findByRole("textbox", { name: "Write a comment" });
+    fireEvent.change(commentBox, { target: { value: "Interested!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(communityService.createCommunityPostComment)
+      .toHaveBeenCalledWith(21, "Interested!"));
   });
 });

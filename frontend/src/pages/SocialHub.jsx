@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import communityService from "../services/communityService";
 import useAuth from "../hooks/useAuth";
@@ -7,6 +7,7 @@ import StoryUploader from "../components/stories/StoryUploader";
 import { getMediaUrl } from "../utils/constants";
 import { getArrayResults } from "../utils/arrayResults";
 import { useLanguage } from "../context/LanguageContext";
+import CommunityPostCard from "../components/posts/CommunityPostCard";
 
 const tabs = ["Stories", "Groups & Pages", "Events", "Marketplace"];
 const socialHubCache = new Map();
@@ -47,6 +48,7 @@ export default function SocialHub() {
   const [orders, setOrders] = useState([]);
   const [expandedCommunityId, setExpandedCommunityId] = useState(null);
   const [communityPosts, setCommunityPosts] = useState([]);
+  const communityPostsRef = useRef(null);
   const [communityPostText, setCommunityPostText] = useState("");
   const [storyViewers, setStoryViewers] = useState({});
   const [viewedStories, setViewedStories] = useState({});
@@ -143,16 +145,43 @@ export default function SocialHub() {
   }, [activeTab, search, t]);
 
   const loadCommunityPosts = async (communityId) => {
+    setExpandedCommunityId(communityId);
+    setCommunityPosts([]);
     setError("");
     try {
       const data = await communityService.communityPosts(communityId);
       setCommunityPosts(getArrayResults(data, "Community posts"));
-      setExpandedCommunityId(communityId);
     } catch (loadError) {
       console.error("Community posts could not be loaded:", loadError);
       setError(loadError.response?.data?.detail || t("socialLoadFailed"));
     }
   };
+
+  const openCommunityPosts = (communityId) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", "Groups & Pages");
+    params.set("community", String(communityId));
+    setSearchParams(params);
+    loadCommunityPosts(communityId);
+  };
+
+  const closeCommunityPosts = () => {
+    setExpandedCommunityId(null);
+    setCommunityPosts([]);
+    const params = new URLSearchParams(searchParams);
+    params.delete("community");
+    params.set("tab", "Groups & Pages");
+    setSearchParams(params);
+  };
+
+  useEffect(() => {
+    if (expandedCommunityId) {
+      communityPostsRef.current?.scrollIntoView?.({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [expandedCommunityId]);
 
   useEffect(() => {
     load();
@@ -163,11 +192,13 @@ export default function SocialHub() {
     const requestedTab = searchParams.get("tab");
     if (communityId && /^\d+$/.test(communityId)) {
       setActiveTab("Groups & Pages");
-      loadCommunityPosts(communityId);
+      if (String(expandedCommunityId) !== communityId) {
+        loadCommunityPosts(communityId);
+      }
     } else {
       setActiveTab(tabs.includes(requestedTab) ? requestedTab : tabs[0]);
     }
-  }, [searchParams]);
+  }, [searchParams, expandedCommunityId]);
 
   const perform = async (action, successMessage) => {
     setSaving(true);
@@ -413,15 +444,15 @@ export default function SocialHub() {
                   </button>
                 )}
                 {community.membership_role === "admin"
-                  ? <button type="button" className="btn btn-secondary" onClick={() => loadCommunityPosts(community.id)}>{t("managePosts")}</button>
+                  ? <button type="button" className="btn btn-secondary" onClick={() => openCommunityPosts(community.id)}>{t("managePosts")}</button>
                   : community.membership_role
-                    ? <><button type="button" className="btn btn-secondary" onClick={() => loadCommunityPosts(community.id)}>{t("communityViewPosts")}</button><button type="button" className="btn btn-secondary" disabled={saving} onClick={() => perform(async () => {
+                    ? <><button type="button" className="btn btn-secondary" onClick={() => openCommunityPosts(community.id)}>{t("communityViewPosts")}</button><button type="button" className="btn btn-secondary" disabled={saving} onClick={() => perform(async () => {
                       await communityService.leaveCommunity(community.id);
                       socialHubCache.delete("Groups & Pages");
                     }, t("leftCommunity"))}>{t("leave")}</button></>
                     : <>
                       {community.visibility === "public" && (
-                        <button type="button" className="btn btn-secondary" onClick={() => loadCommunityPosts(community.id)}>{t("communityViewPosts")}</button>
+                        <button type="button" className="btn btn-secondary" onClick={() => openCommunityPosts(community.id)}>{t("communityViewPosts")}</button>
                       )}
                       <button type="button" className="btn btn-primary" disabled={saving} onClick={() => perform(async () => {
                         await communityService.joinCommunity(community.id);
@@ -432,36 +463,85 @@ export default function SocialHub() {
             ))}
           </div>
           {expandedCommunityId && (
-            <section className="card social-form">
-              <h2>
-                {t("communityPosts")}
-                {communities.find((item) => item.id === expandedCommunityId)?.name
-                  ? ` · ${communities.find((item) => item.id === expandedCommunityId).name}`
-                  : ""}
-              </h2>
-              {communities.find((item) => item.id === expandedCommunityId)?.membership_role && (
-                <form onSubmit={async (event) => {
-                  event.preventDefault();
-                  await perform(async () => {
-                    await communityService.createCommunityPost(expandedCommunityId, communityPostText);
-                    setCommunityPostText("");
-                    await loadCommunityPosts(expandedCommunityId);
-                  }, t("communityPostPublished"));
-                }}>
-                  <textarea value={communityPostText} onChange={(event) => setCommunityPostText(event.target.value)} placeholder={t("writePostForMembers")} required maxLength={5000} />
-                  <button className="btn btn-primary" disabled={saving}>{t("postToGroup")}</button>
-                </form>
-              )}
-              {communityPosts.map((post) => (
-                <article className="social-card" key={post.id}>
-                  <strong>@{post.author.username}</strong><p>{post.content}</p>
-                  {post.image && <img src={getMediaUrl(post.image)} alt="" />}
-                  {(post.author.id === user?.id || communities.find((item) => item.id === expandedCommunityId)?.membership_role === "admin") && (
-                    <button className="btn btn-secondary" disabled={saving} onClick={() => perform(() => communityService.removeCommunityPost(post.id), t("communityPostRemoved"))}>{t("removePost")}</button>
-                  )}
-                </article>
-              ))}
-              {communityPosts.length === 0 && <p className="social-empty">{t("noCommunityPosts")}</p>}
+            <section className="card social-form" ref={communityPostsRef} id="community-posts">
+              <div className="social-actions">
+                <h2>
+                  {t("communityPosts")}
+                  {communities.find((item) => String(item.id) === String(expandedCommunityId))?.name
+                    ? ` · ${communities.find((item) => String(item.id) === String(expandedCommunityId)).name}`
+                    : ""}
+                </h2>
+                <button type="button" className="btn btn-secondary" onClick={closeCommunityPosts}>
+                  {t("backToPages")}
+                </button>
+              </div>
+              {(() => {
+                const activeCommunity = communities.find(
+                  (item) => String(item.id) === String(expandedCommunityId)
+                );
+                const pageOwner = activeCommunity?.kind === "page"
+                  && String(activeCommunity.owner?.id) === String(user?.id);
+                const canCreatePagePost = pageOwner && user?.is_verified;
+                const canCreateGroupPost = activeCommunity?.kind === "group"
+                  && Boolean(activeCommunity.membership_role);
+                const createPostForm = (buttonLabel) => (
+                  <form onSubmit={async (event) => {
+                    event.preventDefault();
+                    await perform(async () => {
+                      await communityService.createCommunityPost(
+                        expandedCommunityId,
+                        communityPostText
+                      );
+                      setCommunityPostText("");
+                      await loadCommunityPosts(expandedCommunityId);
+                    }, t("communityPostPublished"));
+                  }}>
+                    <textarea
+                      value={communityPostText}
+                      onChange={(event) => setCommunityPostText(event.target.value)}
+                      placeholder={t("writePostForMembers")}
+                      required
+                      maxLength={5000}
+                    />
+                    <button className="btn btn-primary" disabled={saving}>
+                      {t(buttonLabel)}
+                    </button>
+                  </form>
+                );
+                return (
+                  <>
+                    {canCreatePagePost && createPostForm("postToPage")}
+                    {pageOwner && !user?.is_verified && (
+                      <p className="settings-error" role="status">
+                        {t("pagePostVerifiedRequired")}
+                      </p>
+                    )}
+                    {canCreateGroupPost && createPostForm("postToGroup")}
+                    {communityPosts.map((post) => (
+                      <CommunityPostCard
+                        key={post.id}
+                        post={post}
+                        canManage={
+                          String(post.author?.id) === String(user?.id)
+                          || activeCommunity?.membership_role === "admin"
+                        }
+                        onUpdated={(postId, updates) => setCommunityPosts((current) =>
+                          current.map((item) => item.id === postId
+                            ? { ...item, ...updates }
+                            : item)
+                        )}
+                        onDeleted={(postId) => perform(async () => {
+                          await communityService.removeCommunityPost(postId);
+                          await loadCommunityPosts(expandedCommunityId);
+                        }, t("communityPostRemoved"))}
+                      />
+                    ))}
+                    {communityPosts.length === 0 && (
+                      <p className="social-empty">{t("noCommunityPosts")}</p>
+                    )}
+                  </>
+                );
+              })()}
             </section>
           )}
           {!loading && communities.length === 0 && <p className="card social-empty">{t("noCommunities")}</p>}

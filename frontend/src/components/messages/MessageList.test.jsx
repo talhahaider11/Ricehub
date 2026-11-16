@@ -3,12 +3,20 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MessageList from "./MessageList";
 
+function firePointerEvent(element, type, properties) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.entries(properties).forEach(([key, value]) => {
+    Object.defineProperty(event, key, { value });
+  });
+  fireEvent(element, event);
+}
+
 describe("MessageList", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("shows the requested actions in the mobile menu after a two-second touch hold", () => {
+  it("shows the requested actions in the mobile menu after a 1.5-second touch hold", () => {
     vi.useFakeTimers();
     Element.prototype.scrollIntoView = vi.fn();
 
@@ -33,7 +41,7 @@ describe("MessageList", () => {
     fireEvent.touchStart(bubble);
 
     act(() => {
-      vi.advanceTimersByTime(1999);
+      vi.advanceTimersByTime(1499);
     });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
@@ -41,7 +49,7 @@ describe("MessageList", () => {
       vi.advanceTimersByTime(1);
     });
     expect(screen.getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Unsend" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Reply" })).not.toBeInTheDocument();
     expect(screen.getByRole("menu").parentElement).toBe(document.body);
@@ -70,11 +78,45 @@ describe("MessageList", () => {
     const bubble = screen.getByText("My message").closest(".message-bubble");
     fireEvent.touchStart(bubble);
     act(() => {
-      vi.advanceTimersByTime(1500);
+      vi.advanceTimersByTime(1000);
     });
     fireEvent.touchEnd(bubble);
     act(() => {
       vi.advanceTimersByTime(500);
+    });
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("cancels the action menu when a touch moves like a scroll", () => {
+    vi.useFakeTimers();
+    Element.prototype.scrollIntoView = vi.fn();
+
+    render(
+      <MessageList
+        messages={[{ id: 1, content: "My message", sender: { id: 7 } }]}
+        currentUser={{ id: 7 }}
+        onReply={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const bubble = screen.getByText("My message").closest(".message-bubble");
+    firePointerEvent(bubble, "pointerdown", {
+      pointerType: "touch",
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+    });
+    firePointerEvent(bubble, "pointermove", {
+      pointerType: "touch",
+      pointerId: 1,
+      clientX: 100,
+      clientY: 120,
+    });
+    act(() => {
+      vi.advanceTimersByTime(1500);
     });
 
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
@@ -100,18 +142,19 @@ describe("MessageList", () => {
       />
     );
 
-    fireEvent.pointerDown(
+    firePointerEvent(
       screen.getByText("Their message").closest(".message-bubble"),
-      { pointerType: "touch" }
+      "pointerdown",
+      { pointerType: "touch", pointerId: 1 }
     );
     act(() => {
-      vi.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(1500);
     });
 
     expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reply" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Edit" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Unsend" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Delete" })).not.toBeInTheDocument();
   });
 
   it("shows a single sent or seen receipt for the latest own message", () => {

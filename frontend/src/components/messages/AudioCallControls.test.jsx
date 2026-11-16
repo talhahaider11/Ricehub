@@ -5,10 +5,11 @@ import AudioCallControls from "./AudioCallControls";
 const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
 const secureContextDescriptor = Object.getOwnPropertyDescriptor(window, "isSecureContext");
 const peerConnectionDescriptor = Object.getOwnPropertyDescriptor(window, "RTCPeerConnection");
+const mediaStreamDescriptor = Object.getOwnPropertyDescriptor(window, "MediaStream");
 
 function createStream() {
-  const audioTrack = { enabled: true, stop: vi.fn() };
-  const videoTrack = { enabled: true, stop: vi.fn() };
+  const audioTrack = { kind: "audio", enabled: true, stop: vi.fn() };
+  const videoTrack = { kind: "video", enabled: true, stop: vi.fn() };
   const tracks = [audioTrack, videoTrack];
   return {
     audioTrack,
@@ -21,9 +22,39 @@ function createStream() {
   };
 }
 
+class MockMediaStream {
+  constructor(tracks) {
+    this.tracks = tracks;
+  }
+
+  getTracks() {
+    return this.tracks;
+  }
+
+  getAudioTracks() {
+    return this.tracks.filter((track) => track.kind === "audio");
+  }
+
+  getVideoTracks() {
+    return this.tracks.filter((track) => track.kind === "video");
+  }
+}
+
 class MockPeerConnection {
   constructor() {
-    this.addTrack = vi.fn();
+    MockPeerConnection.lastInstance = this;
+    this.senders = [];
+    this.addTrack = vi.fn((track) => {
+      const sender = {
+        track,
+        replaceTrack: vi.fn(async (replacementTrack) => {
+          sender.track = replacementTrack;
+        }),
+      };
+      this.senders.push(sender);
+      return sender;
+    });
+    this.getSenders = vi.fn(() => this.senders);
     this.close = vi.fn();
     this.createOffer = vi.fn().mockResolvedValue({
       type: "offer",
@@ -56,6 +87,14 @@ function renderCall(overrides = {}) {
   );
 }
 
+function firePointerEvent(element, type, properties) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.entries(properties).forEach(([key, value]) => {
+    Object.defineProperty(event, key, { value });
+  });
+  fireEvent(element, event);
+}
+
 function mockMedia(stream, getUserMedia = vi.fn().mockResolvedValue(stream)) {
   Object.defineProperty(navigator, "mediaDevices", {
     configurable: true,
@@ -68,6 +107,10 @@ function mockMedia(stream, getUserMedia = vi.fn().mockResolvedValue(stream)) {
   Object.defineProperty(window, "RTCPeerConnection", {
     configurable: true,
     value: MockPeerConnection,
+  });
+  Object.defineProperty(window, "MediaStream", {
+    configurable: true,
+    value: MockMediaStream,
   });
   return getUserMedia;
 }
@@ -88,6 +131,11 @@ afterEach(() => {
     Object.defineProperty(window, "RTCPeerConnection", peerConnectionDescriptor);
   } else {
     delete window.RTCPeerConnection;
+  }
+  if (mediaStreamDescriptor) {
+    Object.defineProperty(window, "MediaStream", mediaStreamDescriptor);
+  } else {
+    delete window.MediaStream;
   }
 });
 
@@ -199,6 +247,110 @@ describe("AudioCallControls", () => {
       "hangup",
       { mode: "video" }
     );
+  });
+
+  it("switches the active video sender to the rear camera", async () => {
+    const { stream, videoTrack } = createStream();
+    const replacementTrack = { kind: "video", enabled: true, stop: vi.fn() };
+    const replacementStream = new MockMediaStream([replacementTrack]);
+    const getUserMedia = mockMedia(
+      stream,
+      vi.fn()
+        .mockResolvedValueOnce(stream)
+        .mockResolvedValueOnce(replacementStream)
+    );
+
+    renderCall();
+    fireEvent.click(screen.getByRole("button", { name: "Start video call" }));
+    const switchCameraButton = await screen.findByRole("button", {
+      name: "Switch to back camera",
+    });
+    fireEvent.click(switchCameraButton);
+
+    await waitFor(() => {
+      expect(getUserMedia).toHaveBeenNthCalledWith(2, {
+        audio: false,
+        video: { facingMode: { exact: "environment" } },
+      });
+    });
+    await waitFor(() => {
+      const videoSender = MockPeerConnection.lastInstance
+        .getSenders().find((sender) => sender.track.kind === "video");
+      expect(videoSender.replaceTrack).toHaveBeenCalledWith(replacementTrack);
+      expect(screen.getByRole("button", { name: "Switch to front camera" })).toBeInTheDocument();
+    });
+    expect(videoTrack.stop).toHaveBeenCalledOnce();
+  });
+
+  it("reports when the requested camera is unavailable", async () => {
+    const { stream } = createStream();
+    const unavailable = Object.assign(new Error("No rear camera"), {
+      name: "OverconstrainedError",
+    });
+    const getUserMedia = mockMedia(
+      stream,
+      vi.fn()
+        .mockResolvedValueOnce(stream)
+        .mockRejectedValueOnce(unavailable)
+    );
+
+    renderCall();
+    fireEvent.click(screen.getByRole("button", { name: "Start video call" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Switch to back camera" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The selected camera is unavailable"
+    );
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the self-video preview within the call stage while dragging", async () => {
+    const { stream } = createStream();
+    mockMedia(stream);
+
+    renderCall();
+    fireEvent.click(screen.getByRole("button", { name: "Start video call" }));
+    const preview = await screen.findByRole("button", { name: "Move your video preview" });
+    const stage = preview.closest(".call-screen-stage");
+    Object.defineProperties(stage, {
+      clientWidth: { configurable: true, value: 300 },
+      clientHeight: { configurable: true, value: 400 },
+    });
+    Object.defineProperties(preview, {
+      offsetWidth: { configurable: true, value: 100 },
+      offsetHeight: { configurable: true, value: 120 },
+    });
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue({
+      left: 10,
+      top: 20,
+      right: 310,
+      bottom: 420,
+      width: 300,
+      height: 400,
+    });
+    vi.spyOn(preview, "getBoundingClientRect").mockReturnValue({
+      left: 210,
+      top: 30,
+      right: 310,
+      bottom: 150,
+      width: 100,
+      height: 120,
+    });
+
+    firePointerEvent(preview, "pointerdown", {
+      pointerId: 1,
+      button: 0,
+      clientX: 220,
+      clientY: 40,
+    });
+    firePointerEvent(preview, "pointermove", {
+      pointerId: 1,
+      clientX: 1000,
+      clientY: 1000,
+    });
+
+    expect(preview).toHaveStyle({ left: "200px", top: "280px" });
+    firePointerEvent(preview, "pointerup", { pointerId: 1 });
   });
 
   it("offers a retry when call media permission is denied", async () => {

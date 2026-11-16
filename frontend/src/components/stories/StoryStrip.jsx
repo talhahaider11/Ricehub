@@ -76,7 +76,9 @@ export default function StoryStrip({
               author={group.author}
               story={story}
               hasUnseen={hasUnseen}
-              onSelect={() => navigate(`/stories/${story.id}`)}
+              onSelect={() => navigate(`/stories/${story.id}`, {
+                state: { stories },
+              })}
             />
           );
         })}

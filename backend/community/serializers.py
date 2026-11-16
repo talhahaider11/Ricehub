@@ -6,6 +6,7 @@ from .models import (
     Community,
     CommunityMembership,
     CommunityPost,
+    CommunityPostComment,
     Event,
     EventAttendance,
     EventInvitation,
@@ -100,10 +101,16 @@ class CommunityUpdateSerializer(serializers.ModelSerializer):
 class CommunityPostSerializer(serializers.ModelSerializer):
     author = serializers.SerializerMethodField()
     image = MediaURLField(required=False, allow_empty_file=False)
+    likes_count = serializers.IntegerField(read_only=True)
+    comments_count = serializers.IntegerField(read_only=True)
+    is_liked = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = CommunityPost
-        fields = ["id", "community", "author", "content", "image", "created_at"]
+        fields = [
+            "id", "community", "author", "content", "image", "created_at",
+            "likes_count", "comments_count", "is_liked",
+        ]
         read_only_fields = ["id", "community", "author", "created_at"]
 
     def get_author(self, obj):
@@ -123,6 +130,28 @@ class CommunityPostSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"image": "Use a JPEG, PNG or WebP image."})
         attrs["content"] = content
         return attrs
+
+
+class CommunityPostCommentSerializer(serializers.ModelSerializer):
+    author = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CommunityPostComment
+        fields = ["id", "author", "content", "created_at"]
+        read_only_fields = ["id", "author", "created_at"]
+
+    def get_author(self, obj):
+        return {
+            "id": obj.author_id,
+            "username": obj.author.username,
+            "is_verified": obj.author.is_verified,
+        }
+
+    def validate_content(self, value):
+        content = value.strip()
+        if not content:
+            raise serializers.ValidationError("Write a comment before sending.")
+        return content
 
 
 class EventSerializer(serializers.ModelSerializer):

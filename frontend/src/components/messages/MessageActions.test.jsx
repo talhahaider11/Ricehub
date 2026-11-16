@@ -24,7 +24,7 @@ describe("MessageActions", () => {
     expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
     expect(screen.getAllByRole("menuitem")).toHaveLength(1);
     expect(screen.queryByRole("menuitem", { name: "Edit" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Unsend" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Delete" })).not.toBeInTheDocument();
   });
 
   it("edits and deletes an owned message from the menu", async () => {
@@ -96,7 +96,7 @@ describe("MessageActions", () => {
         onDelete={onDelete}
       />
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Unsend" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 
     await waitFor(() => {
       expect(onDelete).toHaveBeenCalledWith(message);

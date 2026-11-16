@@ -108,7 +108,7 @@ describe("MessageInput", () => {
     });
   });
 
-  it("previews a photo captured from the in-app camera before sending", async () => {
+  it("previews a photo captured from the camera before sending", async () => {
     const track = { stop: vi.fn() };
     const stream = { getTracks: () => [track] };
     const getUserMedia = vi.fn().mockResolvedValue(stream);

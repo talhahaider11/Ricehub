@@ -8,6 +8,8 @@ from .models import (
     Community,
     CommunityMembership,
     CommunityPost,
+    CommunityPostComment,
+    CommunityPostLike,
     Event,
     EventAttendance,
     EventInvitation,
@@ -166,6 +168,100 @@ class CommunityFeatureTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 403)
+
+    def test_verified_page_owner_can_publish_and_public_users_can_like_and_comment(self):
+        page = Community.objects.create(
+            owner=self.other,
+            name="Rice page",
+            kind=Community.Kind.PAGE,
+        )
+        CommunityMembership.objects.create(
+            community=page,
+            user=self.other,
+            role=CommunityMembership.Role.ADMIN,
+        )
+        self.other.is_verified = True
+        self.other.save(update_fields=["is_verified"])
+        self.client.force_authenticate(self.other)
+
+        created = self.client.post(
+            f"/api/community/communities/{page.id}/posts/",
+            {"content": "Fresh rice from the farm"},
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201)
+        post_id = created.data["id"]
+
+        self.client.force_authenticate(self.user)
+        posts = self.client.get(f"/api/community/communities/{page.id}/posts/")
+        self.assertEqual(posts.status_code, 200)
+        post_list = (
+            posts.data.get("results", posts.data)
+            if isinstance(posts.data, dict)
+            else posts.data
+        )
+        post_data = next(post for post in post_list if post["id"] == post_id)
+        self.assertFalse(post_data["is_liked"])
+        self.assertEqual(post_data["likes_count"], 0)
+        self.assertEqual(post_data["comments_count"], 0)
+
+        liked = self.client.post(
+            f"/api/community/community-posts/{post_id}/like/"
+        )
+        unliked = self.client.post(
+            f"/api/community/community-posts/{post_id}/like/"
+        )
+        commented = self.client.post(
+            f"/api/community/community-posts/{post_id}/comments/",
+            {"content": "Looks great!"},
+            format="json",
+        )
+
+        self.assertEqual(liked.status_code, 200)
+        self.assertTrue(liked.data["is_liked"])
+        self.assertEqual(liked.data["likes_count"], 1)
+        self.assertFalse(unliked.data["is_liked"])
+        self.assertEqual(unliked.data["likes_count"], 0)
+        self.assertEqual(commented.status_code, 201)
+        self.assertEqual(commented.data["content"], "Looks great!")
+        self.assertEqual(CommunityPostLike.objects.filter(post_id=post_id).count(), 0)
+        self.assertEqual(
+            CommunityPostComment.objects.filter(post_id=post_id).count(),
+            1,
+        )
+
+    def test_only_verified_page_owner_can_publish_page_posts(self):
+        page = Community.objects.create(
+            owner=self.other,
+            name="Rice page",
+            kind=Community.Kind.PAGE,
+        )
+        CommunityMembership.objects.create(
+            community=page,
+            user=self.other,
+            role=CommunityMembership.Role.ADMIN,
+        )
+        url = f"/api/community/communities/{page.id}/posts/"
+
+        self.client.force_authenticate(self.other)
+        unverified = self.client.post(
+            url,
+            {"content": "Unverified page post"},
+            format="json",
+        )
+        self.assertEqual(unverified.status_code, 403)
+        self.assertIn("verified", unverified.data["detail"].lower())
+
+        self.other.is_verified = True
+        self.other.save(update_fields=["is_verified"])
+        self.client.force_authenticate(self.user)
+        non_owner = self.client.post(
+            url,
+            {"content": "Post by another verified user"},
+            format="json",
+        )
+        self.assertEqual(non_owner.status_code, 403)
+        self.assertFalse(CommunityPost.objects.filter(community=page).exists())
 
     def test_community_admin_can_edit_details_but_non_admin_cannot(self):
         community = Community.objects.create(

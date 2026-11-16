@@ -1,4 +1,4 @@
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
@@ -21,6 +21,8 @@ from .models import (
     Community,
     CommunityMembership,
     CommunityPost,
+    CommunityPostComment,
+    CommunityPostLike,
     Event,
     EventAttendance,
     EventInvitation,
@@ -31,6 +33,7 @@ from messaging.models import Conversation, ConversationMember
 from .serializers import (
     CommunitySerializer,
     CommunityPostSerializer,
+    CommunityPostCommentSerializer,
     CommunityUpdateSerializer,
     EventAttendanceSerializer,
     EventInvitationSerializer,
@@ -186,10 +189,26 @@ class CommunityPostListCreateView(generics.ListCreateAPIView):
             community=community,
         ).exclude(
             author_id__in=get_blocked_user_ids(self.request.user),
-        ).select_related("author", "community")
+        ).select_related("author", "community").annotate(
+            likes_count=Count("likes", distinct=True),
+            comments_count=Count("comments", distinct=True),
+            is_liked=Exists(
+                CommunityPostLike.objects.filter(
+                    post_id=OuterRef("pk"),
+                    user_id=self.request.user.pk,
+                )
+            ),
+        ).order_by("-created_at", "-pk")
 
     def perform_create(self, serializer):
         community = get_object_or_404(Community, pk=self.kwargs["community_id"])
+        if community.kind == Community.Kind.PAGE:
+            if community.owner_id != self.request.user.pk:
+                raise PermissionDenied("Only the page creator can publish page posts.")
+            if not self.request.user.is_verified:
+                raise PermissionDenied("Only verified users can publish page posts.")
+            serializer.save(community=community, author=self.request.user)
+            return
         if not CommunityMembership.objects.filter(
             community=community,
             user=self.request.user,
@@ -198,6 +217,64 @@ class CommunityPostListCreateView(generics.ListCreateAPIView):
         if community.owner_id in get_blocked_user_ids(self.request.user):
             raise PermissionDenied("This community is unavailable.")
         serializer.save(community=community, author=self.request.user)
+
+
+def get_visible_community_post(request, post_id):
+    post = get_object_or_404(
+        CommunityPost.objects.select_related("community", "author"),
+        pk=post_id,
+    )
+    hidden_user_ids = get_blocked_user_ids(request.user)
+    if post.community.owner_id in hidden_user_ids or post.author_id in hidden_user_ids:
+        raise PermissionDenied("This post is unavailable.")
+    if (
+        post.community.visibility != Community.Visibility.PUBLIC
+        and not CommunityMembership.objects.filter(
+            community=post.community,
+            user=request.user,
+        ).exists()
+    ):
+        raise PermissionDenied("Join this community to view its posts.")
+    return post
+
+
+class CommunityPostLikeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        post = get_visible_community_post(request, post_id)
+        like, created = CommunityPostLike.objects.get_or_create(
+            post=post,
+            user=request.user,
+        )
+        if not created:
+            like.delete()
+        return Response({
+            "is_liked": created,
+            "likes_count": post.likes.count(),
+        })
+
+
+class CommunityPostCommentListCreateView(generics.ListCreateAPIView):
+    serializer_class = CommunityPostCommentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_post(self):
+        return get_visible_community_post(
+            self.request,
+            self.kwargs["post_id"],
+        )
+
+    def get_queryset(self):
+        post = self.get_post()
+        return CommunityPostComment.objects.filter(
+            post=post,
+        ).exclude(
+            author_id__in=get_blocked_user_ids(self.request.user),
+        ).select_related("author")
+
+    def perform_create(self, serializer):
+        serializer.save(post=self.get_post(), author=self.request.user)
 
 
 class CommunityPostDetailView(generics.DestroyAPIView):

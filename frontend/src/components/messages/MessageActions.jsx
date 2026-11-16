@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MoreVertical, Reply, Share2 } from "lucide-react";
+import {
+  MoreVertical,
+  Pencil,
+  Reply,
+  Share2,
+  Trash2,
+} from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 
 export default function MessageActions({
@@ -111,7 +117,11 @@ export default function MessageActions({
   );
   const menuElement = !editing && menuOpen ? (
     <div
-      className={`message-actions-menu${open ? " message-actions-menu--portal" : ""}`}
+      className={[
+        "message-actions-menu",
+        open ? "message-actions-menu--portal" : "",
+        own ? "message-actions-menu--owner" : "message-actions-menu--viewer",
+      ].filter(Boolean).join(" ")}
       id={`message-options-${message.id}`}
       ref={menuRef}
       role="menu"
@@ -121,23 +131,27 @@ export default function MessageActions({
         <>
           {message.content && (
             <button type="button" role="menuitem" onClick={startEditing}>
-              {t("edit")}
+              <Pencil size={18} aria-hidden="true" />
+              <span>{t("edit")}</span>
             </button>
           )}
           <button
             type="button"
+            className="message-action-delete"
             role="menuitem"
             onClick={() => {
               closeMenu();
               void remove();
             }}
           >
-            {t("unsend")}
+            <Trash2 size={18} aria-hidden="true" />
+            <span>{t("deleteMessageAction")}</span>
           </button>
         </>
       )}
       <button type="button" role="menuitem" onClick={() => void shareMessage()}>
-        {t("share")}
+        <Share2 size={18} aria-hidden="true" />
+        <span>{t("share")}</span>
       </button>
     </div>
   ) : null;

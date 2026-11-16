@@ -1,6 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+} from "react-router-dom";
 import StoryStrip from "./StoryStrip";
 import storyService from "../../services/storyService";
 
@@ -13,7 +19,13 @@ vi.mock("../../services/storyService", () => ({
 
 function StoryRouteProbe() {
   const { id } = useParams();
-  return <p>Story route {id}</p>;
+  const location = useLocation();
+  return (
+    <>
+      <p>Story route {id}</p>
+      <p>Cached stories {location.state?.stories?.length || 0}</p>
+    </>
+  );
 }
 
 describe("StoryStrip", () => {
@@ -76,6 +88,7 @@ describe("StoryStrip", () => {
     );
 
     expect(await screen.findByText("Story route 4")).toBeInTheDocument();
+    expect(screen.getByText("Cached stories 1")).toBeInTheDocument();
   });
 
   it("groups stories by author and opens the first unseen story", async () => {
@@ -108,5 +121,40 @@ describe("StoryStrip", () => {
     );
 
     expect(await screen.findByText("Story route 9")).toBeInTheDocument();
+    expect(screen.getByText("Cached stories 2")).toBeInTheDocument();
+  });
+
+  it("marks a viewed story locally without reloading the active story list", async () => {
+    storyService.list.mockResolvedValue({
+      results: [
+        {
+          id: 12,
+          author: { id: 7, username: "story-user" },
+          is_seen: false,
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<StoryStrip />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const storyButton = await screen.findByRole("button", {
+      name: "View story-user's story",
+    });
+    expect(storyButton).toHaveClass("is-unseen");
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("ricehub:story-viewed", {
+        detail: { storyId: 12 },
+      }));
+    });
+
+    expect(storyButton).toHaveClass("is-seen");
+    expect(storyService.list).toHaveBeenCalledOnce();
   });
 });

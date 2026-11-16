@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import storyService from "../services/storyService";
+import messageService from "../services/messageService";
 import useAuth from "../hooks/useAuth";
 import StoryViewer from "./StoryViewer";
 
@@ -16,6 +17,13 @@ vi.mock("../services/storyService", () => ({
   },
 }));
 
+vi.mock("../services/messageService", () => ({
+  default: {
+    createConversation: vi.fn(),
+    sendText: vi.fn(),
+  },
+}));
+
 vi.mock("../hooks/useAuth", () => ({
   default: vi.fn(),
 }));
@@ -24,6 +32,8 @@ describe("StoryViewer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAuth.mockReturnValue({ user: { id: 1 } });
+    messageService.createConversation.mockResolvedValue({ id: 17 });
+    messageService.sendText.mockResolvedValue({});
     storyService.markViewed.mockResolvedValue({});
     storyService.toggleLike.mockResolvedValue({
       is_liked: true,
@@ -113,6 +123,57 @@ describe("StoryViewer", () => {
 
     expect(storyService.toggleLike).toHaveBeenNthCalledWith(1, 4);
     expect(storyService.toggleLike).toHaveBeenNthCalledWith(2, 4);
+  });
+
+  it("sends a reply to the story author's direct conversation", async () => {
+    render(
+      <MemoryRouter initialEntries={["/stories/4"]}>
+        <Routes>
+          <Route path="/stories/:id" element={<StoryViewer />} />
+          <Route path="/" element={<p>Story viewer closed</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByText("First story");
+    fireEvent.change(screen.getByRole("textbox", { name: "Reply to story..." }), {
+      target: { value: "Nice update!" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send story reply" }));
+
+    await waitFor(() => {
+      expect(messageService.createConversation).toHaveBeenCalledWith("author");
+      expect(messageService.sendText).toHaveBeenCalledWith(
+        17,
+        "Story reply: Nice update!"
+      );
+    });
+    expect(await screen.findByRole("status")).toHaveTextContent("Reply sent.");
+  });
+
+  it("uses the story strip cache instead of fetching the list again", async () => {
+    const stories = [
+      {
+        id: 4,
+        author: { id: 2, username: "author" },
+        caption: "Cached story",
+        created_at: new Date().toISOString(),
+      },
+    ];
+
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: "/stories/4", state: { stories } }]}
+      >
+        <Routes>
+          <Route path="/stories/:id" element={<StoryViewer />} />
+          <Route path="/" element={<p>Story viewer closed</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Cached story")).toBeInTheDocument();
+    expect(storyService.list).not.toHaveBeenCalled();
   });
 
   it("shows owner controls and removes a deleted story immediately", async () => {
@@ -225,6 +286,65 @@ describe("StoryViewer", () => {
       });
 
       expect(screen.getByText("Second story")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("pauses an image story when the viewer taps it", async () => {
+    vi.useFakeTimers();
+    storyService.list.mockResolvedValue({
+      results: [
+        {
+          id: 4,
+          author: { id: 2, username: "author" },
+          image: "/story.jpg",
+          media_type: "image",
+          created_at: "2026-11-02T10:00:00Z",
+        },
+        {
+          id: 5,
+          author: { id: 2, username: "author" },
+          caption: "Next story",
+          media_type: null,
+          created_at: "2026-11-02T10:01:00Z",
+        },
+      ],
+    });
+    try {
+      render(
+        <MemoryRouter initialEntries={["/stories/4"]}>
+          <Routes>
+            <Route path="/stories/:id" element={<StoryViewer />} />
+            <Route path="/" element={<p>Story viewer closed</p>} />
+          </Routes>
+        </MemoryRouter>
+      );
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      const progressBar = screen.getByRole("progressbar", { name: "Story 1 of 2" });
+      expect(progressBar).toHaveAttribute("aria-valuenow", "20");
+
+      fireEvent.click(screen.getByAltText("Story"));
+      expect(document.querySelector(
+        ".story-fullscreen-actions button[aria-label='Resume story']"
+      )).toBeInTheDocument();
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(progressBar).toHaveAttribute("aria-valuenow", "20");
+
+      fireEvent.click(screen.getByAltText("Story"));
+      await act(async () => {
+        vi.advanceTimersByTime(4100);
+      });
+      expect(screen.getByText("Next story")).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

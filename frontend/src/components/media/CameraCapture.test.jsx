@@ -91,32 +91,37 @@ describe("CameraCapture", () => {
     );
   });
 
-  it("uses the device camera for mobile photo and video capture with lens selection", async () => {
+  it("launches native mobile capture directly and supports front and back cameras", async () => {
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,
       value: "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/130 Mobile",
     });
     const onCapture = vi.fn().mockResolvedValue(undefined);
     const { container } = render(<CameraCapture onCapture={onCapture} />);
+    const photoInput = container.querySelector('input[accept="image/*"]');
+    const photoInputClick = vi.spyOn(photoInput, "click");
 
     fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
-    expect(await screen.findByRole("dialog", { name: "Camera" })).toBeInTheDocument();
+    expect(photoInputClick).toHaveBeenCalledOnce();
     expect(screen.queryByLabelText("Camera preview")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Camera" })).not.toBeInTheDocument();
+    expect(photoInput).toHaveAttribute("capture", "environment");
 
-    fireEvent.click(screen.getByRole("button", { name: "Front camera" }));
-    const photoInput = container.querySelector('input[accept="image/*"]');
+    fireEvent.click(screen.getByRole("button", { name: "Switch to front camera" }));
+    expect(screen.getByText("Front camera")).toBeInTheDocument();
     expect(photoInput).toHaveAttribute("capture", "user");
-    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
+    expect(photoInputClick).toHaveBeenCalledTimes(2);
     const photoFile = new File(["photo"], "camera.jpg", { type: "image/jpeg" });
     fireEvent.change(photoInput, { target: { files: [photoFile] } });
 
     await waitFor(() => expect(onCapture).toHaveBeenLastCalledWith(photoFile));
-    fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
-    await screen.findByRole("dialog", { name: "Camera" });
-    fireEvent.click(screen.getByRole("button", { name: "Back camera" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to back camera" }));
     const videoInput = container.querySelector('input[accept="video/*"]');
+    const videoInputClick = vi.spyOn(videoInput, "click");
     expect(videoInput).toHaveAttribute("capture", "environment");
     fireEvent.click(screen.getByRole("button", { name: "Record video" }));
+    expect(videoInputClick).toHaveBeenCalledOnce();
     const videoFile = new File(["video"], "camera.mp4", { type: "video/mp4" });
     fireEvent.change(videoInput, { target: { files: [videoFile] } });
 

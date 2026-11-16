@@ -22,14 +22,26 @@ export default function useStories(authorId) {
     }
   }, [authorId]);
 
+  const markViewedLocally = useCallback((event) => {
+    const storyId = event.detail?.storyId;
+    if (storyId == null) return;
+    setStories((current) => current.map((story) => (
+      String(story.id) === String(storyId)
+        ? { ...story, is_seen: true }
+        : story
+    )));
+  }, []);
+
   useEffect(() => {
     void loadStories();
     const refresh = () => void loadStories();
     window.addEventListener("ricehub:stories-updated", refresh);
+    window.addEventListener("ricehub:story-viewed", markViewedLocally);
     return () => {
       window.removeEventListener("ricehub:stories-updated", refresh);
+      window.removeEventListener("ricehub:story-viewed", markViewedLocally);
     };
-  }, [loadStories]);
+  }, [loadStories, markViewedLocally]);
 
   const viewStory = useCallback(async (storyId) => {
     try {

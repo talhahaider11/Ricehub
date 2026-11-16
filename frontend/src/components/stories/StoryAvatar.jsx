@@ -22,9 +22,15 @@ export default function StoryAvatar({ author, story, hasUnseen, onSelect }) {
     >
       {media ? (
         isVideo && !story.thumbnail_url ? (
-          <video src={getMediaUrl(media)} muted playsInline />
+          <video src={getMediaUrl(media)} muted playsInline preload="none" />
         ) : (
-          <img src={getMediaUrl(preview)} alt="" />
+          <img
+            src={getMediaUrl(preview)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            fetchpriority="low"
+          />
         )
       ) : (
         <span className="story-text-preview">{text || "Story"}</span>
