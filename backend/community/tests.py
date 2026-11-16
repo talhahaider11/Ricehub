@@ -107,10 +107,10 @@ class CommunityFeatureTests(APITestCase):
         self.assertEqual(viewers.status_code, 200)
         self.assertEqual(viewers.data[0]["viewer"]["id"], self.user.id)
 
-    def test_only_members_can_post_or_read_group_posts_and_admin_can_moderate(self):
+    def test_public_group_posts_are_readable_without_membership_but_posting_requires_it(self):
         group = Community.objects.create(
             owner=self.other,
-            name="Members only",
+            name="Public group",
             kind=Community.Kind.GROUP,
         )
         CommunityMembership.objects.create(
@@ -118,12 +118,25 @@ class CommunityFeatureTests(APITestCase):
             user=self.other,
             role=CommunityMembership.Role.ADMIN,
         )
+        existing_post = CommunityPost.objects.create(
+            community=group,
+            author=self.other,
+            content="Public post",
+        )
         posts_url = f"/api/community/communities/{group.id}/posts/"
+        viewed = self.client.get(posts_url)
         denied = self.client.post(
             posts_url,
             {"content": "Not joined"},
             format="json",
         )
+        viewed_posts = (
+            viewed.data.get("results", viewed.data)
+            if isinstance(viewed.data, dict)
+            else viewed.data
+        )
+        self.assertEqual(viewed.status_code, 200)
+        self.assertEqual([post["id"] for post in viewed_posts], [existing_post.id])
         self.assertEqual(denied.status_code, 403)
 
         CommunityMembership.objects.create(community=group, user=self.user)
@@ -139,6 +152,51 @@ class CommunityFeatureTests(APITestCase):
         removed = self.client.delete(f"/api/community/community-posts/{post_id}/")
         self.assertEqual(removed.status_code, 204)
         self.assertFalse(CommunityPost.objects.filter(pk=post_id).exists())
+
+    def test_private_community_posts_are_hidden_from_non_members(self):
+        private_group = Community.objects.create(
+            owner=self.other,
+            name="Private group",
+            kind=Community.Kind.GROUP,
+            visibility=Community.Visibility.PRIVATE,
+        )
+
+        response = self.client.get(
+            f"/api/community/communities/{private_group.id}/posts/"
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_community_admin_can_edit_details_but_non_admin_cannot(self):
+        community = Community.objects.create(
+            owner=self.other,
+            name="Original",
+            kind=Community.Kind.PAGE,
+        )
+        CommunityMembership.objects.create(
+            community=community,
+            user=self.other,
+            role=CommunityMembership.Role.ADMIN,
+        )
+
+        denied = self.client.patch(
+            f"/api/community/communities/{community.id}/",
+            {"name": "Changed by member"},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        self.client.force_authenticate(self.other)
+        updated = self.client.patch(
+            f"/api/community/communities/{community.id}/",
+            {"name": "Updated page", "description": "Updated description"},
+            format="json",
+        )
+
+        self.assertEqual(updated.status_code, 200)
+        community.refresh_from_db()
+        self.assertEqual(community.name, "Updated page")
+        self.assertEqual(community.description, "Updated description")
 
     def test_public_group_join_and_private_group_is_not_joinable(self):
         public_group = Community.objects.create(

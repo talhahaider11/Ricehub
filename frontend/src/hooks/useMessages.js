@@ -41,7 +41,7 @@ export default function useMessages(conversationId) {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [typingUser, setTypingUser] = useState(false);
-  const [callSignal, setCallSignal] = useState(null);
+  const [callSignals, setCallSignals] = useState([]);
   const [conversationHidden, setConversationHidden] = useState(false);
   const [error, setError] = useState("");
   conversationIdRef.current = conversationId;
@@ -79,7 +79,7 @@ export default function useMessages(conversationId) {
     setMessages([]);
     setError("");
     setTypingUser(false);
-    setCallSignal(null);
+    setCallSignals([]);
     setConversationHidden(false);
     loadMessages();
 
@@ -121,7 +121,7 @@ export default function useMessages(conversationId) {
             return;
           }
           if (data.type === "call_signal") {
-            setCallSignal(data);
+            setCallSignals((current) => [...current, data]);
             return;
           }
           if (data.type === "error") {
@@ -266,7 +266,9 @@ export default function useMessages(conversationId) {
       signal,
     }));
   }, []);
-  const clearCallSignal = useCallback(() => setCallSignal(null), []);
+  const clearCallSignal = useCallback(() => {
+    setCallSignals((current) => current.slice(1));
+  }, []);
 
   return {
     messages,
@@ -276,7 +278,7 @@ export default function useMessages(conversationId) {
     sendMessage,
     sendTyping,
     sendCallSignal,
-    callSignal,
+    callSignal: callSignals[0] || null,
     conversationHidden,
     clearCallSignal,
     typingUser,

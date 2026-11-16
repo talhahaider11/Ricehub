@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "../../context/LanguageContext";
 
@@ -9,12 +9,29 @@ export default function SearchBar() {
   const [query, setQuery] = useState(params.get("q") || "");
   const location = useLocation();
   const navigate = useNavigate();
+  const inputRef = useRef(null);
+  const isSearchPage = location.pathname === "/search";
+
+  const updateQuery = (value) => {
+    setQuery(value);
+    if (isSearchPage) {
+      navigate(`/search${value ? `?q=${encodeURIComponent(value)}` : ""}`, {
+        replace: true,
+      });
+    }
+  };
 
   useEffect(() => {
-    if (location.pathname === "/search") {
+    if (isSearchPage) {
       setQuery(params.get("q") || "");
     }
-  }, [location.pathname, params]);
+  }, [isSearchPage, params]);
+
+  useEffect(() => {
+    if (isSearchPage) {
+      inputRef.current?.focus();
+    }
+  }, [isSearchPage]);
 
   return (
     <div className="navbar-search">
@@ -23,16 +40,25 @@ export default function SearchBar() {
         role="search"
         onSubmit={(event) => {
           event.preventDefault();
-          navigate(`/search${query ? `?q=${encodeURIComponent(query)}` : ""}`);
+          navigate(`/search${query ? `?q=${encodeURIComponent(query)}` : ""}`, {
+            replace: isSearchPage,
+          });
         }}
       >
         <Search size={18} />
         <input
+          ref={inputRef}
           type="search"
           aria-label={t("searchUsersPosts")}
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onFocus={() => {
+            if (!isSearchPage) {
+              navigate(`/search${query ? `?q=${encodeURIComponent(query)}` : ""}`);
+            }
+          }}
+          onChange={(event) => updateQuery(event.target.value)}
           placeholder={t("searchRiceHub")}
+          autoFocus={isSearchPage}
         />
       </form>
     </div>

@@ -14,6 +14,9 @@ const communityService = {
   async createCommunity(data) {
     return (await api.post("/community/communities/", data)).data;
   },
+  async updateCommunity(id, data) {
+    return (await api.patch(`/community/communities/${id}/`, data)).data;
+  },
   async communityPosts(id) {
     return (await api.get(`/community/communities/${id}/posts/`)).data;
   },

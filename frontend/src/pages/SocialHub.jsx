@@ -59,6 +59,7 @@ export default function SocialHub() {
   const [communityName, setCommunityName] = useState("");
   const [communityDescription, setCommunityDescription] = useState("");
   const [communityKind, setCommunityKind] = useState("group");
+  const [editingCommunity, setEditingCommunity] = useState(null);
   const [eventTitle, setEventTitle] = useState("");
   const [eventDescription, setEventDescription] = useState("");
   const [eventDate, setEventDate] = useState("");
@@ -197,11 +198,26 @@ export default function SocialHub() {
         description: communityDescription,
         visibility: "public",
       });
+      socialHubCache.delete("Groups & Pages");
       setCommunityName("");
       setCommunityDescription("");
     }, t("groupPageCreated", {
       kind: t(communityKind === "group" ? "group" : "page"),
     }));
+  };
+
+  const updateCommunity = (event) => {
+    event.preventDefault();
+    if (!editingCommunity) return;
+    return perform(async () => {
+      await communityService.updateCommunity(editingCommunity.id, {
+        name: editingCommunity.name,
+        description: editingCommunity.description,
+        visibility: editingCommunity.visibility,
+      });
+      socialHubCache.delete("Groups & Pages");
+      setEditingCommunity(null);
+    }, t("communityUpdated"));
   };
 
   const createEvent = (event) => {
@@ -330,34 +346,112 @@ export default function SocialHub() {
             </select>
             <button className="btn btn-primary" disabled={saving}>{t("create")}</button>
           </form>
+          {editingCommunity && (
+            <form className="card social-form" onSubmit={updateCommunity}>
+              <h2>{t("editPage")}</h2>
+              <input
+                value={editingCommunity.name}
+                onChange={(event) => setEditingCommunity((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }))}
+                maxLength={100}
+                placeholder={t("name")}
+                required
+              />
+              <textarea
+                value={editingCommunity.description}
+                onChange={(event) => setEditingCommunity((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))}
+                maxLength={2000}
+                placeholder={t("optionalDescription")}
+              />
+              <select
+                value={editingCommunity.visibility}
+                onChange={(event) => setEditingCommunity((current) => ({
+                  ...current,
+                  visibility: event.target.value,
+                }))}
+                aria-label={t("communityVisibility")}
+              >
+                <option value="public">{t("public")}</option>
+                <option value="private">{t("private")}</option>
+              </select>
+              <div className="social-actions">
+                <button className="btn btn-primary" disabled={saving}>{t("save")}</button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={saving}
+                  onClick={() => setEditingCommunity(null)}
+                >
+                  {t("cancel")}
+                </button>
+              </div>
+            </form>
+          )}
           <div className="social-grid">
             {communities.map((community) => (
               <article className="card social-card" key={community.id}>
                 <span className="settings-badge">{t(community.kind)}</span>
                 <h2>{community.name}</h2><p>{community.description || t("aCommunity")}</p>
                 <small>{new Intl.NumberFormat(language).format(community.member_count)} {t("members")} · {t("by")} @{community.owner.username}</small>
+                {community.kind === "page" && community.membership_role === "admin" && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setEditingCommunity({
+                      id: community.id,
+                      name: community.name,
+                      description: community.description || "",
+                      visibility: community.visibility,
+                    })}
+                  >
+                    {t("editPage")}
+                  </button>
+                )}
                 {community.membership_role === "admin"
-                  ? <button className="btn btn-secondary" onClick={() => loadCommunityPosts(community.id)}>{t("managePosts")}</button>
+                  ? <button type="button" className="btn btn-secondary" onClick={() => loadCommunityPosts(community.id)}>{t("managePosts")}</button>
                   : community.membership_role
-                    ? <><button className="btn btn-secondary" onClick={() => loadCommunityPosts(community.id)}>{t("posts")}</button><button className="btn btn-secondary" disabled={saving} onClick={() => perform(() => communityService.leaveCommunity(community.id), t("leftCommunity"))}>{t("leave")}</button></>
-                  : <button className="btn btn-primary" disabled={saving} onClick={() => perform(() => communityService.joinCommunity(community.id), t("joinedCommunity"))}>{t("join")}</button>}
+                    ? <><button type="button" className="btn btn-secondary" onClick={() => loadCommunityPosts(community.id)}>{t("communityViewPosts")}</button><button type="button" className="btn btn-secondary" disabled={saving} onClick={() => perform(async () => {
+                      await communityService.leaveCommunity(community.id);
+                      socialHubCache.delete("Groups & Pages");
+                    }, t("leftCommunity"))}>{t("leave")}</button></>
+                    : <>
+                      {community.visibility === "public" && (
+                        <button type="button" className="btn btn-secondary" onClick={() => loadCommunityPosts(community.id)}>{t("communityViewPosts")}</button>
+                      )}
+                      <button type="button" className="btn btn-primary" disabled={saving} onClick={() => perform(async () => {
+                        await communityService.joinCommunity(community.id);
+                        socialHubCache.delete("Groups & Pages");
+                      }, t("joinedCommunity"))}>{t("join")}</button>
+                    </>}
               </article>
             ))}
           </div>
           {expandedCommunityId && (
             <section className="card social-form">
-              <h2>{t("communityPosts")}</h2>
-              <form onSubmit={async (event) => {
-                event.preventDefault();
-                await perform(async () => {
-                  await communityService.createCommunityPost(expandedCommunityId, communityPostText);
-                  setCommunityPostText("");
-                  await loadCommunityPosts(expandedCommunityId);
-                }, t("communityPostPublished"));
-              }}>
-                <textarea value={communityPostText} onChange={(event) => setCommunityPostText(event.target.value)} placeholder={t("writePostForMembers")} required maxLength={5000} />
-                <button className="btn btn-primary" disabled={saving}>{t("postToGroup")}</button>
-              </form>
+              <h2>
+                {t("communityPosts")}
+                {communities.find((item) => item.id === expandedCommunityId)?.name
+                  ? ` · ${communities.find((item) => item.id === expandedCommunityId).name}`
+                  : ""}
+              </h2>
+              {communities.find((item) => item.id === expandedCommunityId)?.membership_role && (
+                <form onSubmit={async (event) => {
+                  event.preventDefault();
+                  await perform(async () => {
+                    await communityService.createCommunityPost(expandedCommunityId, communityPostText);
+                    setCommunityPostText("");
+                    await loadCommunityPosts(expandedCommunityId);
+                  }, t("communityPostPublished"));
+                }}>
+                  <textarea value={communityPostText} onChange={(event) => setCommunityPostText(event.target.value)} placeholder={t("writePostForMembers")} required maxLength={5000} />
+                  <button className="btn btn-primary" disabled={saving}>{t("postToGroup")}</button>
+                </form>
+              )}
               {communityPosts.map((post) => (
                 <article className="social-card" key={post.id}>
                   <strong>@{post.author.username}</strong><p>{post.content}</p>
@@ -367,6 +461,7 @@ export default function SocialHub() {
                   )}
                 </article>
               ))}
+              {communityPosts.length === 0 && <p className="social-empty">{t("noCommunityPosts")}</p>}
             </section>
           )}
           {!loading && communities.length === 0 && <p className="card social-empty">{t("noCommunities")}</p>}

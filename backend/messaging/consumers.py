@@ -138,6 +138,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             signal_type = data.get("signal_type")
             target_user_id = data.get("to_user_id")
             signal = data.get("signal", {})
+            call_mode = signal.get("mode", "audio") if isinstance(signal, dict) else None
             valid_target_id = (
                 isinstance(target_user_id, int)
                 and not isinstance(target_user_id, bool)
@@ -148,6 +149,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 or not valid_target_id
                 or not isinstance(signal, dict)
                 or len(json.dumps(signal)) > 20_000
+                or (
+                    signal_type == "hangup"
+                    and call_mode not in {"audio", "video"}
+                )
             ):
                 await self.send_json({
                     "type": "error",
@@ -163,16 +168,45 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "message": "This conversation is not available for audio calls.",
                 })
                 return
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    "type": "call_signal_event",
-                    "from_user_id": self.user.id,
-                    "to_user_id": target_user_id,
-                    "signal_type": signal_type,
-                    "signal": signal,
-                },
-            )
+            try:
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        "type": "call_signal_event",
+                        "from_user_id": self.user.id,
+                        "to_user_id": target_user_id,
+                        "signal_type": signal_type,
+                        "signal": signal,
+                    },
+                )
+            except (ChannelFull, RedisError, OSError, TimeoutError):
+                logger.exception(
+                    "Call signal from user %s could not be broadcast.",
+                    self.user.id,
+                )
+                await self.send_json({
+                    "type": "error",
+                    "message": "Call signal could not be delivered.",
+                })
+
+            if signal_type == "hangup":
+                call_message = await self.create_call_ended_message(call_mode)
+                if call_message:
+                    call_event = {
+                        "type": "chat_message",
+                        "message": call_message,
+                    }
+                    try:
+                        await self.channel_layer.group_send(
+                            self.room_group_name,
+                            call_event,
+                        )
+                    except (ChannelFull, RedisError, OSError, TimeoutError):
+                        logger.exception(
+                            "Call end message %s was saved but could not be broadcast.",
+                            call_message["id"],
+                        )
+                        await self.chat_message(call_event)
             return
 
 
@@ -291,6 +325,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             "type": "conversation_hidden",
             "conversation_id": self.conversation_id,
         })
+        await self.close(code=4003)
 
     async def typing_event(
         self,
@@ -345,7 +380,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if membership and membership.deleted_at:
             return False
         if conversation.conversation_type == Conversation.ConversationType.GROUP:
-            return True
+            return bool(membership)
         other_user = conversation.participants.exclude(pk=self.user.pk).first()
         return bool(other_user and can_message_between(self.user, other_user))
 
@@ -399,6 +434,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
         ).first()
         if membership and membership.deleted_at:
             return None
+        if conversation.conversation_type == Conversation.ConversationType.GROUP:
+            if not membership:
+                return None
+            if (
+                conversation.admins_only
+                and membership.role != ConversationMember.Role.ADMIN
+            ):
+                return None
         reply_to = None
         if reply_to_id is not None:
             reply_to = Message.objects.filter(
@@ -422,6 +465,49 @@ class ChatConsumer(AsyncWebsocketConsumer):
         return message, verification_warning
 
     @database_sync_to_async
+    def create_call_ended_message(self, call_mode):
+        conversation = (
+            Conversation.objects
+            .filter(
+                id=self.conversation_id,
+                conversation_type=Conversation.ConversationType.DIRECT,
+                participants=self.user,
+            )
+            .first()
+        )
+        if not conversation:
+            return None
+
+        membership = ConversationMember.objects.filter(
+            conversation=conversation,
+            user=self.user,
+        ).first()
+        if membership and membership.deleted_at:
+            return None
+
+        call_name = "Audio" if call_mode == "audio" else "Video"
+        message = Message.objects.create(
+            conversation=conversation,
+            sender=self.user,
+            content=f"{call_name} call was ended",
+        )
+        restore_conversation_memberships(conversation)
+        conversation.save()
+
+        return {
+            "id": message.id,
+            "conversation": message.conversation_id,
+            "sender": message.sender_id,
+            "reply_to": None,
+            "reply_to_id": None,
+            "sender_username": self.user.username,
+            "verification_warning": not self.user.is_verified,
+            "content": message.content,
+            "created_at": message.created_at.isoformat(),
+            "is_read": message.is_read,
+        }
+
+    @database_sync_to_async
     def can_send_message(self):
         conversation = (
             Conversation.objects
@@ -441,7 +527,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if membership and membership.deleted_at:
             return False
         if conversation.conversation_type == Conversation.ConversationType.GROUP:
-            return True
+            return bool(
+                membership
+                and (
+                    not conversation.admins_only
+                    or membership.role == ConversationMember.Role.ADMIN
+                )
+            )
         other_user = conversation.participants.exclude(pk=self.user.pk).first()
         return bool(other_user and can_message_between(self.user, other_user))
 

@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, X } from "lucide-react";
+import { Camera, Video, X } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
+
+function shouldUseDeviceCamera() {
+  const mobileUserAgent = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return mobileUserAgent || window.matchMedia?.("(pointer: coarse)").matches === true;
+}
 
 export default function CameraCapture({
   onCapture,
@@ -10,7 +15,11 @@ export default function CameraCapture({
   const { t } = useLanguage();
   const [stream, setStream] = useState(null);
   const [error, setError] = useState("");
+  const [deviceCaptureOpen, setDeviceCaptureOpen] = useState(false);
+  const [cameraDirection, setCameraDirection] = useState("environment");
   const videoRef = useRef(null);
+  const photoInputRef = useRef(null);
+  const videoInputRef = useRef(null);
   const streamRef = useRef(null);
   const openingRef = useRef(false);
 
@@ -34,6 +43,11 @@ export default function CameraCapture({
 
   const openCamera = async () => {
     setError("");
+    if (shouldUseDeviceCamera()) {
+      setDeviceCaptureOpen(true);
+      return;
+    }
+
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setError(t("cameraUnsupported"));
       return;
@@ -59,6 +73,26 @@ export default function CameraCapture({
       }
     } finally {
       openingRef.current = false;
+    }
+  };
+
+  const openDeviceCapture = (type) => {
+    const input = type === "video" ? videoInputRef.current : photoInputRef.current;
+    input?.click();
+  };
+
+  const handleDeviceCapture = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setDeviceCaptureOpen(false);
+    setError("");
+    try {
+      await onCapture(file);
+    } catch (captureError) {
+      console.error("Device camera capture could not be used:", captureError);
+      setError(captureError.message || t("cameraCaptureFailed"));
     }
   };
 
@@ -97,6 +131,26 @@ export default function CameraCapture({
 
   return (
     <>
+      <input
+        ref={photoInputRef}
+        className="camera-capture-input"
+        type="file"
+        accept="image/*"
+        capture={cameraDirection}
+        onChange={(event) => void handleDeviceCapture(event)}
+        aria-label={t("takePhoto")}
+        tabIndex={-1}
+      />
+      <input
+        ref={videoInputRef}
+        className="camera-capture-input"
+        type="file"
+        accept="video/*"
+        capture={cameraDirection}
+        onChange={(event) => void handleDeviceCapture(event)}
+        aria-label={t("recordVideo")}
+        tabIndex={-1}
+      />
       <button
         type="button"
         className={`camera-capture-trigger ${className}`.trim()}
@@ -108,6 +162,73 @@ export default function CameraCapture({
         <Camera size={18} aria-hidden="true" />
         <span>{t("camera")}</span>
       </button>
+      {deviceCaptureOpen && (
+        <div className="camera-capture-backdrop">
+          <section
+            className="camera-capture-dialog camera-device-capture-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("camera")}
+          >
+            <header>
+              <h2>{t("camera")}</h2>
+              <button
+                type="button"
+                onClick={() => setDeviceCaptureOpen(false)}
+                aria-label={t("closeCamera")}
+              >
+                <X size={20} aria-hidden="true" />
+              </button>
+            </header>
+            <p>{t("chooseCameraDirection")}</p>
+            <div className="camera-direction-options" role="group" aria-label={t("chooseCameraDirection")}>
+              <button
+                type="button"
+                className={cameraDirection === "environment" ? "active" : ""}
+                aria-pressed={cameraDirection === "environment"}
+                onClick={() => setCameraDirection("environment")}
+              >
+                {t("backCamera")}
+              </button>
+              <button
+                type="button"
+                className={cameraDirection === "user" ? "active" : ""}
+                aria-pressed={cameraDirection === "user"}
+                onClick={() => setCameraDirection("user")}
+              >
+                {t("frontCamera")}
+              </button>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setDeviceCaptureOpen(false)}
+              >
+                {t("cancel")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={disabled}
+                onClick={() => openDeviceCapture("photo")}
+              >
+                <Camera size={17} aria-hidden="true" />
+                {t("takePhoto")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={disabled}
+                onClick={() => openDeviceCapture("video")}
+              >
+                <Video size={17} aria-hidden="true" />
+                {t("recordVideo")}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
       {error && !stream && <p className="error camera-capture-error" role="alert">{error}</p>}
       {stream && (
         <div className="camera-capture-backdrop">

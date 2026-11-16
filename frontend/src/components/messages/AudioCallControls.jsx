@@ -16,6 +16,7 @@ import Avatar from "../common/Avatar";
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
 ];
+const CALL_RING_TIMEOUT_MS = 30_000;
 
 function formatCallDuration(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -41,6 +42,8 @@ export default function AudioCallControls({
   const remoteVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
   const processedCallSignalRef = useRef(null);
+  const callSignalSentRef = useRef(false);
+  const endedCallRef = useRef(false);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [callState, setCallState] = useState("idle");
@@ -62,6 +65,7 @@ export default function AudioCallControls({
     localStreamRef.current = null;
     incomingOfferRef.current = null;
     pendingCandidatesRef.current = [];
+    callSignalSentRef.current = false;
     setLocalStream(null);
     setRemoteStream(null);
     setCallDuration(0);
@@ -161,9 +165,14 @@ export default function AudioCallControls({
       try {
         if (callSignal.signal_type === "offer") {
           if (callState !== "idle") {
-            sendCallSignal(peerId, "hangup");
+            const incomingMode = callSignal.signal?.sdp?.includes("m=video")
+              ? "video"
+              : "audio";
+            sendCallSignal(peerId, "hangup", { mode: incomingMode });
             return;
           }
+          callSignalSentRef.current = true;
+          endedCallRef.current = false;
           incomingOfferRef.current = callSignal.signal;
           setCallMode(callSignal.signal?.sdp?.includes("m=video") ? "video" : "audio");
           setCallState("incoming");
@@ -212,6 +221,8 @@ export default function AudioCallControls({
   const startCall = async (mode) => {
     setError("");
     setPermissionDenied(false);
+    callSignalSentRef.current = false;
+    endedCallRef.current = false;
     if (!window.isSecureContext) {
       setError(t("microphoneSecureContext"));
       return;
@@ -228,6 +239,8 @@ export default function AudioCallControls({
         "offer",
         connection.localDescription.toJSON?.() || connection.localDescription
       );
+      callSignalSentRef.current = true;
+      setCallState("ringing");
     } catch (callError) {
       const denied = callError.name === "NotAllowedError"
         || callError.name === "SecurityError";
@@ -268,16 +281,28 @@ export default function AudioCallControls({
     }
   };
 
-  const endCall = () => {
-    if (callState !== "idle") {
+  const endCall = useCallback(() => {
+    if (callState !== "idle" && !endedCallRef.current) {
+      endedCallRef.current = true;
       try {
-        sendCallSignal(peerId, "hangup");
+        if (callSignalSentRef.current) {
+          sendCallSignal(peerId, "hangup", { mode: callMode || "audio" });
+        }
       } catch (signalError) {
         setError(signalError.message || t("callEndFailed"));
       }
     }
     closeCall();
-  };
+  }, [callMode, callState, closeCall, peerId, sendCallSignal, t]);
+
+  useEffect(() => {
+    if (callState !== "ringing") return undefined;
+    const timer = window.setTimeout(() => {
+      setError(t("callNoAnswer"));
+      endCall();
+    }, CALL_RING_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [callState, endCall, t]);
 
   const toggleMute = () => {
     const nextMuted = !muted;

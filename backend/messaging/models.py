@@ -18,6 +18,7 @@ class Conversation(models.Model):
         default=ConversationType.DIRECT,
     )
     name = models.CharField(max_length=100, blank=True)
+    admins_only = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

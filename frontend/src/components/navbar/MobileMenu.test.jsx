@@ -37,6 +37,21 @@ describe("MobileMenu", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("renders outside the sticky header so the full drawer is not clipped", () => {
+    render(
+      <MemoryRouter>
+        <ThemeProvider>
+          <header className="navbar">
+            <MobileMenu onClose={vi.fn()} />
+          </header>
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    const drawer = screen.getByRole("dialog", { name: "RiceHub menu" });
+    expect(drawer.parentElement).toBe(document.body);
+  });
+
   it("expands the extra navigation and settings sections", () => {
     renderMenu();
 

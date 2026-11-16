@@ -31,6 +31,7 @@ from messaging.models import Conversation, ConversationMember
 from .serializers import (
     CommunitySerializer,
     CommunityPostSerializer,
+    CommunityUpdateSerializer,
     EventAttendanceSerializer,
     EventInvitationSerializer,
     EventSerializer,
@@ -79,6 +80,38 @@ class CommunityListCreateView(generics.ListCreateAPIView):
                 )
                 community.conversation = conversation
                 community.save(update_fields=("conversation",))
+
+
+class CommunityDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CommunitySerializer
+    lookup_url_kwarg = "community_id"
+
+    def get_queryset(self):
+        return Community.objects.annotate(
+            member_count=Count("memberships", distinct=True),
+        ).filter(
+            Q(visibility=Community.Visibility.PUBLIC)
+            | Q(memberships__user=self.request.user)
+        ).exclude(
+            owner_id__in=get_blocked_user_ids(self.request.user),
+        ).distinct().prefetch_related("memberships__user")
+
+    def get_serializer_class(self):
+        if self.request.method in {"PUT", "PATCH"}:
+            return CommunityUpdateSerializer
+        return CommunitySerializer
+
+    def perform_update(self, serializer):
+        community = self.get_object()
+        is_admin = CommunityMembership.objects.filter(
+            community=community,
+            user=self.request.user,
+            role=CommunityMembership.Role.ADMIN,
+        ).exists()
+        if community.owner_id != self.request.user.pk and not is_admin:
+            raise PermissionDenied("Only a community admin can edit this page.")
+        serializer.save()
 
 
 class CommunityMembershipView(APIView):
@@ -138,11 +171,17 @@ class CommunityPostListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         community = get_object_or_404(Community, pk=self.kwargs["community_id"])
-        if not CommunityMembership.objects.filter(
+        is_member = CommunityMembership.objects.filter(
             community=community,
             user=self.request.user,
-        ).exists():
+        ).exists()
+        if (
+            community.visibility != Community.Visibility.PUBLIC
+            and not is_member
+        ):
             raise PermissionDenied("Join this community to view its posts.")
+        if community.owner_id in get_blocked_user_ids(self.request.user):
+            raise PermissionDenied("This community is unavailable.")
         return CommunityPost.objects.filter(
             community=community,
         ).exclude(

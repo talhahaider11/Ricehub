@@ -101,8 +101,8 @@ export default function MessageList({
           if (
             !event.target.closest(".message-bubble")
             || event.pointerType === "mouse"
+            || longPressTimer.current
           ) return;
-          if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
           longPressTimer.current = window.setTimeout(() => {
             longPressTimer.current = null;
             window.navigator.vibrate?.(30);
@@ -134,8 +134,10 @@ export default function MessageList({
               ].filter(Boolean).join(" ")}
               onPointerDown={startLongPress}
               onPointerUp={cancelLongPress}
-              onPointerLeave={cancelLongPress}
               onPointerCancel={cancelLongPress}
+              onTouchStart={startLongPress}
+              onTouchEnd={cancelLongPress}
+              onTouchCancel={cancelLongPress}
             >
               <div className="message-bubble">
                 {message.reply_to && (

@@ -8,7 +8,7 @@ describe("MessageList", () => {
     vi.useRealTimers();
   });
 
-  it("shows the requested actions for the user's message after a two-second hold", () => {
+  it("shows the requested actions in the mobile menu after a two-second touch hold", () => {
     vi.useFakeTimers();
     Element.prototype.scrollIntoView = vi.fn();
 
@@ -30,7 +30,7 @@ describe("MessageList", () => {
     );
 
     const bubble = screen.getByText("My message").closest(".message-bubble");
-    fireEvent.pointerDown(bubble, { pointerType: "touch" });
+    fireEvent.touchStart(bubble);
 
     act(() => {
       vi.advanceTimersByTime(1999);
@@ -44,6 +44,40 @@ describe("MessageList", () => {
     expect(screen.getByRole("menuitem", { name: "Unsend" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Reply" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menu").parentElement).toBe(document.body);
+  });
+
+  it("cancels the action menu when a touch is released before the hold threshold", () => {
+    vi.useFakeTimers();
+    Element.prototype.scrollIntoView = vi.fn();
+
+    render(
+      <MessageList
+        messages={[
+          {
+            id: 1,
+            content: "My message",
+            sender: { id: 7 },
+          },
+        ]}
+        currentUser={{ id: 7 }}
+        onReply={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const bubble = screen.getByText("My message").closest(".message-bubble");
+    fireEvent.touchStart(bubble);
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    fireEvent.touchEnd(bubble);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it("shows Share for an incoming message after a hold and preserves Reply separately", () => {

@@ -5,7 +5,7 @@ from rest_framework import serializers
 from users.models import UserPrivacySettings
 from users.presence import is_user_online
 
-from .models import Conversation, Message
+from .models import Conversation, ConversationMember, Message
 
 
 User = get_user_model()
@@ -228,6 +228,15 @@ class MessageSerializer(
         return attrs
 
 
+class ConversationMembershipSerializer(serializers.ModelSerializer):
+    user = MessageSenderSerializer(read_only=True)
+
+    class Meta:
+        model = ConversationMember
+        fields = ["user", "role", "joined_at"]
+        read_only_fields = fields
+
+
 class ConversationSerializer(
     serializers.ModelSerializer
 ):
@@ -242,6 +251,10 @@ class ConversationSerializer(
     unread_count = serializers.SerializerMethodField()
     is_group = serializers.SerializerMethodField()
     is_archived = serializers.SerializerMethodField()
+    is_muted = serializers.SerializerMethodField()
+    memberships = serializers.SerializerMethodField()
+    member_count = serializers.SerializerMethodField()
+    admins_only = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Conversation
@@ -251,10 +264,14 @@ class ConversationSerializer(
             "conversation_type",
             "name",
             "is_group",
+            "admins_only",
             "participants",
+            "memberships",
+            "member_count",
             "last_message",
             "unread_count",
             "is_archived",
+            "is_muted",
             "created_at",
             "updated_at",
         ]
@@ -301,5 +318,38 @@ class ConversationSerializer(
         request = self.context.get("request")
         if not request:
             return False
-        membership = obj.memberships.filter(user=request.user).first()
+        membership = next(
+            (
+                item
+                for item in obj.memberships.all()
+                if item.user_id == request.user.pk
+                and item.deleted_at is None
+            ),
+            None,
+        )
         return bool(membership and membership.is_archived)
+
+    def get_is_muted(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return False
+        membership = next(
+            (
+                item
+                for item in obj.memberships.all()
+                if item.user_id == request.user.pk
+                and item.deleted_at is None
+            ),
+            None,
+        )
+        return bool(membership and membership.is_muted)
+
+    def get_memberships(self, obj):
+        return ConversationMembershipSerializer(
+            obj.memberships.all(),
+            many=True,
+            context=self.context,
+        ).data
+
+    def get_member_count(self, obj):
+        return obj.participants.count()

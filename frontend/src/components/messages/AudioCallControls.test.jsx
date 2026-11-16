@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AudioCallControls from "./AudioCallControls";
 
@@ -110,9 +110,34 @@ describe("AudioCallControls", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "End call" }));
-    expect(sendCallSignal).toHaveBeenLastCalledWith(2, "hangup");
+    expect(sendCallSignal).toHaveBeenLastCalledWith(2, "hangup", { mode: "audio" });
     expect(audioTrack.stop).toHaveBeenCalledOnce();
     expect(videoTrack.stop).toHaveBeenCalledOnce();
+  });
+
+  it("ends an unanswered call after the ringing timeout", async () => {
+    const { stream } = createStream();
+    mockMedia(stream);
+    const sendCallSignal = vi.fn();
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+
+    renderCall({ sendCallSignal });
+    fireEvent.click(screen.getByRole("button", { name: "Start audio call" }));
+    await waitFor(() => {
+      expect(sendCallSignal).toHaveBeenCalledWith(
+        2,
+        "offer",
+        expect.objectContaining({ type: "offer" })
+      );
+    });
+
+    const timeout = setTimeoutSpy.mock.calls.find(([, delay]) => delay === 30_000);
+    expect(timeout).toBeDefined();
+    act(() => timeout[0]());
+
+    expect(sendCallSignal).toHaveBeenLastCalledWith(2, "hangup", { mode: "audio" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("No answer");
   });
 
   it("answers video calls and toggles microphone, camera, and speaker audio", async () => {
@@ -150,8 +175,30 @@ describe("AudioCallControls", () => {
       .toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "End call" }));
+    expect(sendCallSignal).toHaveBeenLastCalledWith(2, "hangup", { mode: "video" });
     expect(audioTrack.stop).toHaveBeenCalledOnce();
     expect(videoTrack.stop).toHaveBeenCalledOnce();
+  });
+
+  it("declines an incoming video call with its mode included in the hangup signal", async () => {
+    const sendCallSignal = vi.fn();
+    renderCall({
+      callSignal: {
+        from_user_id: 2,
+        signal_type: "offer",
+        signal: { type: "offer", sdp: "v=0\r\nm=video\r\n" },
+      },
+      sendCallSignal,
+    });
+
+    await screen.findByRole("dialog", { name: "Sam User" });
+    fireEvent.click(screen.getByRole("button", { name: "Decline" }));
+
+    expect(sendCallSignal).toHaveBeenCalledWith(
+      2,
+      "hangup",
+      { mode: "video" }
+    );
   });
 
   it("offers a retry when call media permission is denied", async () => {

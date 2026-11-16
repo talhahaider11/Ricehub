@@ -53,6 +53,41 @@ const messageService = {
     return response.data;
   },
 
+  async updateGroupMember(conversationId, userId, role) {
+    const response = await api.patch(
+      `/messages/conversations/${conversationId}/members/${userId}/`,
+      { role }
+    );
+    return response.data;
+  },
+
+  async removeGroupMember(conversationId, userId) {
+    const response = await api.delete(
+      `/messages/conversations/${conversationId}/members/${userId}/`
+    );
+    return response.data;
+  },
+
+  async updateGroupSettings(conversationId, adminsOnly) {
+    const response = await api.patch(
+      `/messages/conversations/${conversationId}/settings/`,
+      { admins_only: adminsOnly }
+    );
+    return response.data;
+  },
+
+  async muteConversation(conversationId, isMuted) {
+    const response = await api.patch(
+      `/messages/conversations/${conversationId}/mute/`,
+      { is_muted: isMuted }
+    );
+    return response.data;
+  },
+
+  async leaveGroup(conversationId) {
+    return api.delete(`/messages/conversations/${conversationId}/leave/`);
+  },
+
   async searchGroupMembers(query = "") {
     const response = await api.get("/messages/group-members/search/", {
       params: query ? { q: query } : undefined,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MoreVertical, Reply, Share2 } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 
@@ -18,6 +19,7 @@ export default function MessageActions({
   const [menuOpen, setMenuOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
   const actionsRef = useRef(null);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     setMenuOpen(open);
@@ -32,7 +34,10 @@ export default function MessageActions({
     if (!menuOpen) return undefined;
 
     const handlePointerDown = (event) => {
-      if (!actionsRef.current?.contains(event.target)) {
+      if (
+        !actionsRef.current?.contains(event.target)
+        && !menuRef.current?.contains(event.target)
+      ) {
         closeMenu();
       }
     };
@@ -104,6 +109,38 @@ export default function MessageActions({
   const isShareable = Boolean(
     message.attachment || /https?:\/\/\S+/i.test(message.content || "")
   );
+  const menuElement = !editing && menuOpen ? (
+    <div
+      className={`message-actions-menu${open ? " message-actions-menu--portal" : ""}`}
+      id={`message-options-${message.id}`}
+      ref={menuRef}
+      role="menu"
+      aria-label={t("messageOptions")}
+    >
+      {own && (
+        <>
+          {message.content && (
+            <button type="button" role="menuitem" onClick={startEditing}>
+              {t("edit")}
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeMenu();
+              void remove();
+            }}
+          >
+            {t("unsend")}
+          </button>
+        </>
+      )}
+      <button type="button" role="menuitem" onClick={() => void shareMessage()}>
+        {t("share")}
+      </button>
+    </div>
+  ) : null;
 
   return (
     <div className="message-actions" ref={actionsRef}>
@@ -140,37 +177,7 @@ export default function MessageActions({
           <MoreVertical size={18} aria-hidden="true" />
         </button>
       )}
-      {!editing && menuOpen && (
-        <div
-          className="message-actions-menu"
-          id={`message-options-${message.id}`}
-          role="menu"
-          aria-label={t("messageOptions")}
-        >
-          {own && (
-            <>
-              {message.content && (
-                <button type="button" role="menuitem" onClick={startEditing}>
-                  {t("edit")}
-                </button>
-              )}
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  closeMenu();
-                  void remove();
-                }}
-              >
-                {t("unsend")}
-              </button>
-            </>
-          )}
-          <button type="button" role="menuitem" onClick={() => void shareMessage()}>
-            {t("share")}
-          </button>
-        </div>
-      )}
+      {menuElement && (open ? createPortal(menuElement, document.body) : menuElement)}
       {editing && (
         <form className="message-edit-form" onSubmit={save}>
           <input

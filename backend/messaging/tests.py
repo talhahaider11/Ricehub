@@ -1,8 +1,10 @@
 from datetime import datetime
 from unittest.mock import patch
 
+from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TransactionTestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
@@ -12,6 +14,7 @@ from messaging.models import (
     ConversationMember,
     Message,
 )
+from messaging.consumers import ChatConsumer
 from users.models import ProfileVisibility
 from users.models import UserPrivacySettings
 
@@ -111,6 +114,168 @@ class MessagingFeatureTests(APITestCase):
             ).role,
             ConversationMember.Role.ADMIN,
         )
+        self.assertEqual(response.data["member_count"], 2)
+        self.assertEqual(
+            {
+                item["user"]["id"]: item["role"]
+                for item in response.data["memberships"]
+            },
+            {
+                self.user.pk: ConversationMember.Role.ADMIN,
+                self.friend.pk: ConversationMember.Role.MEMBER,
+            },
+        )
+
+    def test_only_group_admin_can_add_members(self):
+        created = self.client.post(
+            "/api/messages/conversations/group/",
+            {"name": "Study group", "user_ids": [self.friend.pk]},
+            format="json",
+        )
+        self.client.force_authenticate(self.friend)
+
+        response = self.client.post(
+            f"/api/messages/conversations/{created.data['id']}/members/",
+            {"user_id": self.stranger.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(
+            Conversation.objects.get(pk=created.data["id"])
+            .participants.filter(pk=self.stranger.pk).exists()
+        )
+
+    def test_admin_can_promote_and_remove_group_members(self):
+        created = self.client.post(
+            "/api/messages/conversations/group/",
+            {"name": "Study group", "user_ids": [self.friend.pk]},
+            format="json",
+        )
+        conversation_id = created.data["id"]
+
+        promoted = self.client.patch(
+            f"/api/messages/conversations/{conversation_id}/members/{self.friend.pk}/",
+            {"role": ConversationMember.Role.ADMIN},
+            format="json",
+        )
+
+        self.assertEqual(promoted.status_code, 200)
+        self.assertEqual(
+            next(
+                item["role"]
+                for item in promoted.data["memberships"]
+                if item["user"]["id"] == self.friend.pk
+            ),
+            ConversationMember.Role.ADMIN,
+        )
+
+        self.client.force_authenticate(self.friend)
+        removed = self.client.delete(
+            f"/api/messages/conversations/{conversation_id}/members/{self.user.pk}/"
+        )
+
+        self.assertEqual(removed.status_code, 200)
+        self.assertFalse(
+            Conversation.objects.get(pk=conversation_id)
+            .participants.filter(pk=self.user.pk).exists()
+        )
+
+    def test_non_admin_cannot_promote_group_members(self):
+        created = self.client.post(
+            "/api/messages/conversations/group/",
+            {"name": "Study group", "user_ids": [self.friend.pk]},
+            format="json",
+        )
+        conversation_id = created.data["id"]
+        self.client.force_authenticate(self.friend)
+
+        response = self.client.patch(
+            f"/api/messages/conversations/{conversation_id}/members/{self.user.pk}/",
+            {"role": ConversationMember.Role.ADMIN},
+            format="json",
+        )
+        settings_response = self.client.patch(
+            f"/api/messages/conversations/{conversation_id}/settings/",
+            {"admins_only": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(settings_response.status_code, 403)
+
+    def test_mute_and_leave_group_are_user_specific(self):
+        created = self.client.post(
+            "/api/messages/conversations/group/",
+            {"name": "Study group", "user_ids": [self.friend.pk]},
+            format="json",
+        )
+        conversation_id = created.data["id"]
+        self.client.patch(
+            f"/api/messages/conversations/{conversation_id}/members/{self.friend.pk}/",
+            {"role": ConversationMember.Role.ADMIN},
+            format="json",
+        )
+
+        muted = self.client.patch(
+            f"/api/messages/conversations/{conversation_id}/mute/",
+            {"is_muted": True},
+            format="json",
+        )
+        left = self.client.delete(
+            f"/api/messages/conversations/{conversation_id}/leave/"
+        )
+
+        self.assertEqual(muted.status_code, 200)
+        self.assertTrue(muted.data["is_muted"])
+        self.assertEqual(left.status_code, 200)
+        conversation = Conversation.objects.get(pk=conversation_id)
+        self.assertFalse(conversation.participants.filter(pk=self.user.pk).exists())
+        self.assertFalse(
+            ConversationMember.objects.filter(
+                conversation=conversation,
+                user=self.user,
+            ).exists()
+        )
+
+    def test_only_group_admin_can_send_when_admins_only_is_enabled(self):
+        created = self.client.post(
+            "/api/messages/conversations/group/",
+            {"name": "Study group", "user_ids": [self.friend.pk]},
+            format="json",
+        )
+        conversation = Conversation.objects.get(pk=created.data["id"])
+        settings_response = self.client.patch(
+            f"/api/messages/conversations/{conversation.pk}/settings/",
+            {"admins_only": True},
+            format="json",
+        )
+        self.assertEqual(settings_response.status_code, 200)
+        self.assertTrue(settings_response.data["admins_only"])
+        self.client.force_authenticate(self.friend)
+
+        blocked = self.client.post(
+            f"/api/messages/conversations/{conversation.pk}/messages/",
+            {"content": "Member message"},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, 403)
+
+        self.client.force_authenticate(self.user)
+        promoted = self.client.patch(
+            f"/api/messages/conversations/{conversation.pk}/members/{self.friend.pk}/",
+            {"role": ConversationMember.Role.ADMIN},
+            format="json",
+        )
+        self.assertEqual(promoted.status_code, 200)
+        self.client.force_authenticate(self.friend)
+        allowed = self.client.post(
+            f"/api/messages/conversations/{conversation.pk}/messages/",
+            {"content": "Admin message"},
+            format="json",
+        )
+
+        self.assertEqual(allowed.status_code, 201)
 
     def test_unverified_user_cannot_create_group(self):
         self.user.is_verified = False
@@ -477,3 +642,95 @@ class MessagingFeatureTests(APITestCase):
             [item["id"] for item in conversations.data["results"]],
             [self.conversation.pk],
         )
+
+
+class AdminsOnlyGroupConsumerTests(TransactionTestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="group-admin",
+            email="group-admin@example.com",
+            password="StrongPassword123",
+            is_verified=True,
+        )
+        self.member = User.objects.create_user(
+            username="group-member",
+            email="group-member@example.com",
+            password="StrongPassword123",
+            is_verified=True,
+        )
+        self.conversation = Conversation.objects.create(
+            conversation_type=Conversation.ConversationType.GROUP,
+            name="Admins only",
+            admins_only=True,
+            created_by=self.admin,
+        )
+        self.conversation.participants.add(self.admin, self.member)
+        ConversationMember.objects.create(
+            conversation=self.conversation,
+            user=self.admin,
+            role=ConversationMember.Role.ADMIN,
+        )
+        ConversationMember.objects.create(
+            conversation=self.conversation,
+            user=self.member,
+        )
+
+    def test_websocket_blocks_member_sends_until_promoted(self):
+        consumer = ChatConsumer()
+        consumer.user = self.member
+        consumer.conversation_id = self.conversation.pk
+
+        self.assertFalse(async_to_sync(consumer.can_send_message)())
+        self.assertIsNone(
+            async_to_sync(consumer.create_message)("Blocked message")
+        )
+
+        ConversationMember.objects.filter(
+            conversation=self.conversation,
+            user=self.member,
+        ).update(role=ConversationMember.Role.ADMIN)
+
+        self.assertTrue(async_to_sync(consumer.can_send_message)())
+        message, _ = async_to_sync(consumer.create_message)("Allowed message")
+        self.assertEqual(message.content, "Allowed message")
+
+
+class CallEndedMessageTests(TransactionTestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="call-owner",
+            email="call-owner@example.com",
+            password="StrongPassword123",
+            is_verified=True,
+        )
+        self.friend = User.objects.create_user(
+            username="call-friend",
+            email="call-friend@example.com",
+            password="StrongPassword123",
+            is_verified=True,
+        )
+        self.conversation = Conversation.objects.create()
+        self.conversation.participants.add(self.user, self.friend)
+
+    def test_audio_and_video_call_endings_are_saved_as_chat_messages(self):
+        consumer = ChatConsumer()
+        consumer.user = self.user
+        consumer.conversation_id = self.conversation.pk
+
+        for mode, expected_content in (
+            ("audio", "Audio call was ended"),
+            ("video", "Video call was ended"),
+        ):
+            with self.subTest(mode=mode):
+                result = async_to_sync(consumer.create_call_ended_message)(mode)
+
+                self.assertEqual(result["content"], expected_content)
+                self.assertEqual(result["sender"], self.user.pk)
+                self.assertTrue(
+                    Message.objects.filter(
+                        pk=result["id"],
+                        conversation=self.conversation,
+                        sender=self.user,
+                        content=expected_content,
+                    ).exists()
+                )

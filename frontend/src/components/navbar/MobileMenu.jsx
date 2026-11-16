@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Bell,
   ChevronDown,
@@ -134,7 +135,7 @@ export default function MobileMenu({ onClose }) {
   const name = displayName(user, t("yourAccount"));
   const profilePath = `/profile/${user?.id}`;
 
-  return (
+  return createPortal(
     <>
       <button
         className="mobile-menu-backdrop"
@@ -281,6 +282,7 @@ export default function MobileMenu({ onClose }) {
         </button>
         <footer className="mobile-menu-footer">{t("riceHubSlogan")}</footer>
       </aside>
-    </>
+    </>,
+    document.body
   );
 }

@@ -276,6 +276,17 @@ export default function Messages() {
       setConversationActionError(t("conversationActionFailed"));
     }
   };
+  const handleLeaveGroup = async () => {
+    await messageService.leaveGroup(selectedConversation);
+    setConversations((current) => current.filter(
+      (conversation) => conversation.id !== selectedConversation
+    ));
+    setArchivedConversations((current) => current.filter(
+      (conversation) => conversation.id !== selectedConversation
+    ));
+    setSelectedConversation(null);
+    setMemberModalOpen(false);
+  };
   const handleShowArchived = async () => {
     setConversationActionError("");
     try {
@@ -335,6 +346,20 @@ export default function Messages() {
     && !activeConversation.is_group
     && activeConversation.conversation_type !== "group"
   );
+  const isGroupConversation = Boolean(
+    activeConversation?.is_group
+    || activeConversation?.conversation_type === "group"
+  );
+  const isGroupAdmin = Boolean(activeConversation?.memberships?.some(
+    (membership) => String(membership.user?.id) === String(user?.id)
+      && membership.role === "admin"
+  ));
+  const membersCannotSend = Boolean(
+    isGroupConversation && activeConversation?.admins_only && !isGroupAdmin
+  );
+  const activeMemberCount = Number(activeConversation?.member_count)
+    || activeConversation?.participants?.length
+    || 0;
   const showVerificationWarning = Boolean(
     isDirectConversation && otherUser?.is_verified === false
   );
@@ -421,14 +446,21 @@ export default function Messages() {
                   </small>
                 )}
               </div>
-              {(activeConversation?.is_group
-                || activeConversation?.conversation_type === "group") && (
+              {isGroupConversation && (
                 <button
                   type="button"
                   className="chat-add-member-button"
+                  aria-label={t("groupMembersCount", {
+                    count: new Intl.NumberFormat(language).format(activeMemberCount),
+                  })}
                   onClick={() => setMemberModalOpen(true)}
                 >
-                  {t("addMember")}
+                  <UsersRound size={17} aria-hidden="true" />
+                  <span>
+                    {t("groupMembersCount", {
+                      count: new Intl.NumberFormat(language).format(activeMemberCount),
+                    })}
+                  </span>
                 </button>
               )}
               {activeConversation
@@ -452,6 +484,11 @@ export default function Messages() {
                 {messageError}
               </p>
             )}
+            {membersCannotSend && (
+              <p className="message-connection-banner group-admins-only-notice" role="status">
+                {t("adminsOnlyMessages")}
+              </p>
+            )}
             <MessageList
               messages={messages}
               currentUser={user}
@@ -473,7 +510,7 @@ export default function Messages() {
               onSend={handleSend}
               onSendAttachment={handleSendAttachment}
               onTyping={sendTyping}
-              disabled={!selectedConversation}
+              disabled={!selectedConversation || membersCannotSend}
               replyTarget={replyTarget}
               onCancelReply={() => setReplyTarget(null)}
             />
@@ -520,8 +557,11 @@ export default function Messages() {
           setConversations((current) => current.map((item) => (
             item.id === conversation.id ? conversation : item
           )));
-          setMemberModalOpen(false);
+          setArchivedConversations((current) => current.map((item) => (
+            item.id === conversation.id ? conversation : item
+          )));
         }}
+        onLeave={handleLeaveGroup}
       />
     </div>
   );

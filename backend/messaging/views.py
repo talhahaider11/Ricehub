@@ -46,6 +46,61 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+def get_active_group_conversation(conversation_id, user, *, lock=False):
+    conversations = Conversation.objects.filter(
+        pk=conversation_id,
+        conversation_type=Conversation.ConversationType.GROUP,
+        participants=user,
+    )
+    if lock:
+        conversations = conversations.select_for_update()
+    conversation = conversations.first()
+    if not conversation:
+        raise PermissionDenied("You cannot manage this group conversation.")
+    membership = ConversationMember.objects.filter(
+        conversation=conversation,
+        user=user,
+        deleted_at__isnull=True,
+    ).first()
+    if not membership:
+        raise PermissionDenied("You are not an active member of this group.")
+    return conversation, membership
+
+
+def sync_community_membership(conversation, user, role=None, *, remove=False):
+    community = getattr(conversation, "community", None)
+    if not community:
+        return
+    from community.models import CommunityMembership
+
+    if remove:
+        if community.owner_id != user.pk:
+            CommunityMembership.objects.filter(
+                community=community,
+                user=user,
+            ).delete()
+        return
+
+    role = role or ConversationMember.Role.MEMBER
+    community_role = (
+        CommunityMembership.Role.ADMIN
+        if role == ConversationMember.Role.ADMIN
+        else CommunityMembership.Role.MEMBER
+    )
+    membership, created = CommunityMembership.objects.get_or_create(
+        community=community,
+        user=user,
+        defaults={"role": community_role},
+    )
+    if (
+        not created
+        and community.owner_id != user.pk
+        and membership.role != community_role
+    ):
+        membership.role = community_role
+        membership.save(update_fields=["role"])
+
+
 def broadcast_message_event(conversation_id, event_type, payload):
     channel_layer = get_channel_layer()
     if not channel_layer:
@@ -117,9 +172,7 @@ class ConversationListCreateView(
                 "participants",
                 Prefetch(
                     "memberships",
-                    queryset=ConversationMember.objects.filter(
-                        user=self.request.user
-                    ),
+                    queryset=ConversationMember.objects.select_related("user"),
                 ),
             )
             .order_by("-updated_at")
@@ -339,6 +392,13 @@ class GroupConversationMemberAddView(APIView):
         )
         if not conversation:
             raise PermissionDenied("You cannot add members to this conversation.")
+        admin_membership = ConversationMember.objects.filter(
+            conversation=conversation,
+            user=request.user,
+            deleted_at__isnull=True,
+        ).first()
+        if not admin_membership or admin_membership.role != ConversationMember.Role.ADMIN:
+            raise PermissionDenied("Only group admins can add members.")
 
         user_id = request.data.get("user_id")
         if not isinstance(user_id, int) or isinstance(user_id, bool):
@@ -368,14 +428,7 @@ class GroupConversationMemberAddView(APIView):
             conversation=conversation,
             user=member,
         )
-        community = getattr(conversation, "community", None)
-        if community:
-            from community.models import CommunityMembership
-
-            CommunityMembership.objects.get_or_create(
-                community=community,
-                user=member,
-            )
+        sync_community_membership(conversation, member)
         conversation.save()
 
         return Response(
@@ -385,6 +438,219 @@ class GroupConversationMemberAddView(APIView):
             ).data,
             status=status.HTTP_200_OK,
         )
+
+
+class GroupConversationMemberManageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def patch(self, request, conversation_id, user_id):
+        conversation, _ = get_active_group_conversation(
+            conversation_id,
+            request.user,
+            lock=True,
+        )
+        admin_membership = ConversationMember.objects.filter(
+            conversation=conversation,
+            user=request.user,
+            deleted_at__isnull=True,
+        ).first()
+        if admin_membership.role != ConversationMember.Role.ADMIN:
+            raise PermissionDenied("Only group admins can manage members.")
+
+        role = request.data.get("role")
+        if not isinstance(role, str) or role not in {
+            ConversationMember.Role.ADMIN,
+            ConversationMember.Role.MEMBER,
+        }:
+            raise ValidationError({"role": "Choose admin or member."})
+
+        target = ConversationMember.objects.select_for_update().filter(
+            conversation=conversation,
+            user_id=user_id,
+        ).select_related("user").first()
+        if not target:
+            return Response(
+                {"detail": "Group member not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        community = getattr(conversation, "community", None)
+        if community and community.owner_id == target.user_id:
+            raise ValidationError(
+                {"user_id": "The community owner cannot be removed from its group."}
+            )
+        if (
+            target.role == ConversationMember.Role.ADMIN
+            and role == ConversationMember.Role.MEMBER
+            and ConversationMember.objects.filter(
+                conversation=conversation,
+                role=ConversationMember.Role.ADMIN,
+            ).count() <= 1
+        ):
+            raise ValidationError({"role": "A group must keep at least one admin."})
+
+        community = getattr(conversation, "community", None)
+        if (
+            community
+            and community.owner_id == target.user_id
+            and role != ConversationMember.Role.ADMIN
+        ):
+            raise ValidationError({"role": "The community owner must remain an admin."})
+
+        target.role = role
+        target.save(update_fields=["role"])
+        sync_community_membership(conversation, target.user, role)
+        return Response(
+            ConversationSerializer(
+                conversation,
+                context={"request": request},
+            ).data
+        )
+
+    @transaction.atomic
+    def delete(self, request, conversation_id, user_id):
+        conversation, admin_membership = get_active_group_conversation(
+            conversation_id,
+            request.user,
+            lock=True,
+        )
+        if admin_membership.role != ConversationMember.Role.ADMIN:
+            raise PermissionDenied("Only group admins can remove members.")
+        if user_id == request.user.pk:
+            raise ValidationError(
+                {"user_id": "Use the leave-group action to remove yourself."}
+            )
+
+        target = ConversationMember.objects.select_for_update().filter(
+            conversation=conversation,
+            user_id=user_id,
+        ).select_related("user").first()
+        if not target:
+            return Response(
+                {"detail": "Group member not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if (
+            target.role == ConversationMember.Role.ADMIN
+            and ConversationMember.objects.filter(
+                conversation=conversation,
+                role=ConversationMember.Role.ADMIN,
+            ).count() <= 1
+        ):
+            raise ValidationError(
+                {"user_id": "A group must keep at least one admin."}
+            )
+
+        removed_user = target.user
+        removed_user_id = target.user_id
+        conversation.participants.remove(removed_user)
+        target.delete()
+        sync_community_membership(conversation, removed_user, remove=True)
+        transaction.on_commit(
+            lambda: broadcast_message_event(
+                conversation.pk,
+                "conversation_hidden",
+                {"user_id": removed_user_id},
+            )
+        )
+        return Response(
+            ConversationSerializer(
+                conversation,
+                context={"request": request},
+            ).data
+        )
+
+
+class GroupConversationSettingsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def patch(self, request, conversation_id):
+        conversation, membership = get_active_group_conversation(
+            conversation_id,
+            request.user,
+            lock=True,
+        )
+        if membership.role != ConversationMember.Role.ADMIN:
+            raise PermissionDenied("Only group admins can change group settings.")
+        admins_only = request.data.get("admins_only")
+        if not isinstance(admins_only, bool):
+            raise ValidationError({"admins_only": "Provide true or false."})
+        conversation.admins_only = admins_only
+        conversation.save(update_fields=["admins_only", "updated_at"])
+        return Response(
+            ConversationSerializer(
+                conversation,
+                context={"request": request},
+            ).data
+        )
+
+
+class ConversationMuteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, conversation_id):
+        is_muted = request.data.get("is_muted")
+        if not isinstance(is_muted, bool):
+            raise ValidationError({"is_muted": "Provide true or false."})
+        conversation = Conversation.objects.filter(
+            pk=conversation_id,
+            participants=request.user,
+        ).first()
+        if not conversation or not is_conversation_member(
+            request.user,
+            conversation_id,
+        ):
+            return Response(
+                {"detail": "Conversation not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        membership, _ = ConversationMember.objects.get_or_create(
+            conversation=conversation,
+            user=request.user,
+        )
+        membership.is_muted = is_muted
+        membership.save(update_fields=["is_muted"])
+        return Response(
+            ConversationSerializer(
+                conversation,
+                context={"request": request},
+            ).data
+        )
+
+
+class GroupConversationLeaveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def delete(self, request, conversation_id):
+        conversation, membership = get_active_group_conversation(
+            conversation_id,
+            request.user,
+            lock=True,
+        )
+        if (
+            membership.role == ConversationMember.Role.ADMIN
+            and ConversationMember.objects.filter(
+                conversation=conversation,
+                role=ConversationMember.Role.ADMIN,
+            ).count() <= 1
+        ):
+            raise ValidationError(
+                {"detail": "Promote another admin before leaving this group."}
+            )
+        conversation.participants.remove(request.user)
+        membership.delete()
+        sync_community_membership(conversation, request.user, remove=True)
+        user_id = request.user.pk
+        transaction.on_commit(
+            lambda: broadcast_message_event(
+                conversation.pk,
+                "conversation_hidden",
+                {"user_id": user_id},
+            )
+        )
+        return Response({"success": True}, status=status.HTTP_200_OK)
 
 
 class ConversationDetailView(
@@ -419,9 +685,7 @@ class ConversationDetailView(
                 "participants",
                 Prefetch(
                     "memberships",
-                    queryset=ConversationMember.objects.filter(
-                        user=self.request.user
-                    ),
+                    queryset=ConversationMember.objects.select_related("user"),
                 ),
             )
         )
@@ -501,23 +765,31 @@ class MessageListCreateView(
         )
 
         if not conversation:
-            from rest_framework.exceptions import (
-                PermissionDenied
-            )
-
             raise PermissionDenied(
                 "You are not part of this conversation."
             )
         if not is_conversation_member(self.request.user, conversation_id):
             raise PermissionDenied("This conversation is no longer available.")
+        if conversation.conversation_type == Conversation.ConversationType.GROUP:
+            membership = ConversationMember.objects.filter(
+                conversation=conversation,
+                user=self.request.user,
+                deleted_at__isnull=True,
+            ).first()
+            if (
+                conversation.admins_only
+                and (
+                    not membership
+                    or membership.role != ConversationMember.Role.ADMIN
+                )
+            ):
+                raise PermissionDenied("Only group admins can send messages.")
         other_user = (
             conversation.participants.exclude(pk=self.request.user.pk).first()
             if conversation.conversation_type == Conversation.ConversationType.DIRECT
             else None
         )
         if other_user and not can_message_between(self.request.user, other_user):
-            from rest_framework.exceptions import PermissionDenied
-
             raise PermissionDenied("This person is not accepting messages.")
 
         serializer.save(
@@ -627,6 +899,18 @@ class EditMessageView(APIView):
                 {"detail": "Deleted messages cannot be edited."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if (
+            message.conversation.conversation_type
+            == Conversation.ConversationType.GROUP
+            and message.conversation.admins_only
+        ):
+            membership = ConversationMember.objects.filter(
+                conversation=message.conversation,
+                user=request.user,
+                deleted_at__isnull=True,
+            ).first()
+            if not membership or membership.role != ConversationMember.Role.ADMIN:
+                raise PermissionDenied("Only group admins can edit messages.")
         content = request.data.get("content")
         if not isinstance(content, str) or not content.strip():
             return Response(

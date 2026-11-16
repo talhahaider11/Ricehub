@@ -71,4 +71,38 @@ describe("useMessages", () => {
       expect.objectContaining({ id: 12, content: "Hello" }),
     ]);
   });
+
+  it("processes queued call signals in order instead of dropping candidates", async () => {
+    const socket = {
+      readyState: 0,
+      send: vi.fn(),
+      close: vi.fn(),
+    };
+    mocks.createSocket.mockReturnValue(socket);
+    const { result } = renderHook(() => useMessages(42));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      socket.onmessage({
+        data: JSON.stringify({
+          type: "call_signal",
+          signal_type: "offer",
+          from_user_id: 2,
+          signal: { type: "offer" },
+        }),
+      });
+      socket.onmessage({
+        data: JSON.stringify({
+          type: "call_signal",
+          signal_type: "ice_candidate",
+          from_user_id: 2,
+          signal: { candidate: "candidate" },
+        }),
+      });
+    });
+
+    expect(result.current.callSignal.signal_type).toBe("offer");
+    act(() => result.current.clearCallSignal());
+    expect(result.current.callSignal.signal_type).toBe("ice_candidate");
+  });
 });

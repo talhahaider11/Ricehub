@@ -44,6 +44,13 @@ afterEach(() => {
 });
 
 describe("MessageInput", () => {
+  it("removes the emoji shortcut while keeping the quick Like action", () => {
+    render(<MessageInput onSend={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: "Add emoji" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Like" })).toBeInTheDocument();
+  });
+
   it("sends trimmed text only after the send request succeeds", async () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(<MessageInput onSend={onSend} />);

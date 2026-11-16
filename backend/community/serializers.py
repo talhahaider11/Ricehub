@@ -91,6 +91,12 @@ class CommunitySerializer(serializers.ModelSerializer):
         )
 
 
+class CommunityUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Community
+        fields = ["name", "description", "visibility"]
+
+
 class CommunityPostSerializer(serializers.ModelSerializer):
     author = serializers.SerializerMethodField()
     image = MediaURLField(required=False, allow_empty_file=False)

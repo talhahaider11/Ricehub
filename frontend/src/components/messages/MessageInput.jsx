@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, Mic, Send, Smile, Square, ThumbsUp } from "lucide-react";
+import { ImagePlus, Mic, Send, Square, ThumbsUp } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 import CameraCapture from "../media/CameraCapture";
 
@@ -95,12 +95,6 @@ export default function MessageInput({
     } finally {
       setSending(false);
     }
-  };
-
-  const addEmoji = () => {
-    setMessage((current) => `${current}🙂`);
-    messageInputRef.current?.focus();
-    onTyping?.(true);
   };
 
   const stopRecording = () => {
@@ -354,16 +348,6 @@ export default function MessageInput({
             disabled={disabled || sending || recording}
             aria-label={t("writeMessage")}
           />
-          <button
-            type="button"
-            className="message-emoji-button"
-            aria-label={t("addEmoji")}
-            title={t("addEmoji")}
-            disabled={disabled || sending || recording}
-            onClick={addEmoji}
-          >
-            <Smile size={19} aria-hidden="true" />
-          </button>
         </div>
         {message.trim() ? (
           <button
