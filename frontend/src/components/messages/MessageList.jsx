@@ -11,6 +11,8 @@ import { Link } from "react-router-dom";
 
 const MESSAGE_ACTION_HOLD_MS = 1500;
 const LONG_PRESS_MOVE_THRESHOLD = 12;
+const REPLY_SWIPE_THRESHOLD = 64;
+const REPLY_SWIPE_VERTICAL_LIMIT = 48;
 
 function getTimestamp(value, language) {
   const date = new Date(value);
@@ -46,6 +48,7 @@ export default function MessageList({
     useRef(null);
   const longPressTimer = useRef(null);
   const longPressOrigin = useRef(null);
+  const replySwipeOrigin = useRef(null);
   const [longPressedMessageId, setLongPressedMessageId] = useState(null);
 
   useEffect(() => () => {
@@ -119,6 +122,38 @@ export default function MessageList({
     }
   };
 
+  const startReplySwipe = (event, message) => {
+    const touch = event.changedTouches?.[0] || event.touches?.[0];
+    if (!touch || !event.target.closest?.(".message-bubble")) {
+      replySwipeOrigin.current = null;
+      return;
+    }
+
+    replySwipeOrigin.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      message,
+    };
+  };
+
+  const finishReplySwipe = (event) => {
+    const origin = replySwipeOrigin.current;
+    const touch = event.changedTouches?.[0];
+    replySwipeOrigin.current = null;
+    cancelLongPress();
+    if (!origin || !touch) return;
+
+    const deltaX = touch.clientX - origin.x;
+    const deltaY = touch.clientY - origin.y;
+    if (
+      deltaX <= -REPLY_SWIPE_THRESHOLD
+      && Math.abs(deltaY) <= REPLY_SWIPE_VERTICAL_LIMIT
+    ) {
+      setLongPressedMessageId(null);
+      onReply?.(origin.message);
+    }
+  };
+
   let previousDay = "";
 
   return (
@@ -174,8 +209,12 @@ export default function MessageList({
               onPointerLeave={cancelLongPress}
               onTouchStart={(event) => startLongPress(event, message.id)}
               onTouchMove={moveLongPress}
-              onTouchEnd={cancelLongPress}
-              onTouchCancel={cancelLongPress}
+              onTouchStartCapture={(event) => startReplySwipe(event, message)}
+              onTouchEnd={finishReplySwipe}
+              onTouchCancel={() => {
+                cancelLongPress();
+                replySwipeOrigin.current = null;
+              }}
             >
               <div className="message-bubble">
                 {message.reply_to && (

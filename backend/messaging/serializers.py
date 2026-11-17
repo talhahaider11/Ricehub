@@ -119,11 +119,6 @@ class MessageSerializer(
             "updated_at",
         ]
 
-    def validate_attachment(self, value):
-        if value and value.size > 10 * 1024 * 1024:
-            raise serializers.ValidationError("Attachments must be 10 MB or smaller.")
-        return value
-
     def get_verification_warning(self, obj):
         return not obj.sender.is_verified
 
@@ -169,6 +164,17 @@ class MessageSerializer(
             "attachment_type",
             Message.AttachmentType.FILE,
         )
+        if attachment:
+            max_size = (
+                100 * 1024 * 1024
+                if attachment_type == Message.AttachmentType.VIDEO
+                else 10 * 1024 * 1024
+            )
+            if attachment.size > max_size:
+                max_size_mb = max_size // (1024 * 1024)
+                raise serializers.ValidationError(
+                    {"attachment": f"Attachments must be {max_size_mb} MB or smaller."}
+                )
         if attachment and attachment_type == Message.AttachmentType.AUDIO:
             allowed_extensions = {".m4a", ".mp3", ".ogg", ".wav", ".webm"}
             extension = PurePath(attachment.name).suffix.lower()

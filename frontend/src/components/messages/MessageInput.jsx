@@ -4,6 +4,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import NativeCameraActions from "../media/NativeCameraActions";
 
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const MAX_CAMERA_VIDEO_SIZE = 100 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
@@ -36,6 +37,8 @@ export default function MessageInput({
   const [recording, setRecording] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState(null);
+  const [pendingAttachmentMaxSize, setPendingAttachmentMaxSize] =
+    useState(MAX_ATTACHMENT_SIZE);
   const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState("");
   const recorderRef = useRef(null);
   const messageInputRef = useRef(null);
@@ -107,7 +110,7 @@ export default function MessageInput({
     }
   };
 
-  const sendAttachmentFile = async (file) => {
+  const sendAttachmentFile = async (file, maxSize = MAX_ATTACHMENT_SIZE) => {
     if (!file) return;
 
     const attachmentType = IMAGE_TYPES.has(file.type)
@@ -121,10 +124,12 @@ export default function MessageInput({
       setError(t("photoVideoTypeError"));
       return;
     }
-    if (file.size > MAX_ATTACHMENT_SIZE) {
+    if (file.size > maxSize) {
       setError(file.type.startsWith("audio/")
         ? t("voiceSizeError")
-        : t("photoVideoSizeError"));
+        : maxSize === MAX_CAMERA_VIDEO_SIZE
+          ? t("cameraVideoSizeError")
+          : t("photoVideoSizeError"));
       return;
     }
 
@@ -144,7 +149,7 @@ export default function MessageInput({
     }
   };
 
-  const queueAttachmentFile = (file) => {
+  const queueAttachmentFile = (file, isCameraVideo = false) => {
     if (!file) return;
     const supported = IMAGE_TYPES.has(file.type)
       || VIDEO_TYPES.has(file.type)
@@ -153,20 +158,25 @@ export default function MessageInput({
       setError(t("photoVideoTypeError"));
       return;
     }
-    if (file.size > MAX_ATTACHMENT_SIZE) {
+    const maxSize = isCameraVideo ? MAX_CAMERA_VIDEO_SIZE : MAX_ATTACHMENT_SIZE;
+    if (file.size > maxSize) {
       setError(file.type.startsWith("audio/")
         ? t("voiceSizeError")
-        : t("photoVideoSizeError"));
+        : isCameraVideo
+          ? t("cameraVideoSizeError")
+          : t("photoVideoSizeError"));
       return;
     }
     setError("");
     setPendingAttachment(file);
+    setPendingAttachmentMaxSize(maxSize);
   };
 
   const confirmAttachment = async () => {
     if (!pendingAttachment || sending || disabled) return;
-    if (await sendAttachmentFile(pendingAttachment)) {
+    if (await sendAttachmentFile(pendingAttachment, pendingAttachmentMaxSize)) {
       setPendingAttachment(null);
+      setPendingAttachmentMaxSize(MAX_ATTACHMENT_SIZE);
     }
   };
 
@@ -298,7 +308,9 @@ export default function MessageInput({
         {onSendAttachment && (
           <NativeCameraActions
             disabled={disabled || sending || recording}
-            onCapture={queueAttachmentFile}
+            onCapture={(file, mediaType) =>
+              queueAttachmentFile(file, mediaType === "video")
+            }
           />
         )}
         {onSendAttachment && (

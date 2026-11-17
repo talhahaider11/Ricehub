@@ -140,7 +140,11 @@ describe("MessageInput", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Camera" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Record video" }));
-    const video = new File(["video"], "camera.mp4", { type: "video/mp4" });
+    const video = new File(
+      [new Uint8Array(10 * 1024 * 1024 + 1)],
+      "camera.mp4",
+      { type: "video/mp4" }
+    );
     fireEvent.change(videoInput, { target: { files: [video] } });
 
     expect(await screen.findByRole("region", { name: "Attachment preview" }))

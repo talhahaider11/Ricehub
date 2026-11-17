@@ -514,6 +514,27 @@ class MessagingFeatureTests(APITestCase):
                 self.assertEqual(response.status_code, 201)
                 self.assertEqual(response.data["attachment_type"], attachment_type)
 
+    def test_video_upload_accepts_camera_recordings_over_ten_megabytes(self):
+        self.make_friends()
+        upload = SimpleUploadedFile(
+            "camera-recording.mp4",
+            b"v" * (10 * 1024 * 1024 + 1),
+            content_type="video/mp4",
+        )
+
+        response = self.client.post(
+            f"/api/messages/conversations/{self.conversation.pk}/messages/",
+            {
+                "content": "",
+                "attachment": upload,
+                "attachment_type": Message.AttachmentType.VIDEO,
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["attachment_type"], Message.AttachmentType.VIDEO)
+
     def test_image_upload_rejects_mismatched_mime_type(self):
         self.make_friends()
         upload = SimpleUploadedFile(

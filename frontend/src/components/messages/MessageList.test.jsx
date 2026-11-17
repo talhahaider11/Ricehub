@@ -11,6 +11,16 @@ function firePointerEvent(element, type, properties) {
   fireEvent(element, event);
 }
 
+function fireTouchEvent(element, type, x, y) {
+  const touch = { clientX: x, clientY: y };
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "touches", {
+    value: type === "touchend" ? [] : [touch],
+  });
+  Object.defineProperty(event, "changedTouches", { value: [touch] });
+  fireEvent(element, event);
+}
+
 describe("MessageList", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -120,6 +130,72 @@ describe("MessageList", () => {
     });
 
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("replies to image, video, and audio messages on a left swipe", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const onReply = vi.fn();
+    const messages = [
+      {
+        id: 1,
+        sender: { id: 8 },
+        attachment: "/media/photo.jpg",
+        attachment_type: "image",
+      },
+      {
+        id: 2,
+        sender: { id: 8 },
+        attachment: "/media/clip.mp4",
+        attachment_type: "video",
+      },
+      {
+        id: 3,
+        sender: { id: 8 },
+        attachment: "/media/voice.webm",
+        attachment_type: "audio",
+      },
+    ];
+    const { container } = render(
+      <MessageList
+        messages={messages}
+        currentUser={{ id: 7 }}
+        onReply={onReply}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    [
+      container.querySelector(".message-image-attachment"),
+      container.querySelector(".message-video-attachment"),
+      container.querySelector(".message-bubble audio"),
+    ].forEach((attachment, index) => {
+      fireTouchEvent(attachment, "touchstart", 180, 100);
+      fireTouchEvent(attachment, "touchmove", 90, 104);
+      fireTouchEvent(attachment, "touchend", 90, 104);
+      expect(onReply).toHaveBeenNthCalledWith(index + 1, messages[index]);
+    });
+  });
+
+  it("does not reply to a rightward swipe", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const onReply = vi.fn();
+    const { container } = render(
+      <MessageList
+        messages={[{ id: 1, content: "Message", sender: { id: 8 } }]}
+        currentUser={{ id: 7 }}
+        onReply={onReply}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+    const bubble = container.querySelector(".message-bubble");
+
+    fireTouchEvent(bubble, "touchstart", 90, 100);
+    fireTouchEvent(bubble, "touchmove", 180, 104);
+    fireTouchEvent(bubble, "touchend", 180, 104);
+
+    expect(onReply).not.toHaveBeenCalled();
   });
 
   it("shows Share for an incoming message after a hold and preserves Reply separately", () => {

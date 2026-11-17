@@ -11,10 +11,10 @@ export default function NativeCameraActions({
   const photoInputRef = useRef(null);
   const videoInputRef = useRef(null);
 
-  const captureFile = (event) => {
+  const captureFile = (event, mediaType) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) onCapture?.(file);
+    if (file) onCapture?.(file, mediaType);
   };
 
   const openCapture = (inputRef) => {
@@ -31,7 +31,7 @@ export default function NativeCameraActions({
         accept="image/*"
         capture="environment"
         aria-label={t("takePhoto")}
-        onChange={captureFile}
+        onChange={(event) => captureFile(event, "image")}
       />
       <input
         ref={videoInputRef}
@@ -40,7 +40,7 @@ export default function NativeCameraActions({
         accept="video/*"
         capture="environment"
         aria-label={t("recordVideo")}
-        onChange={captureFile}
+        onChange={(event) => captureFile(event, "video")}
       />
       <button
         type="button"

@@ -1050,7 +1050,7 @@ textarea:focus-visible {
 .message,
 .message-row {
   display: flex;
-  margin-bottom: 10px;
+
 }
 
 .message {
@@ -7972,7 +7972,6 @@ body {
 .messages-shell .message {
   position: relative;
   max-width: 82%;
-  margin-bottom: 12px;
   -webkit-touch-callout: none;
   user-select: none;
 }
@@ -7990,10 +7989,9 @@ body {
 .messages-shell .message-bubble {
   display: grid;
   gap: 5px;
-  padding: 10px 14px 7px;
-  border: 1px solid var(--border-subtle);
+  padding: 0px 0px 0px 0px;
   border-radius: 20px 20px 20px 6px;
-  background: var(--bg-surface);
+  background: transparent;
   color: var(--text-primary);
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
 }
@@ -8279,6 +8277,7 @@ body {
 
   .messages-shell .message {
     max-width: 90%;
+    touch-action: pan-y;
   }
 
   .messages-shell .message.mine {
@@ -8313,11 +8312,15 @@ body {
     display: none;
   }
 
-  .message-actions .message-reply-trigger,
+  .message-actions .message-reply-trigger {
+    display: none;
+  }
+
   .message-actions .message-share-quick {
     width: 36px;
     min-height: 36px;
     background: var(--bg-surface);
+    box-shadow: 0 2px 8px rgb(15 23 42 / 12%);
   }
 }
 

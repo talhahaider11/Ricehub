@@ -1,9 +1,19 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import MessageActions from "./MessageActions";
+
+const shareDescriptor = Object.getOwnPropertyDescriptor(navigator, "share");
 
 describe("MessageActions", () => {
   const message = { id: 12, content: "Hello" };
+
+  afterEach(() => {
+    if (shareDescriptor) {
+      Object.defineProperty(navigator, "share", shareDescriptor);
+    } else {
+      delete navigator.share;
+    }
+  });
 
   it("keeps Reply separate and shows Share in the three-dot menu", () => {
     const onReply = vi.fn();
@@ -100,6 +110,40 @@ describe("MessageActions", () => {
 
     await waitFor(() => {
       expect(onDelete).toHaveBeenCalledWith(message);
+    });
+  });
+
+  it("shares an image or video attachment from the adjacent quick action", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: share,
+    });
+    const attachmentMessage = {
+      id: 22,
+      content: "",
+      attachment: "https://example.test/media/clip.mp4",
+      attachment_type: "video",
+    };
+    const { container } = render(
+      <MessageActions
+        message={attachmentMessage}
+        own
+        onReply={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const shareButton = screen.getByRole("button", { name: "Share" });
+    expect(shareButton.parentElement).toBe(container.querySelector(".message-actions"));
+    fireEvent.click(shareButton);
+
+    await waitFor(() => {
+      expect(share).toHaveBeenCalledWith({
+        text: "",
+        url: attachmentMessage.attachment,
+      });
     });
   });
 });
