@@ -108,34 +108,17 @@ describe("MessageInput", () => {
     });
   });
 
-  it("previews a photo captured from the camera before sending", async () => {
-    const track = { stop: vi.fn() };
-    const stream = { getTracks: () => [track] };
-    const getUserMedia = vi.fn().mockResolvedValue(stream);
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: { getUserMedia },
-    });
-    Object.defineProperty(window, "isSecureContext", {
-      configurable: true,
-      value: true,
-    });
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
-      drawImage: vi.fn(),
-    });
-    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => {
-      callback(new Blob(["photo"], { type: "image/jpeg" }));
-    });
+  it("previews a photo from the native camera input before sending", async () => {
     const onSendAttachment = vi.fn().mockResolvedValue(undefined);
     render(<MessageInput onSend={vi.fn()} onSendAttachment={onSendAttachment} />);
+    const photoInput = screen.getByLabelText("Take photo");
+    expect(photoInput).toHaveAttribute("accept", "image/*");
+    expect(photoInput).toHaveAttribute("capture", "environment");
 
-    fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
-    const video = await screen.findByLabelText("Camera preview");
-    Object.defineProperty(video, "videoWidth", { configurable: true, value: 640 });
-    Object.defineProperty(video, "videoHeight", { configurable: true, value: 480 });
-    const shutter = screen.getByRole("button", { name: /hold to record video/i });
-    fireEvent.pointerDown(shutter, { button: 0 });
-    fireEvent.pointerUp(shutter, { button: 0 });
+    fireEvent.click(screen.getByRole("button", { name: "Camera" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Take photo" }));
+    const photo = new File(["photo"], "camera.jpg", { type: "image/jpeg" });
+    fireEvent.change(photoInput, { target: { files: [photo] } });
 
     expect(await screen.findByRole("region", { name: "Attachment preview" }))
       .toBeInTheDocument();
@@ -143,13 +126,31 @@ describe("MessageInput", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send attachment" }));
 
     await waitFor(() => {
-      expect(onSendAttachment).toHaveBeenCalledOnce();
-      expect(onSendAttachment.mock.calls[0][0]).toMatchObject({
-        type: "image/jpeg",
-      });
-      expect(onSendAttachment.mock.calls[0].slice(1)).toEqual([undefined, "image"]);
+      expect(onSendAttachment).toHaveBeenCalledWith(photo, undefined, "image");
     });
-    expect(track.stop).toHaveBeenCalledOnce();
+    expect(photoInput).toHaveValue("");
+  });
+
+  it("previews a video from the native camera input before sending", async () => {
+    const onSendAttachment = vi.fn().mockResolvedValue(undefined);
+    render(<MessageInput onSend={vi.fn()} onSendAttachment={onSendAttachment} />);
+    const videoInput = screen.getByLabelText("Record video");
+    expect(videoInput).toHaveAttribute("accept", "video/*");
+    expect(videoInput).toHaveAttribute("capture", "environment");
+
+    fireEvent.click(screen.getByRole("button", { name: "Camera" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Record video" }));
+    const video = new File(["video"], "camera.mp4", { type: "video/mp4" });
+    fireEvent.change(videoInput, { target: { files: [video] } });
+
+    expect(await screen.findByRole("region", { name: "Attachment preview" }))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Send attachment" }));
+
+    await waitFor(() => {
+      expect(onSendAttachment).toHaveBeenCalledWith(video, undefined, "video");
+    });
+    expect(videoInput).toHaveValue("");
   });
 
   it("sends a selected video attachment after confirmation", async () => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Mic, Send, Square, ThumbsUp } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
-import CameraCapture from "../media/CameraCapture";
+import NativeCameraActions from "../media/NativeCameraActions";
 
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -296,7 +296,7 @@ export default function MessageInput({
           tabIndex={-1}
         />
         {onSendAttachment && (
-          <CameraCapture
+          <NativeCameraActions
             disabled={disabled || sending || recording}
             onCapture={queueAttachmentFile}
           />

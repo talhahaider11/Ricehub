@@ -8,7 +8,7 @@ import {
 import { uploadMedia } from "../../services/mediaService";
 import { getMediaType } from "../../utils/media";
 import UploadProgress from "./UploadProgress";
-import CameraCapture from "./CameraCapture";
+import NativeCameraActions from "./NativeCameraActions";
 
 function getErrorMessage(error) {
   return (
@@ -92,7 +92,7 @@ export default function MediaUploader({
       </label>
 
       {showCamera && (
-        <CameraCapture
+        <NativeCameraActions
           disabled={uploading || maxFiles <= 0}
           onCapture={(file) => uploadFiles([file])}
         />

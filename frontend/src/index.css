@@ -6736,7 +6736,7 @@ a {
   min-height: 0;
 }
 
-.media-uploader .camera-capture-trigger {
+.media-uploader .native-camera-trigger {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -6748,10 +6748,52 @@ a {
   cursor: pointer;
 }
 
-.message-input .camera-capture-trigger {
+.message-input .native-camera-trigger {
   flex: 0 0 auto;
   padding-right: 12px;
   padding-left: 12px;
+}
+
+.native-camera-actions {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.native-camera-input {
+  display: none;
+}
+
+.native-camera-menu {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  min-width: max-content;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+}
+
+.native-camera-menu button,
+.message-input .native-camera-menu button {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  justify-content: flex-start;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.native-camera-menu button:hover {
+  background: var(--background);
 }
 
 .camera-capture-backdrop {
