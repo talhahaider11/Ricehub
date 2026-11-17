@@ -108,7 +108,7 @@ describe("messageService", () => {
       .toBe(6);
   });
 
-  it("sends attachment data without overriding the browser multipart boundary", async () => {
+  it("clears the JSON content type so the browser can set the multipart boundary", async () => {
     apiMocks.post.mockResolvedValue({ data: { id: 9 } });
     const file = new File(["voice"], "voice-note.webm", { type: "audio/webm" });
 
@@ -123,6 +123,6 @@ describe("messageService", () => {
     });
     expect(formData.get("attachment_type")).toBe("audio");
     expect(formData.get("reply_to_id")).toBe("5");
-    expect(config).toBeUndefined();
+    expect(config.headers["Content-Type"]).toBeUndefined();
   });
 });

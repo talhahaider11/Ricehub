@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, RefreshCw, Video, X } from "lucide-react";
+import { Camera, RefreshCw, X } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 
 function shouldUseDeviceCamera() {
@@ -18,7 +18,6 @@ export default function CameraCapture({
   const [cameraDirection, setCameraDirection] = useState("environment");
   const videoRef = useRef(null);
   const photoInputRef = useRef(null);
-  const videoInputRef = useRef(null);
   const streamRef = useRef(null);
   const openingRef = useRef(false);
 
@@ -43,7 +42,7 @@ export default function CameraCapture({
   const openCamera = async () => {
     setError("");
     if (shouldUseDeviceCamera()) {
-      openDeviceCapture("photo");
+      openDeviceCapture();
       return;
     }
 
@@ -75,9 +74,8 @@ export default function CameraCapture({
     }
   };
 
-  const openDeviceCapture = (type) => {
-    const input = type === "video" ? videoInputRef.current : photoInputRef.current;
-    input?.click();
+  const openDeviceCapture = () => {
+    photoInputRef.current?.click();
   };
 
   const toggleCameraDirection = () => {
@@ -145,16 +143,6 @@ export default function CameraCapture({
         aria-label={t("takePhoto")}
         tabIndex={-1}
       />
-      <input
-        ref={videoInputRef}
-        className="camera-capture-input"
-        type="file"
-        accept="video/*"
-        capture={cameraDirection}
-        onChange={(event) => void handleDeviceCapture(event)}
-        aria-label={t("recordVideo")}
-        tabIndex={-1}
-      />
       <button
         type="button"
         className={`camera-capture-trigger ${className}`.trim()}
@@ -189,17 +177,6 @@ export default function CameraCapture({
                 ? t("backCamera")
                 : t("frontCamera")}
             </span>
-          </button>
-          <button
-            type="button"
-            className="camera-capture-video"
-            disabled={disabled}
-            onClick={() => openDeviceCapture("video")}
-            aria-label={t("recordVideo")}
-            title={t("recordVideo")}
-          >
-            <Video size={17} aria-hidden="true" />
-            <span>{t("recordVideo")}</span>
           </button>
         </div>
       )}

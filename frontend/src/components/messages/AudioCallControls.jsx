@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import {
   Mic,
   MicOff,
+  Minimize2,
   Phone,
   PhoneOff,
   RefreshCw,
@@ -52,6 +53,7 @@ export default function AudioCallControls({
   const [remoteStream, setRemoteStream] = useState(null);
   const [callState, setCallState] = useState("idle");
   const [callMode, setCallMode] = useState(null);
+  const [callMinimized, setCallMinimized] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
@@ -86,6 +88,7 @@ export default function AudioCallControls({
     setSpeakerEnabled(true);
     setPermissionDenied(false);
     setCallState("idle");
+    setCallMinimized(false);
   }, []);
 
   const createPeerConnection = useCallback(async (mode) => {
@@ -175,17 +178,19 @@ export default function AudioCallControls({
     const processSignal = async () => {
       try {
         if (callSignal.signal_type === "offer") {
+          if (callSignal.signal?.sdp?.includes("m=video")) {
+            sendCallSignal(peerId, "hangup", { mode: "video" });
+            return;
+          }
           if (callState !== "idle") {
-            const incomingMode = callSignal.signal?.sdp?.includes("m=video")
-              ? "video"
-              : "audio";
-            sendCallSignal(peerId, "hangup", { mode: incomingMode });
+            sendCallSignal(peerId, "hangup", { mode: "audio" });
             return;
           }
           callSignalSentRef.current = true;
           endedCallRef.current = false;
           incomingOfferRef.current = callSignal.signal;
-          setCallMode(callSignal.signal?.sdp?.includes("m=video") ? "video" : "audio");
+          setCallMode("audio");
+          setCallMinimized(false);
           setCallState("incoming");
           setError("");
         } else if (callSignal.signal_type === "answer" && peerConnectionRef.current) {
@@ -240,6 +245,7 @@ export default function AudioCallControls({
     }
 
     setCallMode(mode);
+    setCallMinimized(false);
     setCallState("calling");
     try {
       const connection = await createPeerConnection(mode);
@@ -455,26 +461,25 @@ export default function AudioCallControls({
   return (
     <section className="audio-call-controls" aria-label={t("audioCall")}>
       {callState === "idle" && (
-        <>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => void startCall("audio")}
-            aria-label={t("startAudioCall")}
-            title={t("startAudioCall")}
-          >
-            <Phone size={17} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => void startCall("video")}
-            aria-label={t("startVideoCall")}
-            title={t("startVideoCall")}
-          >
-            <Video size={18} aria-hidden="true" />
-          </button>
-        </>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => void startCall("audio")}
+          aria-label={t("startAudioCall")}
+          title={t("startAudioCall")}
+        >
+          <Phone size={17} aria-hidden="true" />
+        </button>
+      )}
+      {callState !== "idle" && (
+        <button
+          type="button"
+          onClick={() => setCallMinimized(false)}
+          aria-label={t("returnToCall")}
+          title={t("returnToCall")}
+        >
+          <Phone size={17} aria-hidden="true" />
+        </button>
       )}
       {error && callState === "idle" && <span className="error" role="alert">{error}</span>}
       {permissionDenied && callState === "idle" && (
@@ -487,9 +492,10 @@ export default function AudioCallControls({
       )}
       {showCallScreen && createPortal(
         <section
-          className={`call-screen${callMode === "video" ? " call-screen-video" : ""}`}
+          className={`call-screen${callMode === "video" ? " call-screen-video" : ""}${callMinimized ? " call-screen-minimized" : ""}`}
           role="dialog"
-          aria-modal="true"
+          aria-modal={!callMinimized}
+          aria-hidden={callMinimized}
           aria-labelledby="call-screen-name"
         >
           <header className="call-screen-header">
@@ -497,6 +503,14 @@ export default function AudioCallControls({
               <h2 id="call-screen-name">{callName}</h2>
               <p aria-live="polite">{callStatus}</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setCallMinimized(true)}
+              aria-label={t("minimizeCall")}
+              title={t("minimizeCall")}
+            >
+              <Minimize2 size={20} aria-hidden="true" />
+            </button>
           </header>
 
           <main className="call-screen-stage" ref={callStageRef}>

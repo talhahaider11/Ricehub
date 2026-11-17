@@ -91,7 +91,7 @@ describe("CameraCapture", () => {
     );
   });
 
-  it("launches native mobile capture directly and supports front and back cameras", async () => {
+  it("launches native photo capture, switches cameras, and hides video recording", async () => {
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,
       value: "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/130 Mobile",
@@ -117,15 +117,8 @@ describe("CameraCapture", () => {
 
     await waitFor(() => expect(onCapture).toHaveBeenLastCalledWith(photoFile));
     fireEvent.click(screen.getByRole("button", { name: "Switch to back camera" }));
-    const videoInput = container.querySelector('input[accept="video/*"]');
-    const videoInputClick = vi.spyOn(videoInput, "click");
-    expect(videoInput).toHaveAttribute("capture", "environment");
-    fireEvent.click(screen.getByRole("button", { name: "Record video" }));
-    expect(videoInputClick).toHaveBeenCalledOnce();
-    const videoFile = new File(["video"], "camera.mp4", { type: "video/mp4" });
-    fireEvent.change(videoInput, { target: { files: [videoFile] } });
-
-    await waitFor(() => expect(onCapture).toHaveBeenLastCalledWith(videoFile));
-    expect(onCapture).toHaveBeenCalledTimes(2);
+    expect(photoInput).toHaveAttribute("capture", "environment");
+    expect(container.querySelector('input[accept="video/*"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: "Record video" })).not.toBeInTheDocument();
   });
 });

@@ -8413,10 +8413,36 @@ body {
   color-scheme: dark;
 }
 
+.call-screen-minimized {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .call-screen-header {
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.call-screen-header > div {
+  flex: 1;
   text-align: center;
+}
+
+.call-screen-header > button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 50%;
+  background: rgba(30, 41, 59, 0.9);
+  color: #f1f5f9;
+  cursor: pointer;
 }
 
 .call-screen-header h2 {

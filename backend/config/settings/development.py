@@ -4,7 +4,11 @@ from .base import *
 
 DEBUG = True
 
-if not (EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD):
+if not (
+    globals().get("EMAIL_HOST")
+    and globals().get("EMAIL_HOST_USER")
+    and globals().get("EMAIL_HOST_PASSWORD")
+):
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 OCI_PG_USER = os.environ.get("OCI_PG_USER", "").strip()

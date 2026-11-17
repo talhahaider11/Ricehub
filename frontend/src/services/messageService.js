@@ -177,7 +177,8 @@ const messageService = {
     if (replyToId) formData.append("reply_to_id", String(replyToId));
     const response = await api.post(
       `/messages/conversations/${conversationId}/messages/`,
-      formData
+      formData,
+      { headers: { "Content-Type": undefined } }
     );
     return response.data;
   },
