@@ -598,6 +598,10 @@ class CommunityFeatureTests(APITestCase):
         self.assertEqual(results.data["results"][0]["title"], "Rice cooker")
 
     def test_marketplace_buyer_request_and_seller_acceptance(self):
+        self.user.first_name = "Marketplace"
+        self.user.last_name = "Buyer"
+        self.user.is_verified = True
+        self.user.save(update_fields=["first_name", "last_name", "is_verified"])
         listing = MarketplaceListing.objects.create(
             seller=self.other,
             title="Desk",
@@ -610,8 +614,21 @@ class CommunityFeatureTests(APITestCase):
         )
         self.assertEqual(requested.status_code, 201)
         self.assertEqual(requested.data["status"], MarketplaceOrder.Status.REQUESTED)
+        self.assertEqual(
+            requested.data["buyer"],
+            {
+                "id": self.user.id,
+                "username": self.user.username,
+                "full_name": "Marketplace Buyer",
+                "profile_picture": None,
+                "is_verified": True,
+            },
+        )
 
         self.client.force_authenticate(self.other)
+        seller_orders = self.client.get("/api/community/marketplace/orders/")
+        self.assertEqual(seller_orders.status_code, 200)
+        self.assertEqual(seller_orders.data["results"][0]["buyer"], requested.data["buyer"])
         accepted = self.client.patch(
             f"/api/community/marketplace/orders/{requested.data['id']}/",
             {"status": MarketplaceOrder.Status.ACCEPTED},

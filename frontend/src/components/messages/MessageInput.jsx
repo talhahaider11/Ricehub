@@ -263,7 +263,11 @@ export default function MessageInput({
               {t("audioUnsupported")}
             </audio>
           ) : pendingAttachment.type.startsWith("video/") ? (
-            <video controls playsInline preload="metadata" src={attachmentPreviewUrl}>
+            <video controls playsInline preload="metadata" muted={false}>
+              <source
+                src={attachmentPreviewUrl}
+                type={pendingAttachment.type || "video/mp4"}
+              />
               {t("videoUnsupported")}
             </video>
           ) : (

@@ -224,6 +224,27 @@ export default function useMessages(conversationId) {
     };
   }, [conversationId, loadMessages, user?.id]);
 
+  useEffect(() => {
+    const handleVideoUploaded = (event) => {
+      if (
+        String(event.detail?.conversationId) !== String(conversationId)
+        || !event.detail?.message
+      ) return;
+
+      const uploadedMessage = event.detail.message;
+      setMessages((current) => (
+        current.some((message) => String(message.id) === String(uploadedMessage.id))
+          ? current
+          : [...current, uploadedMessage]
+      ));
+    };
+
+    window.addEventListener("ricehub:chat-video-uploaded", handleVideoUploaded);
+    return () => {
+      window.removeEventListener("ricehub:chat-video-uploaded", handleVideoUploaded);
+    };
+  }, [conversationId]);
+
   const sendMessage = useCallback(async (content, replyToId) => {
     if (!conversationId) {
       throw new Error("Select a conversation before sending a message.");

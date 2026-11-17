@@ -140,21 +140,44 @@ describe("MessageInput", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Camera" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Record video" }));
-    const video = new File(
-      [new Uint8Array(10 * 1024 * 1024 + 1)],
-      "camera.mp4",
-      { type: "video/mp4" }
-    );
+    const video = new File(["video"], "camera.mp4", { type: "video/mp4" });
     fireEvent.change(videoInput, { target: { files: [video] } });
 
     expect(await screen.findByRole("region", { name: "Attachment preview" }))
       .toBeInTheDocument();
+    const videoPreview = screen.getByLabelText("Attachment preview").querySelector("video");
+    expect(videoPreview).toHaveAttribute("controls");
+    expect(videoPreview).toHaveAttribute("playsinline");
+    expect(videoPreview).toHaveAttribute("preload", "metadata");
+    expect(videoPreview).not.toHaveAttribute("muted");
+    expect(videoPreview.querySelector("source")).toHaveAttribute(
+      "src",
+      "blob:message-preview"
+    );
+    expect(videoPreview.querySelector("source")).toHaveAttribute("type", "video/mp4");
     fireEvent.click(screen.getByRole("button", { name: "Send attachment" }));
 
     await waitFor(() => {
       expect(onSendAttachment).toHaveBeenCalledWith(video, undefined, "video");
     });
     expect(videoInput).toHaveValue("");
+  });
+
+  it("releases the video preview URL when the attachment is discarded", async () => {
+    render(<MessageInput onSend={vi.fn()} onSendAttachment={vi.fn()} />);
+    const videoInput = screen.getByLabelText("Record video");
+    fireEvent.change(videoInput, {
+      target: {
+        files: [new File(["video"], "camera.mp4", { type: "video/mp4" })],
+      },
+    });
+    await screen.findByRole("region", { name: "Attachment preview" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    await waitFor(() => {
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:message-preview");
+    });
   });
 
   it("sends a selected video attachment after confirmation", async () => {

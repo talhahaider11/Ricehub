@@ -5347,6 +5347,31 @@ select {
   padding: 16px;
 }
 
+.marketplace-buyer-profile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.marketplace-buyer-profile__identity {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.marketplace-buyer-profile__identity span {
+  overflow-wrap: anywhere;
+}
+
+.marketplace-buyer-profile__action {
+  flex: 0 0 auto;
+}
+
 .social-card p {
   margin: 0;
   white-space: pre-wrap;
@@ -8025,13 +8050,89 @@ body {
 }
 
 .messages-shell .message-bubble {
-  display: grid;
+  position: relative;
+  display: flex;
+  width: fit-content;
+  min-width: 70px;
+  max-width: min(75vw, 100%);
+  box-sizing: border-box;
+  flex-direction: column;
   gap: 5px;
-  padding: 0px 0px 0px 0px;
+  padding: 8px 12px;
+  overflow-wrap: break-word;
+  word-break: break-word;
   border-radius: 20px 20px 20px 6px;
   background: transparent;
   color: var(--text-primary);
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.messages-shell .message-bubble--media {
+  width: fit-content;
+  max-width: 75%;
+  padding: 3px;
+  overflow: hidden;
+}
+
+.messages-shell .message-bubble--audio {
+  width: fit-content;
+  min-width: 200px;
+  max-width: 75%;
+  padding: 8px 10px;
+}
+
+.messages-shell .message-bubble--audio audio {
+  width: 100%;
+  max-width: 260px;
+}
+
+.message-media-frame {
+  position: relative;
+  width: fit-content;
+  max-width: 260px;
+  overflow: hidden;
+  border-radius: 12px;
+  line-height: 0;
+}
+
+.message-media-frame a {
+  display: block;
+}
+
+.message-image-attachment,
+.message-video-attachment {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  max-height: none;
+  height: auto;
+  box-sizing: border-box;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.message-media-meta {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.message-media-meta .message-time,
+.message-media-meta .message-receipt {
+  align-self: auto;
+  margin: 0;
+  color: inherit;
+  font-size: inherit;
+  opacity: 1;
 }
 
 .messages-shell .message.mine .message-bubble {
@@ -8053,10 +8154,53 @@ body {
 }
 
 .message-time {
-  justify-self: end;
+  align-self: flex-end;
+  margin-top: 2px;
   color: currentColor;
-  font-size: 10px;
+  font-size: 0.7rem;
   opacity: 0.72;
+}
+
+.message-receipt {
+  align-self: flex-end;
+  margin-top: 2px;
+  padding: 0;
+  color: currentColor;
+  font-size: 0.7rem;
+  opacity: 0.72;
+}
+
+.message-video-upload-indicator {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(10 16 28 / 72%);
+}
+
+.message-video-upload-indicator span {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgb(255 255 255 / 45%);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: message-video-upload-spin 0.8s linear infinite;
+}
+
+.message-video-upload-error {
+  align-self: flex-end;
+  color: var(--danger);
+  font-size: 0.7rem;
+}
+
+@keyframes message-video-upload-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .message-actions {

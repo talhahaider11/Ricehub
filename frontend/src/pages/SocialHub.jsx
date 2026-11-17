@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import communityService from "../services/communityService";
 import useAuth from "../hooks/useAuth";
 import friendService from "../services/friendService";
 import StoryUploader from "../components/stories/StoryUploader";
+import Avatar from "../components/common/Avatar";
+import VerifiedBadge from "../components/common/VerifiedBadge";
 import { getMediaUrl } from "../utils/constants";
 import { getArrayResults } from "../utils/arrayResults";
 import { useLanguage } from "../context/LanguageContext";
@@ -804,12 +806,35 @@ export default function SocialHub() {
             <article className="card social-card" key={order.id}>
               <strong>{order.listing_title}</strong>
               <small>
-                {t("buyer")}: @{order.buyer.username} ·
-                {" "}
                 {orderStatusKeys[order.status]
                   ? t(orderStatusKeys[order.status])
                   : order.status}
               </small>
+              {order.seller.id === user?.id && (
+                <div className="marketplace-buyer-profile">
+                  <Link
+                    className="marketplace-buyer-profile__identity"
+                    to={`/profile/${order.buyer.id}`}
+                  >
+                    <Avatar
+                      user={order.buyer}
+                      name={order.buyer.full_name}
+                      size={36}
+                    />
+                    <span>{order.buyer.full_name || `@${order.buyer.username}`}</span>
+                    <VerifiedBadge verified={order.buyer.is_verified} />
+                  </Link>
+                  <Link
+                    className="btn btn-secondary marketplace-buyer-profile__action"
+                    to={`/profile/${order.buyer.id}`}
+                  >
+                    {t("viewProfile")}
+                  </Link>
+                </div>
+              )}
+              {order.seller.id !== user?.id && (
+                <small>{t("buyer")}: @{order.buyer.username}</small>
+              )}
               {order.status === "requested" && order.seller.id === user?.id && (
                 <div className="social-actions">
                   <button className="btn btn-primary" disabled={saving} onClick={() => perform(() => communityService.updateOrder(order.id, "accepted"), t("purchaseRequestAccepted"))}>{t("accept")}</button>

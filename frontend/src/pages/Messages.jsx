@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, UsersRound } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import CreateGroupModal from "../components/messages/CreateGroupModal";
@@ -16,6 +16,7 @@ import ErrorState from "../components/common/ErrorState";
 import { getArrayResults } from "../utils/arrayResults";
 import GroupMemberModal from "../components/messages/GroupMemberModal";
 import { useLanguage } from "../context/LanguageContext";
+import { useChatUploads } from "../context/ChatUploadContext";
 import Avatar from "../components/common/Avatar";
 
 function formatLastSeen(lastSeen, now, t, language) {
@@ -51,6 +52,7 @@ function formatLastSeen(lastSeen, now, t, language) {
 export default function Messages() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
+  const { uploads, queueVideoUpload } = useChatUploads();
   const location = useLocation();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
@@ -164,6 +166,28 @@ export default function Messages() {
     conversationHidden,
   } = useMessages(selectedConversation);
 
+  const visibleMessages = useMemo(() => {
+    const optimisticVideos = uploads
+      .filter((upload) => (
+        String(upload.conversationId) === String(selectedConversation)
+        && String(upload.userId) === String(user?.id)
+      ))
+      .map((upload) => ({
+        id: upload.id,
+        sender: { id: user.id },
+        attachment: upload.previewUrl,
+        attachment_type: "video",
+        original_filename: upload.fileName,
+        created_at: upload.createdAt,
+        upload_status: upload.status,
+        is_read: false,
+      }));
+
+    return [...messages, ...optimisticVideos].sort((left, right) => (
+      Date.parse(left.created_at || "") - Date.parse(right.created_at || "")
+    ));
+  }, [messages, selectedConversation, uploads, user?.id]);
+
   const handleSend = async (content, replyToId) => {
     try {
       await sendMessage(content, replyToId);
@@ -172,6 +196,17 @@ export default function Messages() {
     }
   };
   const handleSendAttachment = async (file, replyToId, attachmentType) => {
+    if (attachmentType === "video") {
+      await queueVideoUpload({
+        conversationId: selectedConversation,
+        file,
+        replyToId,
+        attachmentType,
+      });
+      setReplyTarget(null);
+      return;
+    }
+
     const message = await messageService.sendAttachment(
       selectedConversation,
       file,
@@ -363,7 +398,7 @@ export default function Messages() {
   const showVerificationWarning = Boolean(
     isDirectConversation && otherUser?.is_verified === false
   );
-  const loadedLastMessage = messages[messages.length - 1];
+  const loadedLastMessage = visibleMessages[visibleMessages.length - 1];
   const loadedLastMessageTime = Date.parse(loadedLastMessage?.created_at || "");
   const listedLastMessage = activeConversation?.last_message;
   const listedLastMessageTime = Date.parse(listedLastMessage?.created_at || "");
@@ -490,7 +525,7 @@ export default function Messages() {
               </p>
             )}
             <MessageList
-              messages={messages}
+              messages={visibleMessages}
               currentUser={user}
               onReply={setReplyTarget}
               onEdit={handleEdit}

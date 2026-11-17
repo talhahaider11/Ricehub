@@ -178,7 +178,10 @@ const messageService = {
     const response = await api.post(
       `/messages/conversations/${conversationId}/messages/`,
       formData,
-      { headers: { "Content-Type": undefined } }
+      {
+        headers: { "Content-Type": undefined },
+        ...(attachmentType === "video" ? { timeout: 0 } : {}),
+      }
     );
     return response.data;
   },

@@ -256,7 +256,20 @@ class MarketplaceOrderSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "listing_title", "buyer", "status", "created_at", "updated_at"]
 
     def get_buyer(self, obj):
-        return {"id": obj.buyer_id, "username": obj.buyer.username}
+        buyer = obj.buyer
+        profile_picture = None
+        if buyer.profile_picture:
+            profile_picture = buyer.profile_picture.url
+            request = self.context.get("request")
+            if request:
+                profile_picture = request.build_absolute_uri(profile_picture)
+        return {
+            "id": buyer.pk,
+            "username": buyer.username,
+            "full_name": buyer.get_full_name().strip() or buyer.username,
+            "profile_picture": profile_picture,
+            "is_verified": buyer.is_verified,
+        }
 
     def get_seller(self, obj):
         seller = obj.listing.seller

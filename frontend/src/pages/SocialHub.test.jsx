@@ -71,6 +71,42 @@ describe("SocialHub route tabs", () => {
     expect(communityService.stories).toHaveBeenCalled();
   });
 
+  it("shows a seller the buyer profile link and verification badge", async () => {
+    communityService.listings.mockResolvedValue([]);
+    communityService.orders.mockResolvedValue([{
+      id: 51,
+      listing_title: "Desk",
+      status: "requested",
+      seller: { id: 7, username: "current-user" },
+      buyer: {
+        id: 12,
+        username: "marketplace-buyer",
+        full_name: "Marketplace Buyer",
+        profile_picture: null,
+        is_verified: true,
+      },
+    }]);
+
+    render(
+      <MemoryRouter initialEntries={["/discover?tab=Marketplace"]}>
+        <Routes>
+          <Route path="/discover" element={<SocialHub />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.change(await screen.findByRole("textbox", { name: "Search listings" }), {
+      target: { value: "buyer-profile-test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    const buyerLink = await screen.findByRole("link", { name: /Marketplace Buyer/ });
+    expect(buyerLink).toHaveAttribute("href", "/profile/12");
+    expect(screen.getByRole("link", { name: "View profile" }))
+      .toHaveAttribute("href", "/profile/12");
+    expect(screen.getByLabelText("Verified account")).toBeInTheDocument();
+  });
+
   it("lets a page admin edit page details", async () => {
     communityService.communities.mockResolvedValue([{
       id: 12,

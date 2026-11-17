@@ -125,4 +125,15 @@ describe("messageService", () => {
     expect(formData.get("reply_to_id")).toBe("5");
     expect(config.headers["Content-Type"]).toBeUndefined();
   });
+
+  it("disables Axios timeouts for chat video uploads", async () => {
+    apiMocks.post.mockResolvedValue({ data: { id: 10 } });
+    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
+
+    await messageService.sendAttachment(42, file, undefined, "video");
+
+    const [, , config] = apiMocks.post.mock.calls[0];
+    expect(config.timeout).toBe(0);
+    expect(config.headers["Content-Type"]).toBeUndefined();
+  });
 });

@@ -248,6 +248,7 @@ describe("MessageList", () => {
     );
 
     expect(screen.getByText("Seen")).toBeInTheDocument();
+    expect(screen.getByText("Seen").closest(".message-bubble")).toBeInTheDocument();
     expect(screen.queryByText("Sent")).not.toBeInTheDocument();
   });
 
@@ -267,6 +268,33 @@ describe("MessageList", () => {
 
     expect(screen.queryByText("Seen")).not.toBeInTheDocument();
     expect(screen.queryByText("Sent")).not.toBeInTheDocument();
+  });
+
+  it("shows a corner upload indicator inside an optimistic video bubble", () => {
+    const { container } = render(
+      <MessageList
+        messages={[
+          {
+            id: "local-video-1",
+            sender: { id: 7 },
+            attachment: "blob:local-video",
+            attachment_type: "video",
+            upload_status: "uploading",
+            created_at: "2026-11-17T10:00:00Z",
+          },
+        ]}
+        currentUser={{ id: 7 }}
+        onReply={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+    const bubble = container.querySelector(".message-bubble");
+
+    expect(bubble.querySelector(".message-video-upload-indicator"))
+      .toHaveAttribute("role", "status");
+    expect(bubble.querySelector(".message-video-upload-indicator"))
+      .toHaveAccessibleName("Sending...");
   });
 
   it("renders image, video, and audio attachments in the conversation", () => {
@@ -311,6 +339,33 @@ describe("MessageList", () => {
       .toHaveAttribute("src", "/media/clip.mp4");
     expect(container.querySelector(".message-bubble audio"))
       .toHaveAttribute("src", "/media/voice.webm");
+  });
+
+  it("keeps image timestamps and receipts in the media overlay", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+
+    const { container } = render(
+      <MessageList
+        messages={[{
+          id: 5,
+          sender: { id: 7 },
+          attachment: "/media/photo.jpg",
+          attachment_type: "image",
+          created_at: "2026-11-15T10:01:00Z",
+          is_read: false,
+        }]}
+        currentUser={{ id: 7 }}
+        onReply={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const metadata = container.querySelector(".message-media-meta");
+    expect(metadata).toContainElement(container.querySelector(".message-time"));
+    expect(metadata).toContainElement(container.querySelector(".message-receipt"));
+    expect(container.querySelector(".message-bubble--media"))
+      .toContainElement(metadata);
   });
 
   it("shows the profile hero and places the trust warning beneath its profile link", () => {

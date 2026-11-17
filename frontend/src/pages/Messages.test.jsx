@@ -45,6 +45,13 @@ vi.mock("../hooks/useMessages", () => ({
   default: mocks.useMessages,
 }));
 
+vi.mock("../context/ChatUploadContext", () => ({
+  useChatUploads: () => ({
+    uploads: [],
+    queueVideoUpload: vi.fn(),
+  }),
+}));
+
 vi.mock("../components/messages/MessageList", () => ({
   default: ({ showVerificationWarning }) => (
     <div data-testid="message-list">

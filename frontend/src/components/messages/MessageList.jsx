@@ -186,6 +186,16 @@ export default function MessageList({
           String(currentUser?.id);
 
         const timestamp = getTimestamp(message.created_at, language);
+        const isVisualMedia = Boolean(
+          message.attachment
+          && ["image", "video"].includes(message.attachment_type)
+        );
+        const showReceipt = Boolean(
+          mine
+          && showLatestReceipt
+          && latestMessage.id === message.id
+          && !message.upload_status
+        );
         const showDateSeparator = timestamp && timestamp.day !== previousDay;
         if (timestamp) previousDay = timestamp.day;
 
@@ -216,7 +226,18 @@ export default function MessageList({
                 replySwipeOrigin.current = null;
               }}
             >
-              <div className="message-bubble">
+              <div
+                className={[
+                  "message-bubble",
+                  message.attachment_type === "image" || message.attachment_type === "video"
+                    ? "message-bubble--media"
+                    : "",
+                  message.attachment_type === "audio" && message.attachment
+                    ? "message-bubble--audio"
+                    : "",
+                  message.upload_status === "uploading" ? "message-bubble--uploading" : "",
+                ].filter(Boolean).join(" ")}
+              >
                 {message.reply_to && (
                   <blockquote className="message-reply-preview">
                     {message.reply_to.content}
@@ -247,33 +268,71 @@ export default function MessageList({
                           {t("audioUnsupported")}
                         </audio>
                       )}
-                      {message.attachment_type === "image" && message.attachment && (
-                        <a href={message.attachment} target="_blank" rel="noreferrer">
-                          <img
-                            className="message-image-attachment"
-                            src={message.attachment}
-                            alt="Image attachment"
-                            loading="lazy"
-                          />
-                        </a>
+                      {isVisualMedia && (
+                        <div className="message-media-frame">
+                          {message.attachment_type === "image" && (
+                            <a href={message.attachment} target="_blank" rel="noreferrer">
+                              <img
+                                className="message-image-attachment"
+                                src={message.attachment}
+                                alt="Image attachment"
+                                loading="lazy"
+                              />
+                            </a>
+                          )}
+                          {message.attachment_type === "video" && (
+                            <video
+                              className="message-video-attachment"
+                              controls
+                              playsInline
+                              preload="metadata"
+                              src={message.attachment}
+                            >
+                              {t("videoUnsupported")}
+                            </video>
+                          )}
+                          {message.upload_status === "uploading"
+                            && message.attachment_type === "video" && (
+                              <span
+                                className="message-video-upload-indicator"
+                                role="status"
+                                aria-label={t("sending")}
+                              >
+                                <span />
+                              </span>
+                          )}
+                          {!message.is_deleted && (timestamp || showReceipt) && (
+                            <div className="message-media-meta">
+                              {timestamp && (
+                                <time className="message-time" dateTime={message.created_at}>
+                                  {timestamp.time}
+                                </time>
+                              )}
+                              {showReceipt && (
+                                <small className="message-receipt">
+                                  {message.is_read ? t("seen") : t("sent")}
+                                </small>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
-                      {message.attachment_type === "video" && message.attachment && (
-                        <video
-                          className="message-video-attachment"
-                          controls
-                          playsInline
-                          preload="metadata"
-                          src={message.attachment}
-                        >
-                          {t("videoUnsupported")}
-                        </video>
+                      {message.upload_status === "failed" && (
+                        <small className="message-video-upload-error" role="status">
+                          {t("videoUploadFailed")}
+                        </small>
                       )}
                     </>
                   )}
-                {timestamp && !message.is_deleted && (
+                {!isVisualMedia && timestamp && !message.is_deleted && (
                   <time className="message-time" dateTime={message.created_at}>
                     {timestamp.time}
                   </time>
+                )}
+                {!isVisualMedia && showReceipt && (
+                  <small className="message-receipt">
+                    {message.is_read ? t("seen") : t("sent")}
+                  </small>
                 )}
               </div>
               {message.edited_at && !message.is_deleted && (
@@ -284,12 +343,7 @@ export default function MessageList({
                   {t("unverifiedWarning")}
                 </small>
               )}
-              {mine && showLatestReceipt && latestMessage.id === message.id && (
-                <small className="message-receipt">
-                  {message.is_read ? t("seen") : t("sent")}
-                </small>
-              )}
-              {!message.is_deleted && (
+              {!message.is_deleted && !message.upload_status && (
                 <MessageActions
                   message={message}
                   own={mine}
