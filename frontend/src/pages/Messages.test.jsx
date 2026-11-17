@@ -84,6 +84,7 @@ vi.mock("../components/messages/MessageInput", () => ({
 
 vi.mock("../components/messages/AudioCallControls", () => ({
   default: () => <button type="button" aria-label="Start audio call" />,
+  AudioCallButtons: () => <button type="button" aria-label="Start audio call" />,
 }));
 
 vi.mock("../components/messages/TypingIndicator", () => ({

@@ -5,7 +5,9 @@ import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { LanguageProvider } from "./context/LanguageContext";
+import { CallProvider } from "./context/CallContext";
 import { ChatUploadProvider } from "./context/ChatUploadContext";
+import AudioCallControls from "./components/messages/AudioCallControls";
 import AppRoutes from "./routes/AppRoutes";
 
 // Android Physical Back Button Handler Component
@@ -42,14 +44,17 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <ChatUploadProvider>
-          <NotificationProvider>
-            <LanguageProvider>
-              <AndroidBackHandler />
-              <AppRoutes />
-            </LanguageProvider>
-          </NotificationProvider>
-        </ChatUploadProvider>
+        <CallProvider>
+          <ChatUploadProvider>
+            <NotificationProvider>
+              <LanguageProvider>
+                <AndroidBackHandler />
+                <AudioCallControls />
+                <AppRoutes />
+              </LanguageProvider>
+            </NotificationProvider>
+          </ChatUploadProvider>
+        </CallProvider>
       </AuthProvider>
     </ThemeProvider>
   );

@@ -103,6 +103,11 @@ class Message(models.Model):
     )
 
     content = models.TextField()
+    call_id = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+    )
 
     reply_to = models.ForeignKey(
         "self",

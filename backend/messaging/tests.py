@@ -1,5 +1,6 @@
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+import uuid
 
 from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
@@ -14,7 +15,7 @@ from messaging.models import (
     ConversationMember,
     Message,
 )
-from messaging.consumers import ChatConsumer
+from messaging.consumers import CallSignalingConsumer, ChatConsumer
 from users.models import ProfileVisibility
 from users.models import UserPrivacySettings
 
@@ -733,25 +734,58 @@ class CallEndedMessageTests(TransactionTestCase):
         self.conversation = Conversation.objects.create()
         self.conversation.participants.add(self.user, self.friend)
 
-    def test_audio_and_video_call_endings_are_saved_as_chat_messages(self):
+    def test_unanswered_call_is_saved_once_with_the_shared_call_id(self):
         consumer = ChatConsumer()
         consumer.user = self.user
         consumer.conversation_id = self.conversation.pk
+        call_id = uuid.uuid4()
 
-        for mode, expected_content in (
-            ("audio", "Audio call was ended"),
-            ("video", "Video call was ended"),
-        ):
-            with self.subTest(mode=mode):
-                result = async_to_sync(consumer.create_call_ended_message)(mode)
+        result, created = async_to_sync(consumer.create_call_ended_message)(
+            call_id,
+            "cancelled",
+        )
+        consumer.user = self.friend
+        second_result, second_created = async_to_sync(
+            consumer.create_call_ended_message
+        )(call_id, "missed")
 
-                self.assertEqual(result["content"], expected_content)
-                self.assertEqual(result["sender"], self.user.pk)
-                self.assertTrue(
-                    Message.objects.filter(
-                        pk=result["id"],
-                        conversation=self.conversation,
-                        sender=self.user,
-                        content=expected_content,
-                    ).exists()
-                )
+        self.assertTrue(created)
+        self.assertFalse(second_created)
+        self.assertEqual(result["id"], second_result["id"])
+        self.assertEqual(result["content"], "Call ended")
+        self.assertEqual(result["sender"], self.user.pk)
+        self.assertEqual(
+            Message.objects.filter(
+                conversation=self.conversation,
+                call_id=call_id,
+            ).count(),
+            1,
+        )
+
+    def test_personal_signaling_routes_to_the_recipient_user_group(self):
+        consumer = CallSignalingConsumer()
+        consumer.user = self.user
+        consumer.channel_layer = type("Layer", (), {"group_send": AsyncMock()})()
+        consumer.send_json = AsyncMock()
+        call_id = uuid.uuid4()
+
+        async_to_sync(consumer.receive_json)({
+            "type": "call_signal",
+            "to_user_id": self.friend.id,
+            "conversation_id": self.conversation.id,
+            "call_id": str(call_id),
+            "call_type": "audio",
+            "signal_type": "offer",
+            "signal": {"type": "offer", "sdp": "v=0\r\nm=audio\r\n"},
+        })
+
+        consumer.channel_layer.group_send.assert_awaited_once()
+        group_name, event = consumer.channel_layer.group_send.await_args.args
+        self.assertEqual(group_name, f"user_{self.friend.id}")
+        self.assertEqual(event["caller_id"], self.user.id)
+        self.assertEqual(event["caller_name"], self.user.username)
+        self.assertIsNone(event["caller_avatar"])
+        self.assertEqual(event["conversation_id"], self.conversation.id)
+        self.assertEqual(event["call_type"], "audio")
+        self.assertEqual(event["call_id"], str(call_id))
+        self.assertFalse(Message.objects.filter(call_id=call_id).exists())

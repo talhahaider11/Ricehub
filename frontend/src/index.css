@@ -8194,6 +8194,19 @@ body {
   opacity: 0.72;
 }
 
+.message-call-log {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.message-call-log svg {
+  opacity: 0.72;
+}
+
 .message-video-upload-indicator {
   position: absolute;
   top: 12px;

@@ -1,9 +1,10 @@
 import json
 import logging
+import uuid
 
 from channels.db import database_sync_to_async
 from channels.exceptions import ChannelFull
-from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.generic.websocket import AsyncJsonWebsocketConsumer, AsyncWebsocketConsumer
 from redis.exceptions import RedisError
 
 from django.contrib.auth import get_user_model
@@ -16,6 +17,223 @@ from users.privacy import can_message_between
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+CALL_LOG_STATUSES = {"cancelled", "missed", "unanswered"}
+
+
+@database_sync_to_async
+def is_valid_call_peer(user_id, conversation_id, target_user_id):
+    conversation = (
+        Conversation.objects
+        .filter(
+            id=conversation_id,
+            conversation_type=Conversation.ConversationType.DIRECT,
+            participants__id=user_id,
+        )
+        .prefetch_related("participants")
+        .first()
+    )
+    if not conversation:
+        return False
+    membership = ConversationMember.objects.filter(
+        conversation=conversation,
+        user_id=user_id,
+    ).first()
+    if membership and membership.deleted_at:
+        return False
+    other_user = conversation.participants.exclude(pk=user_id).first()
+    return bool(
+        other_user
+        and other_user.pk == target_user_id
+        and can_message_between(User.objects.get(pk=user_id), other_user)
+    )
+
+
+@database_sync_to_async
+def get_call_user_details(user):
+    avatar = user.profile_picture.url if user.profile_picture else None
+    return {
+        "caller_name": user.get_full_name() or user.username,
+        "caller_avatar": avatar,
+    }
+
+
+@database_sync_to_async
+def save_call_ended_message(user, conversation_id, call_id, status):
+    if not isinstance(status, str) or status not in CALL_LOG_STATUSES:
+        return None, False
+
+    conversation = (
+        Conversation.objects
+        .filter(
+            id=conversation_id,
+            conversation_type=Conversation.ConversationType.DIRECT,
+            participants=user,
+        )
+        .first()
+    )
+    if not conversation:
+        return None, False
+
+    membership = ConversationMember.objects.filter(
+        conversation=conversation,
+        user=user,
+    ).first()
+    if membership and membership.deleted_at:
+        return None, False
+
+    message, created = Message.objects.get_or_create(
+        call_id=call_id,
+        defaults={
+            "conversation": conversation,
+            "sender": user,
+            "content": "Call ended",
+        },
+    )
+    if message.conversation_id != conversation.id:
+        return None, False
+
+    if created:
+        restore_conversation_memberships(conversation)
+        conversation.save()
+
+    return {
+        "id": message.id,
+        "conversation": message.conversation_id,
+        "sender": message.sender_id,
+        "reply_to": None,
+        "reply_to_id": None,
+        "sender_username": message.sender.username,
+        "verification_warning": not message.sender.is_verified,
+        "content": message.content,
+        "call_id": str(message.call_id),
+        "created_at": message.created_at.isoformat(),
+        "is_read": message.is_read,
+    }, created
+
+
+class CallSignalingConsumer(AsyncJsonWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope.get("user")
+        if not self.user or not self.user.is_authenticated:
+            await self.close(code=4001)
+            return
+
+        self.user_group_name = f"user_{self.user.id}"
+        await self.channel_layer.group_add(
+            self.user_group_name,
+            self.channel_name,
+        )
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, "user_group_name"):
+            await self.channel_layer.group_discard(
+                self.user_group_name,
+                self.channel_name,
+            )
+
+    async def receive_json(self, data, **kwargs):
+        if not isinstance(data, dict) or data.get("type") != "call_signal":
+            await self.send_json({"type": "error", "message": "Call signal is invalid."})
+            return
+
+        signal_type = data.get("signal_type")
+        target_user_id = data.get("to_user_id")
+        conversation_id = data.get("conversation_id")
+        signal = data.get("signal", {})
+        try:
+            call_id = uuid.UUID(str(data.get("call_id")))
+        except (ValueError, TypeError, AttributeError):
+            call_id = None
+
+        if (
+            not isinstance(signal_type, str)
+            or signal_type not in {"offer", "answer", "ice_candidate", "reject", "hangup"}
+            or not isinstance(target_user_id, int)
+            or isinstance(target_user_id, bool)
+            or not isinstance(conversation_id, int)
+            or isinstance(conversation_id, bool)
+            or not isinstance(signal, dict)
+            or len(json.dumps(data)) > 20_000
+            or call_id is None
+        ):
+            await self.send_json({"type": "error", "message": "Call signal is invalid."})
+            return
+
+        if not await is_valid_call_peer(self.user.id, conversation_id, target_user_id):
+            await self.send_json({
+                "type": "error",
+                "message": "This conversation is not available for audio calls.",
+            })
+            return
+
+        call_type = data.get("call_type") or signal.get("mode")
+        if not isinstance(call_type, str) or call_type not in {"audio", "video"}:
+            description = signal.get("sdp", "")
+            call_type = "video" if isinstance(description, str) and "m=video" in description else "audio"
+
+        sender = await get_call_user_details(self.user)
+        status = data.get("status") or signal.get("status")
+        try:
+            await self.channel_layer.group_send(
+                f"user_{target_user_id}",
+                {
+                    "type": "call_signal_event",
+                    "from_user_id": self.user.id,
+                    "caller_id": self.user.id,
+                    **sender,
+                    "conversation_id": conversation_id,
+                    "call_id": str(call_id),
+                    "call_type": call_type,
+                    "signal_type": signal_type,
+                    "signal": signal,
+                    "status": status,
+                },
+            )
+        except (ChannelFull, RedisError, OSError, TimeoutError):
+            logger.exception(
+                "Call signal from user %s could not be routed.",
+                self.user.id,
+            )
+            await self.send_json({
+                "type": "error",
+                "message": "Call signal could not be delivered.",
+            })
+            return
+
+        if signal_type in {"reject", "hangup"}:
+            message, created = await save_call_ended_message(
+                self.user,
+                conversation_id,
+                call_id,
+                status,
+            )
+            if message and created:
+                try:
+                    await self.channel_layer.group_send(
+                        f"chat_{conversation_id}",
+                        {"type": "chat_message", "message": message},
+                    )
+                except (ChannelFull, RedisError, OSError, TimeoutError):
+                    logger.exception(
+                        "Call end message %s was saved but could not be broadcast.",
+                        message["id"],
+                    )
+
+    async def call_signal_event(self, event):
+        await self.send_json({
+            "type": "call_signal",
+            "from_user_id": event["from_user_id"],
+            "caller_id": event["caller_id"],
+            "caller_name": event["caller_name"],
+            "caller_avatar": event["caller_avatar"],
+            "conversation_id": event["conversation_id"],
+            "call_id": event["call_id"],
+            "call_type": event["call_type"],
+            "signal_type": event["signal_type"],
+            "signal": event["signal"],
+            "status": event.get("status"),
+        })
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -143,16 +361,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 isinstance(target_user_id, int)
                 and not isinstance(target_user_id, bool)
             )
+            try:
+                call_id = uuid.UUID(str(data.get("call_id")))
+            except (ValueError, TypeError, AttributeError):
+                call_id = None
             if (
                 not isinstance(signal_type, str)
-                or signal_type not in {"offer", "answer", "ice_candidate", "hangup"}
+                or signal_type not in {"offer", "answer", "ice_candidate", "reject", "hangup"}
                 or not valid_target_id
                 or not isinstance(signal, dict)
                 or len(json.dumps(signal)) > 20_000
-                or (
-                    signal_type == "hangup"
-                    and call_mode not in {"audio", "video"}
-                )
+                or call_id is None
             ):
                 await self.send_json({
                     "type": "error",
@@ -168,15 +387,26 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "message": "This conversation is not available for audio calls.",
                 })
                 return
+            call_type = data.get("call_type") or call_mode
+            if not isinstance(call_type, str) or call_type not in {"audio", "video"}:
+                description = signal.get("sdp", "")
+                call_type = "video" if isinstance(description, str) and "m=video" in description else "audio"
+            sender = await get_call_user_details(self.user)
+            status = data.get("status") or signal.get("status")
             try:
                 await self.channel_layer.group_send(
-                    self.room_group_name,
+                    f"user_{target_user_id}",
                     {
                         "type": "call_signal_event",
                         "from_user_id": self.user.id,
-                        "to_user_id": target_user_id,
+                        "caller_id": self.user.id,
+                        **sender,
+                        "conversation_id": int(self.conversation_id),
+                        "call_id": str(call_id),
+                        "call_type": call_type,
                         "signal_type": signal_type,
                         "signal": signal,
+                        "status": status,
                     },
                 )
             except (ChannelFull, RedisError, OSError, TimeoutError):
@@ -189,9 +419,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "message": "Call signal could not be delivered.",
                 })
 
-            if signal_type == "hangup":
-                call_message = await self.create_call_ended_message(call_mode)
-                if call_message:
+            if signal_type in {"hangup", "reject"}:
+                call_message, created = await save_call_ended_message(
+                    self.user,
+                    int(self.conversation_id),
+                    call_id,
+                    status,
+                )
+                if call_message and created:
                     call_event = {
                         "type": "chat_message",
                         "message": call_message,
@@ -351,13 +586,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
         })
 
     async def call_signal_event(self, event):
-        if event["to_user_id"] != self.user.id:
-            return
         await self.send_json({
             "type": "call_signal",
             "from_user_id": event["from_user_id"],
+            "caller_id": event["caller_id"],
+            "caller_name": event["caller_name"],
+            "caller_avatar": event["caller_avatar"],
+            "conversation_id": event["conversation_id"],
+            "call_id": event["call_id"],
+            "call_type": event["call_type"],
             "signal_type": event["signal_type"],
             "signal": event["signal"],
+            "status": event.get("status"),
         })
 
     @database_sync_to_async
@@ -464,48 +704,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
         verification_warning = not self.user.is_verified
         return message, verification_warning
 
-    @database_sync_to_async
-    def create_call_ended_message(self, call_mode):
-        conversation = (
-            Conversation.objects
-            .filter(
-                id=self.conversation_id,
-                conversation_type=Conversation.ConversationType.DIRECT,
-                participants=self.user,
-            )
-            .first()
+    async def create_call_ended_message(self, call_id, status):
+        return await save_call_ended_message(
+            self.user,
+            int(self.conversation_id),
+            call_id,
+            status,
         )
-        if not conversation:
-            return None
-
-        membership = ConversationMember.objects.filter(
-            conversation=conversation,
-            user=self.user,
-        ).first()
-        if membership and membership.deleted_at:
-            return None
-
-        call_name = "Audio" if call_mode == "audio" else "Video"
-        message = Message.objects.create(
-            conversation=conversation,
-            sender=self.user,
-            content=f"{call_name} call was ended",
-        )
-        restore_conversation_memberships(conversation)
-        conversation.save()
-
-        return {
-            "id": message.id,
-            "conversation": message.conversation_id,
-            "sender": message.sender_id,
-            "reply_to": None,
-            "reply_to_id": None,
-            "sender_username": self.user.username,
-            "verification_warning": not self.user.is_verified,
-            "content": message.content,
-            "created_at": message.created_at.isoformat(),
-            "is_read": message.is_read,
-        }
 
     @database_sync_to_async
     def can_send_message(self):

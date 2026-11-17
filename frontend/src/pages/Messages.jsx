@@ -10,7 +10,7 @@ import ConversationList from "../components/messages/ConversationList";
 import MessageList from "../components/messages/MessageList";
 import MessageInput from "../components/messages/MessageInput";
 import MessageShareModal from "../components/messages/MessageShareModal";
-import AudioCallControls from "../components/messages/AudioCallControls";
+import { AudioCallButtons } from "../components/messages/AudioCallControls";
 import TypingIndicator from "../components/messages/TypingIndicator";
 import Loader from "../components/common/Loader";
 import ErrorState from "../components/common/ErrorState";
@@ -157,14 +157,10 @@ export default function Messages() {
   const {
     messages,
     setMessages,
-    connected,
     typingUser,
     error: messageError,
     sendMessage,
     sendTyping,
-    sendCallSignal,
-    callSignal,
-    clearCallSignal,
     conversationHidden,
   } = useMessages(selectedConversation);
 
@@ -528,14 +524,9 @@ export default function Messages() {
                 && !activeConversation.is_group
                 && activeConversation.conversation_type !== "group"
                 && otherUser && (
-                  <AudioCallControls
-                    peerId={otherUser.id}
+                  <AudioCallButtons
                     peer={otherUser}
-                    currentUser={user}
-                    disabled={!connected}
-                    callSignal={callSignal}
-                    sendCallSignal={sendCallSignal}
-                    clearCallSignal={clearCallSignal}
+                    conversationId={selectedConversation}
                   />
                 )}
             </header>

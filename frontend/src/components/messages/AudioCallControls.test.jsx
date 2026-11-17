@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import AudioCallControls from "./AudioCallControls";
+import { CallContext } from "../../context/CallContext";
+import AudioCallControls, { AudioCallButtons } from "./AudioCallControls";
 
 const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
 const secureContextDescriptor = Object.getOwnPropertyDescriptor(window, "isSecureContext");
@@ -72,19 +73,40 @@ class MockPeerConnection {
   }
 }
 
+const peer = { id: 2, first_name: "Sam", last_name: "User" };
+const callId = "11111111-1111-4111-8111-111111111111";
+
 function renderCall(overrides = {}) {
-  return render(
-    <AudioCallControls
-      peerId={2}
-      peer={{ id: 2, first_name: "Sam", last_name: "User" }}
-      currentUser={{ id: 1, username: "me" }}
-      disabled={false}
-      callSignal={null}
-      sendCallSignal={vi.fn()}
-      clearCallSignal={vi.fn()}
-      {...overrides}
-    />
-  );
+  const activeCall = overrides.activeCall === undefined
+    ? {
+      peer,
+      peerId: 2,
+      conversationId: 3,
+      mode: "audio",
+      callId,
+      direction: "outgoing",
+    }
+    : overrides.activeCall;
+  const context = {
+    activeCall,
+    callSignals: [],
+    clearActiveCall: vi.fn(),
+    clearCallSignal: vi.fn(),
+    connected: true,
+    error: "",
+    sendCallSignal: vi.fn(),
+    startCall: vi.fn(),
+    user: { id: 1, username: "me" },
+    ...overrides,
+  };
+  return {
+    context,
+    ...render(
+      <CallContext.Provider value={context}>
+        <AudioCallControls />
+      </CallContext.Provider>
+    ),
+  };
 }
 
 function firePointerEvent(element, type, properties) {
@@ -140,90 +162,132 @@ afterEach(() => {
 });
 
 describe("AudioCallControls", () => {
+  it("starts calls from the chat header through the global call context", () => {
+    const startCall = vi.fn();
+    const context = {
+      activeCall: null,
+      connected: true,
+      startCall,
+    };
+
+    render(
+      <CallContext.Provider value={context}>
+        <AudioCallButtons peer={peer} conversationId={3} />
+      </CallContext.Provider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start audio call" }));
+
+    expect(startCall).toHaveBeenCalledWith({
+      peer,
+      conversationId: 3,
+      mode: "audio",
+    });
+  });
+
   it("starts and ends an audio call, releasing the local tracks", async () => {
     const { stream, audioTrack, videoTrack } = createStream();
     const getUserMedia = mockMedia(stream);
-    const sendCallSignal = vi.fn();
 
-    renderCall({ sendCallSignal });
-    fireEvent.click(screen.getByRole("button", { name: "Start audio call" }));
+    const { context } = renderCall();
 
     await waitFor(() => {
       expect(getUserMedia).toHaveBeenCalledWith({ audio: true, video: false });
-      expect(sendCallSignal).toHaveBeenCalledWith(
-        2,
-        "offer",
-        expect.objectContaining({ type: "offer" })
-      );
+      expect(context.sendCallSignal).toHaveBeenCalledWith(expect.objectContaining({
+        peerId: 2,
+        conversationId: 3,
+        callId,
+        callType: "audio",
+        signalType: "offer",
+        signal: expect.objectContaining({ type: "offer" }),
+      }));
     });
 
     fireEvent.click(screen.getByRole("button", { name: "End call" }));
-    expect(sendCallSignal).toHaveBeenLastCalledWith(2, "hangup", { mode: "audio" });
+    expect(context.sendCallSignal).toHaveBeenLastCalledWith(expect.objectContaining({
+      signalType: "hangup",
+      status: "cancelled",
+    }));
     expect(audioTrack.stop).toHaveBeenCalledOnce();
     expect(videoTrack.stop).toHaveBeenCalledOnce();
   });
 
   it("minimizes an active call without ending it and restores it from the chat control", async () => {
     const { stream, audioTrack } = createStream();
-    const sendCallSignal = vi.fn();
     mockMedia(stream);
-    renderCall({ sendCallSignal });
+    const { context } = renderCall();
 
-    fireEvent.click(screen.getByRole("button", { name: "Start audio call" }));
     await screen.findByRole("dialog", { name: "Sam User" });
     fireEvent.click(screen.getByRole("button", { name: "Minimize call" }));
 
     expect(screen.queryByRole("dialog", { name: "Sam User" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Return to active call" })).toBeInTheDocument();
-    expect(sendCallSignal).not.toHaveBeenCalledWith(2, "hangup", expect.anything());
+    expect(context.sendCallSignal).not.toHaveBeenCalledWith(expect.objectContaining({
+      signalType: "hangup",
+    }));
     expect(audioTrack.stop).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Return to active call" }));
     expect(await screen.findByRole("dialog", { name: "Sam User" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Start video call" })).not.toBeInTheDocument();
   });
 
   it("ends an unanswered call after the ringing timeout", async () => {
     const { stream } = createStream();
     mockMedia(stream);
-    const sendCallSignal = vi.fn();
     const setTimeoutSpy = vi.spyOn(window, "setTimeout");
 
-    renderCall({ sendCallSignal });
-    fireEvent.click(screen.getByRole("button", { name: "Start audio call" }));
+    const { context } = renderCall();
     await waitFor(() => {
-      expect(sendCallSignal).toHaveBeenCalledWith(
-        2,
-        "offer",
-        expect.objectContaining({ type: "offer" })
-      );
+      expect(context.sendCallSignal).toHaveBeenCalledWith(expect.objectContaining({
+        signalType: "offer",
+      }));
     });
 
     const timeout = setTimeoutSpy.mock.calls.find(([, delay]) => delay === 30_000);
     expect(timeout).toBeDefined();
     act(() => timeout[0]());
 
-    expect(sendCallSignal).toHaveBeenLastCalledWith(2, "hangup", { mode: "audio" });
+    expect(context.sendCallSignal).toHaveBeenLastCalledWith(expect.objectContaining({
+      signalType: "hangup",
+      status: "missed",
+    }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("No answer");
   });
 
-  it("automatically rejects incoming video calls", async () => {
-    const sendCallSignal = vi.fn();
-    renderCall({
-      callSignal: {
+  it("shows incoming video calls and allows the recipient to answer", async () => {
+    const { stream } = createStream();
+    const getUserMedia = mockMedia(stream);
+    const signal = {
+      id: 1,
         from_user_id: 2,
         signal_type: "offer",
+        call_type: "video",
         signal: { type: "offer", sdp: "v=0\r\nm=video\r\n" },
+    };
+    const { context } = renderCall({
+      activeCall: {
+        peer,
+        peerId: 2,
+        conversationId: 3,
+        mode: "video",
+        callId,
+        direction: "incoming",
       },
-      sendCallSignal,
+      callSignals: [signal],
     });
 
+    expect(await screen.findByRole("dialog", { name: "Sam User" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
+
     await waitFor(() => {
-      expect(sendCallSignal).toHaveBeenCalledWith(2, "hangup", { mode: "video" });
+      expect(getUserMedia).toHaveBeenCalledWith({
+        audio: true,
+        video: { facingMode: { ideal: "user" } },
+      });
+      expect(context.sendCallSignal).toHaveBeenCalledWith(expect.objectContaining({
+        signalType: "answer",
+      }));
     });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start audio call" })).toBeInTheDocument();
   });
 
   it("offers a retry when call media permission is denied", async () => {
@@ -234,7 +298,6 @@ describe("AudioCallControls", () => {
     const getUserMedia = mockMedia(stream, vi.fn().mockRejectedValueOnce(denied));
 
     renderCall();
-    fireEvent.click(screen.getByRole("button", { name: "Start audio call" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Microphone permission is required for audio calls"

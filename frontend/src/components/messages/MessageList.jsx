@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { PhoneOff } from "lucide-react";
 import MessageActions from "./MessageActions";
 import { useLanguage } from "../../context/LanguageContext";
 import Avatar from "../common/Avatar";
@@ -193,6 +194,7 @@ export default function MessageList({
         );
         const showReceipt = Boolean(
           mine
+          && !message.call_id
           && showLatestReceipt
           && latestMessage.id === message.id
           && !message.upload_status
@@ -237,6 +239,7 @@ export default function MessageList({
                     ? "message-bubble--audio"
                     : "",
                   message.upload_status === "uploading" ? "message-bubble--uploading" : "",
+                  message.call_id ? "message-bubble--call-log" : "",
                 ].filter(Boolean).join(" ")}
               >
                 {message.reply_to && (
@@ -248,7 +251,12 @@ export default function MessageList({
                   ? t("messageDeleted")
                   : (
                     <>
-                      {message.content && (
+                      {message.call_id ? (
+                        <p className="message-call-log">
+                          <PhoneOff size={15} aria-hidden="true" />
+                          <span>{t("callEndedLog")}</span>
+                        </p>
+                      ) : message.content && (
                         <p>
                           {message.content.split(/(https?:\/\/[^\s]+)/gi).map((part, index) => (
                             /^https?:\/\//i.test(part) ? (
@@ -345,7 +353,7 @@ export default function MessageList({
                   {t("unverifiedWarning")}
                 </small>
               )}
-              {!message.is_deleted && !message.upload_status && (
+              {!message.is_deleted && !message.upload_status && !message.call_id && (
                 <MessageActions
                   message={message}
                   own={mine}
