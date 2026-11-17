@@ -6811,56 +6811,22 @@ a {
   object-fit: contain;
 }
 
-.camera-capture-input {
-  display: none;
+.camera-capture-hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  text-align: center;
 }
 
-.camera-capture-device-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.camera-capture-shutter {
+  touch-action: none;
+  user-select: none;
 }
 
-.camera-capture-device-controls button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 40px;
-  padding: 7px 9px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 9px;
-  background: var(--bg-surface-secondary);
-  color: var(--text-primary);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.camera-capture-device-controls button:hover:not(:disabled) {
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-}
-
-.camera-capture-device-controls button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.message-input .camera-capture-device-controls button {
-  width: 36px;
-  min-width: 36px;
-  height: 40px;
-  min-height: 40px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--accent-primary);
-}
-
-.message-input .camera-capture-device-controls button span {
-  display: none;
+.camera-capture-shutter.is-recording {
+  border-color: #dc2626;
+  background: #dc2626;
+  color: #fff;
 }
 
 .camera-capture-error {

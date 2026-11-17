@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CameraCapture from "./CameraCapture";
 
@@ -6,9 +6,35 @@ const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, "media
 const secureContextDescriptor = Object.getOwnPropertyDescriptor(window, "isSecureContext");
 const userAgentDescriptor = Object.getOwnPropertyDescriptor(navigator, "userAgent");
 
+class FakeMediaRecorder {
+  static isTypeSupported = vi.fn(() => true);
+
+  static instances = [];
+
+  constructor(stream, options) {
+    this.stream = stream;
+    this.mimeType = options?.mimeType || "video/webm";
+    this.state = "inactive";
+    this.stop = vi.fn(() => {
+      this.state = "inactive";
+      this.ondataavailable?.({
+        data: new Blob(["video"], { type: this.mimeType }),
+      });
+      this.onstop?.();
+    });
+    FakeMediaRecorder.instances.push(this);
+  }
+
+  start() {
+    this.state = "recording";
+  }
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+  FakeMediaRecorder.instances = [];
   if (mediaDevicesDescriptor) {
     Object.defineProperty(navigator, "mediaDevices", mediaDevicesDescriptor);
   } else {
@@ -52,13 +78,19 @@ describe("CameraCapture", () => {
 
     await screen.findByRole("dialog", { name: "Camera" });
     expect(getUserMedia).toHaveBeenCalledWith({
-      audio: false,
-      video: { facingMode: { ideal: "environment" } },
+      audio: true,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
     });
     const video = screen.getByLabelText("Camera preview");
     Object.defineProperty(video, "videoWidth", { configurable: true, value: 640 });
     Object.defineProperty(video, "videoHeight", { configurable: true, value: 480 });
-    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    const shutter = screen.getByRole("button", { name: /hold to record video/i });
+    fireEvent.pointerDown(shutter, { button: 0 });
+    fireEvent.pointerUp(shutter, { button: 0 });
 
     await waitFor(() => {
       expect(onCapture).toHaveBeenCalledOnce();
@@ -91,34 +123,104 @@ describe("CameraCapture", () => {
     );
   });
 
-  it("launches native photo capture, switches cameras, and hides video recording", async () => {
+  it("opens an in-app camera on mobile without camera-switch controls", async () => {
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,
       value: "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/130 Mobile",
     });
+    const stream = { getTracks: () => [{ stop: vi.fn() }] };
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    Object.defineProperty(window, "isSecureContext", {
+      configurable: true,
+      value: true,
+    });
     const onCapture = vi.fn().mockResolvedValue(undefined);
-    const { container } = render(<CameraCapture onCapture={onCapture} />);
-    const photoInput = container.querySelector('input[accept="image/*"]');
-    const photoInputClick = vi.spyOn(photoInput, "click");
+    render(<CameraCapture onCapture={onCapture} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
-    expect(photoInputClick).toHaveBeenCalledOnce();
-    expect(screen.queryByLabelText("Camera preview")).not.toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "Camera" })).not.toBeInTheDocument();
-    expect(photoInput).toHaveAttribute("capture", "environment");
+    expect(await screen.findByRole("dialog", { name: "Camera" })).toBeInTheDocument();
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Switch to front camera" }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Switch to back camera" }))
+      .not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch to front camera" }));
-    expect(screen.getByText("Front camera")).toBeInTheDocument();
-    expect(photoInput).toHaveAttribute("capture", "user");
+  it("records while the shutter is held and automatically stops at 30 seconds", async () => {
+    const track = { stop: vi.fn() };
+    const stream = { getTracks: () => [track] };
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+    });
+    Object.defineProperty(window, "isSecureContext", {
+      configurable: true,
+      value: true,
+    });
+    vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
+    const onCapture = vi.fn().mockResolvedValue(undefined);
+
+    render(<CameraCapture onCapture={onCapture} />);
     fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
-    expect(photoInputClick).toHaveBeenCalledTimes(2);
-    const photoFile = new File(["photo"], "camera.jpg", { type: "image/jpeg" });
-    fireEvent.change(photoInput, { target: { files: [photoFile] } });
+    await screen.findByRole("dialog", { name: "Camera" });
+    const shutter = screen.getByRole("button", { name: /hold to record video/i });
 
-    await waitFor(() => expect(onCapture).toHaveBeenLastCalledWith(photoFile));
-    fireEvent.click(screen.getByRole("button", { name: "Switch to back camera" }));
-    expect(photoInput).toHaveAttribute("capture", "environment");
-    expect(container.querySelector('input[accept="video/*"]')).toBeNull();
-    expect(screen.queryByRole("button", { name: "Record video" })).not.toBeInTheDocument();
+    vi.useFakeTimers();
+    fireEvent.pointerDown(shutter, { button: 0 });
+    act(() => vi.advanceTimersByTime(350));
+
+    const recorder = FakeMediaRecorder.instances[0];
+    expect(recorder).toBeDefined();
+    expect(recorder.state).toBe("recording");
+    act(() => vi.advanceTimersByTime(29_999));
+    expect(recorder.stop).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+    expect(recorder.stop).toHaveBeenCalledOnce();
+    expect(onCapture).toHaveBeenCalledOnce();
+    expect(onCapture.mock.calls[0][0]).toMatchObject({
+      type: "video/webm",
+      name: expect.stringMatching(/\.webm$/),
+    });
+    expect(track.stop).toHaveBeenCalledOnce();
+  });
+
+  it("stops and returns the recorded video when the shutter is released", async () => {
+    const stream = { getTracks: () => [{ stop: vi.fn() }] };
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+    });
+    Object.defineProperty(window, "isSecureContext", {
+      configurable: true,
+      value: true,
+    });
+    vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
+    const onCapture = vi.fn().mockResolvedValue(undefined);
+
+    render(<CameraCapture onCapture={onCapture} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
+    await screen.findByRole("dialog", { name: "Camera" });
+    const shutter = screen.getByRole("button", { name: /hold to record video/i });
+
+    vi.useFakeTimers();
+    fireEvent.pointerDown(shutter, { button: 0 });
+    act(() => vi.advanceTimersByTime(350));
+    const recorder = FakeMediaRecorder.instances[0];
+    expect(recorder.state).toBe("recording");
+
+    fireEvent.pointerUp(shutter, { button: 0 });
+    await act(async () => Promise.resolve());
+
+    expect(recorder.stop).toHaveBeenCalledOnce();
+    expect(onCapture).toHaveBeenCalledOnce();
+    expect(onCapture.mock.calls[0][0]).toMatchObject({ type: "video/webm" });
   });
 });

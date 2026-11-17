@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, RefreshCw, X } from "lucide-react";
+import { Camera, Circle, Square, X } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 
-function shouldUseDeviceCamera() {
-  const mobileUserAgent = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  return mobileUserAgent || window.matchMedia?.("(pointer: coarse)").matches === true;
-}
+const HOLD_TO_RECORD_DELAY_MS = 350;
+const MAX_VIDEO_RECORDING_MS = 30_000;
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const VIDEO_MIME_TYPES = [
+  "video/webm;codecs=vp8,opus",
+  "video/webm",
+  "video/mp4",
+];
 
 export default function CameraCapture({
   onCapture,
@@ -15,16 +19,40 @@ export default function CameraCapture({
   const { t } = useLanguage();
   const [stream, setStream] = useState(null);
   const [error, setError] = useState("");
-  const [cameraDirection, setCameraDirection] = useState("environment");
+  const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const videoRef = useRef(null);
-  const photoInputRef = useRef(null);
   const streamRef = useRef(null);
   const openingRef = useRef(false);
+  const recorderRef = useRef(null);
+  const holdTimeoutRef = useRef(null);
+  const recordingTimeoutRef = useRef(null);
+  const recordingIntervalRef = useRef(null);
+  const holdTriggeredRef = useRef(false);
 
   const stopCamera = () => {
+    if (holdTimeoutRef.current) {
+      window.clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
+    }
+    if (recordingTimeoutRef.current) {
+      window.clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+    if (recordingIntervalRef.current) {
+      window.clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+    const recorder = recorderRef.current;
+    recorderRef.current = null;
+    if (recorder?.state === "recording") {
+      recorder.onstop = null;
+      recorder.stop();
+    }
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     setStream(null);
+    setRecording(false);
   };
 
   useEffect(() => {
@@ -36,16 +64,18 @@ export default function CameraCapture({
   }, [stream]);
 
   useEffect(() => () => {
+    if (holdTimeoutRef.current) window.clearTimeout(holdTimeoutRef.current);
+    clearRecordingTimers();
+    const recorder = recorderRef.current;
+    if (recorder?.state === "recording") {
+      recorder.onstop = null;
+      recorder.stop();
+    }
     streamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
   const openCamera = async () => {
     setError("");
-    if (shouldUseDeviceCamera()) {
-      openDeviceCapture();
-      return;
-    }
-
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setError(t("cameraUnsupported"));
       return;
@@ -55,8 +85,12 @@ export default function CameraCapture({
     openingRef.current = true;
     try {
       const cameraStream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: { ideal: "environment" } },
+        audio: true,
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
       });
       streamRef.current = cameraStream;
       setStream(cameraStream);
@@ -74,28 +108,121 @@ export default function CameraCapture({
     }
   };
 
-  const openDeviceCapture = () => {
-    photoInputRef.current?.click();
-  };
-
-  const toggleCameraDirection = () => {
-    setCameraDirection((direction) => (
-      direction === "environment" ? "user" : "environment"
-    ));
-  };
-
-  const handleDeviceCapture = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-
-    setError("");
-    try {
-      await onCapture(file);
-    } catch (captureError) {
-      console.error("Device camera capture could not be used:", captureError);
-      setError(captureError.message || t("cameraCaptureFailed"));
+  const clearRecordingTimers = () => {
+    if (recordingTimeoutRef.current) {
+      window.clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
     }
+    if (recordingIntervalRef.current) {
+      window.clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+  };
+
+  const stopRecording = () => {
+    clearRecordingTimers();
+    if (recorderRef.current?.state === "recording") {
+      recorderRef.current.stop();
+    }
+  };
+
+  const startVideoRecording = () => {
+    if (!streamRef.current) return;
+    if (!window.MediaRecorder) {
+      setError(t("videoRecordingUnsupported"));
+      return;
+    }
+
+    try {
+      const supportedMimeType = VIDEO_MIME_TYPES.find(
+        (mimeType) => window.MediaRecorder.isTypeSupported?.(mimeType)
+      );
+      const options = {
+        videoBitsPerSecond: 1_300_000,
+        audioBitsPerSecond: 64_000,
+        ...(supportedMimeType ? { mimeType: supportedMimeType } : {}),
+      };
+      const recorder = new window.MediaRecorder(streamRef.current, options);
+      const chunks = [];
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) chunks.push(event.data);
+      };
+      recorder.onerror = (recordingError) => {
+        console.error("Camera video recording failed:", recordingError);
+        setError(t("videoRecordingFailed"));
+        stopCamera();
+      };
+      recorder.onstop = () => {
+        clearRecordingTimers();
+        recorderRef.current = null;
+        setRecording(false);
+        const recordingStream = streamRef.current;
+        recordingStream?.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        setStream(null);
+
+        const rawType = recorder.mimeType || chunks[0]?.type || "video/webm";
+        const mimeType = rawType.split(";")[0];
+        const blob = new Blob(chunks, { type: mimeType });
+        if (!blob.size) {
+          setError(t("videoRecordingFailed"));
+          return;
+        }
+        if (blob.size > MAX_ATTACHMENT_SIZE) {
+          setError(t("photoVideoSizeError"));
+          return;
+        }
+        const extension = mimeType === "video/mp4" ? "mp4" : "webm";
+        const file = new File([blob], `ricehub-camera-${Date.now()}.${extension}`, {
+          type: mimeType,
+        });
+        Promise.resolve().then(() => onCapture(file)).catch((captureError) => {
+          console.error("Recorded video could not be used:", captureError);
+          setError(captureError.message || t("cameraCaptureFailed"));
+        });
+      };
+      recorder.start(250);
+      setError("");
+      setRecording(true);
+      setRecordingSeconds(0);
+      recordingIntervalRef.current = window.setInterval(() => {
+        setRecordingSeconds((seconds) => Math.min(seconds + 1, 30));
+      }, 1000);
+      recordingTimeoutRef.current = window.setTimeout(
+        stopRecording,
+        MAX_VIDEO_RECORDING_MS
+      );
+    } catch (recordingError) {
+      console.error("Camera video recording could not be started:", recordingError);
+      recorderRef.current = null;
+      setError(recordingError.message || t("videoRecordingFailed"));
+    }
+  };
+
+  const beginCapturePress = (event) => {
+    if (event.type === "pointerdown" && event.button > 0) return;
+    if (recording || holdTimeoutRef.current) return;
+    event.preventDefault();
+    holdTriggeredRef.current = false;
+    holdTimeoutRef.current = window.setTimeout(() => {
+      holdTimeoutRef.current = null;
+      holdTriggeredRef.current = true;
+      startVideoRecording();
+    }, HOLD_TO_RECORD_DELAY_MS);
+  };
+
+  const finishCapturePress = () => {
+    if (holdTimeoutRef.current) {
+      window.clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
+    }
+    if (holdTriggeredRef.current) {
+      stopRecording();
+      holdTriggeredRef.current = false;
+      return;
+    }
+    void capturePhoto();
   };
 
   const capturePhoto = async () => {
@@ -133,16 +260,6 @@ export default function CameraCapture({
 
   return (
     <>
-      <input
-        ref={photoInputRef}
-        className="camera-capture-input"
-        type="file"
-        accept="image/*"
-        capture={cameraDirection}
-        onChange={(event) => void handleDeviceCapture(event)}
-        aria-label={t("takePhoto")}
-        tabIndex={-1}
-      />
       <button
         type="button"
         className={`camera-capture-trigger ${className}`.trim()}
@@ -154,32 +271,6 @@ export default function CameraCapture({
         <Camera size={18} aria-hidden="true" />
         <span>{t("camera")}</span>
       </button>
-      {shouldUseDeviceCamera() && (
-        <div className="camera-capture-device-controls">
-          <button
-            type="button"
-            className="camera-capture-lens"
-            onClick={toggleCameraDirection}
-            aria-label={t(
-              cameraDirection === "environment"
-                ? "switchToFrontCamera"
-                : "switchToBackCamera"
-            )}
-            title={t(
-              cameraDirection === "environment"
-                ? "switchToFrontCamera"
-                : "switchToBackCamera"
-            )}
-          >
-            <RefreshCw size={17} aria-hidden="true" />
-            <span>
-              {cameraDirection === "environment"
-                ? t("backCamera")
-                : t("frontCamera")}
-            </span>
-          </button>
-        </div>
-      )}
       {error && !stream && <p className="error camera-capture-error" role="alert">{error}</p>}
       {stream && (
         <div className="camera-capture-backdrop">
@@ -202,14 +293,42 @@ export default function CameraCapture({
               playsInline
               aria-label={t("cameraPreview")}
             />
+            <p className="camera-capture-hint" aria-live="polite">
+              {recording
+                ? t("recordingVideo", { seconds: recordingSeconds })
+                : t("holdToRecordVideo")}
+            </p>
             {error && <p className="error" role="alert">{error}</p>}
             <footer>
               <button type="button" className="btn btn-secondary" onClick={stopCamera}>
                 {t("cancel")}
               </button>
-              <button type="button" className="btn btn-primary" onClick={() => void capturePhoto()}>
-                <Camera size={17} aria-hidden="true" />
-                {t("takePhoto")}
+              <button
+                type="button"
+                className={`btn btn-primary camera-capture-shutter${recording ? " is-recording" : ""}`}
+                aria-label={recording ? t("stopVideoRecording") : t("holdToRecordVideo")}
+                disabled={disabled && !recording}
+                onPointerDown={beginCapturePress}
+                onPointerUp={finishCapturePress}
+                onPointerCancel={finishCapturePress}
+                onKeyDown={(event) => {
+                  if (event.key === " " || event.key === "Enter") beginCapturePress(event);
+                }}
+                onKeyUp={(event) => {
+                  if (event.key === " " || event.key === "Enter") finishCapturePress();
+                }}
+              >
+                {recording ? (
+                  <>
+                    <Square size={17} aria-hidden="true" />
+                    {t("stopVideoRecording")}
+                  </>
+                ) : (
+                  <>
+                    <Circle size={17} aria-hidden="true" />
+                    {t("takePhoto")}
+                  </>
+                )}
               </button>
             </footer>
           </section>

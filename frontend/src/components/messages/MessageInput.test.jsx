@@ -133,7 +133,9 @@ describe("MessageInput", () => {
     const video = await screen.findByLabelText("Camera preview");
     Object.defineProperty(video, "videoWidth", { configurable: true, value: 640 });
     Object.defineProperty(video, "videoHeight", { configurable: true, value: 480 });
-    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    const shutter = screen.getByRole("button", { name: /hold to record video/i });
+    fireEvent.pointerDown(shutter, { button: 0 });
+    fireEvent.pointerUp(shutter, { button: 0 });
 
     expect(await screen.findByRole("region", { name: "Attachment preview" }))
       .toBeInTheDocument();
