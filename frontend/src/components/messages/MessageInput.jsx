@@ -269,7 +269,15 @@ export default function MessageInput({
   return (
     <>
       {pendingAttachment && (
-        <section className="message-attachment-preview" aria-label={pendingAttachment.type.startsWith("audio/") ? t("voiceMessagePreview") : t("attachmentPreview")}>
+        <section
+          className={[
+            "message-attachment-preview",
+            pendingAttachment.type.startsWith("video/")
+              ? "message-attachment-preview--video"
+              : "",
+          ].filter(Boolean).join(" ")}
+          aria-label={pendingAttachment.type.startsWith("audio/") ? t("voiceMessagePreview") : t("attachmentPreview")}
+        >
           {pendingAttachment.type.startsWith("audio/") ? (
             <audio controls preload="metadata" src={attachmentPreviewUrl}>
               {t("audioUnsupported")}
@@ -281,7 +289,7 @@ export default function MessageInput({
               controls
               playsInline
               webkit-playsinline="true"
-              preload="auto"
+              preload="metadata"
               autoPlay
               muted={false}
             >
