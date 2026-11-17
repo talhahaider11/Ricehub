@@ -15,6 +15,7 @@ export default function MessageActions({
   onReply,
   onEdit,
   onDelete,
+  onShare,
   open = false,
   onClose,
 }) {
@@ -23,7 +24,6 @@ export default function MessageActions({
   const [content, setContent] = useState(message.content || "");
   const [error, setError] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [shareNotice, setShareNotice] = useState("");
   const actionsRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -84,24 +84,9 @@ export default function MessageActions({
     }
   };
 
-  const shareMessage = async () => {
-    const url = message.attachment || undefined;
-    const text = message.content || "";
-    try {
-      if (navigator.share) {
-        await navigator.share({ text, url });
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText([text, url].filter(Boolean).join("\n"));
-        setShareNotice(t("copied"));
-      } else {
-        throw new Error(t("shareUnavailable"));
-      }
-      closeMenu();
-    } catch (shareError) {
-      if (shareError.name !== "AbortError") {
-        setError(shareError.message || t("shareUnavailable"));
-      }
-    }
+  const shareMessage = () => {
+    closeMenu();
+    onShare?.(message);
   };
 
   const startEditing = () => {
@@ -113,7 +98,7 @@ export default function MessageActions({
 
   if (message.is_deleted) return null;
   const isShareable = Boolean(
-    message.attachment || /https?:\/\/\S+/i.test(message.content || "")
+    message.attachment || message.content?.trim()
   );
   const menuElement = !editing && menuOpen ? (
     <div
@@ -173,7 +158,7 @@ export default function MessageActions({
           type="button"
           aria-label={t("share")}
           title={t("share")}
-          onClick={() => void shareMessage()}
+          onClick={shareMessage}
         >
           <Share2 size={16} aria-hidden="true" />
         </button>
@@ -205,7 +190,6 @@ export default function MessageActions({
           {error && <span className="error" role="alert">{error}</span>}
         </form>
       )}
-      {shareNotice && <span className="message-share-notice" role="status">{shareNotice}</span>}
       {error && !editing && <span className="error" role="alert">{error}</span>}
     </div>
   );

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   createConversation: vi.fn(),
   friends: vi.fn(),
   useMessages: vi.fn(),
+  sendText: vi.fn(),
   archiveConversation: vi.fn(),
   deleteConversation: vi.fn(),
 }));
@@ -18,6 +19,7 @@ vi.mock("../services/messageService", () => ({
     createConversation: mocks.createConversation,
     archiveConversation: mocks.archiveConversation,
     deleteConversation: mocks.deleteConversation,
+    sendText: mocks.sendText,
     sendAttachment: vi.fn(),
     editMessage: vi.fn(),
     deleteMessage: vi.fn(),
@@ -53,8 +55,20 @@ vi.mock("../context/ChatUploadContext", () => ({
 }));
 
 vi.mock("../components/messages/MessageList", () => ({
-  default: ({ showVerificationWarning }) => (
+  default: ({ showVerificationWarning, onShare }) => (
     <div data-testid="message-list">
+      {onShare && (
+        <button
+          type="button"
+          onClick={() => onShare({
+            id: 99,
+            content: "Check this",
+            attachment: "https://example.test/media/photo.jpg",
+          })}
+        >
+          Open share modal
+        </button>
+      )}
       {showVerificationWarning && (
         <p role="alert">
           ⚠️ This user is unverified. Trust this person at your own risk.
@@ -251,5 +265,56 @@ describe("Messages", () => {
     expect(await screen.findByRole("button", {
       name: "Open conversation with archived-friend",
     })).toBeInTheDocument();
+  });
+
+  it("forwards the message text and media URL through the existing send API", async () => {
+    mocks.conversations.mockImplementation((params = {}) => Promise.resolve(
+      params.archived ? [] : [
+        {
+          id: 4,
+          is_group: false,
+          conversation_type: "direct",
+          participants: [
+            { id: 1, username: "me" },
+            { id: 2, username: "talha2" },
+          ],
+        },
+        {
+          id: 5,
+          is_group: true,
+          conversation_type: "group",
+          name: "Target group",
+          participants: [
+            { id: 1, username: "me" },
+            { id: 3, username: "member" },
+          ],
+        },
+      ]
+    ));
+    mocks.sendText.mockResolvedValue({
+      id: 100,
+      content: "Check this\nhttps://example.test/media/photo.jpg",
+      created_at: "2026-11-17T10:00:00Z",
+    });
+
+    render(
+      <MemoryRouter>
+        <Messages />
+      </MemoryRouter>
+    );
+    fireEvent.click(await screen.findByRole("button", {
+      name: "Open conversation with talha2",
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Open share modal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send to Target group" }));
+
+    await waitFor(() => {
+      expect(mocks.sendText).toHaveBeenCalledWith(
+        5,
+        "Check this\nhttps://example.test/media/photo.jpg"
+      );
+      expect(screen.getByRole("button", { name: "Sent to Target group" }))
+        .toHaveTextContent("Sent ✓");
+    });
   });
 });

@@ -39,6 +39,7 @@ export default function MessageList({
   onReply,
   onEdit,
   onDelete,
+  onShare,
   conversationPartner,
   showVerificationWarning = false,
   latestConversationMessageId,
@@ -285,7 +286,8 @@ export default function MessageList({
                               className="message-video-attachment"
                               controls
                               playsInline
-                              preload="metadata"
+                              webkit-playsinline="true"
+                              preload="auto"
                               src={message.attachment}
                             >
                               {t("videoUnsupported")}
@@ -350,6 +352,7 @@ export default function MessageList({
                   onReply={onReply}
                   onEdit={onEdit}
                   onDelete={onDelete}
+                  onShare={onShare}
                   open={longPressedMessageId === message.id}
                   onClose={() => setLongPressedMessageId(null)}
                 />

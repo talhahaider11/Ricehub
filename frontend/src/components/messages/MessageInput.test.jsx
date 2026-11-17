@@ -8,6 +8,8 @@ const createObjectURLDescriptor = Object.getOwnPropertyDescriptor(URL, "createOb
 const revokeObjectURLDescriptor = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
 
 beforeEach(() => {
+  vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
     value: vi.fn(() => "blob:message-preview"),
@@ -132,6 +134,10 @@ describe("MessageInput", () => {
   });
 
   it("previews a video from the native camera input before sending", async () => {
+    const loadVideo = vi.spyOn(HTMLMediaElement.prototype, "load")
+      .mockImplementation(() => {});
+    const playVideo = vi.spyOn(HTMLMediaElement.prototype, "play")
+      .mockRejectedValue(new Error("Autoplay requires a user gesture."));
     const onSendAttachment = vi.fn().mockResolvedValue(undefined);
     render(<MessageInput onSend={vi.fn()} onSendAttachment={onSendAttachment} />);
     const videoInput = screen.getByLabelText("Record video");
@@ -148,13 +154,18 @@ describe("MessageInput", () => {
     const videoPreview = screen.getByLabelText("Attachment preview").querySelector("video");
     expect(videoPreview).toHaveAttribute("controls");
     expect(videoPreview).toHaveAttribute("playsinline");
-    expect(videoPreview).toHaveAttribute("preload", "metadata");
+    expect(videoPreview).toHaveAttribute("webkit-playsinline", "true");
+    expect(videoPreview).toHaveAttribute("preload", "auto");
+    expect(videoPreview).toHaveAttribute("autoplay");
+    expect(videoPreview).toHaveAttribute("src", "blob:message-preview");
     expect(videoPreview).not.toHaveAttribute("muted");
     expect(videoPreview.querySelector("source")).toHaveAttribute(
       "src",
       "blob:message-preview"
     );
     expect(videoPreview.querySelector("source")).toHaveAttribute("type", "video/mp4");
+    expect(loadVideo).toHaveBeenCalled();
+    expect(playVideo).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Send attachment" }));
 
     await waitFor(() => {

@@ -41,6 +41,7 @@ export default function MessageInput({
     useState(MAX_ATTACHMENT_SIZE);
   const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState("");
   const recorderRef = useRef(null);
+  const videoPreviewRef = useRef(null);
   const messageInputRef = useRef(null);
   const streamRef = useRef(null);
   const recordingTimeoutRef = useRef(null);
@@ -63,6 +64,17 @@ export default function MessageInput({
     setAttachmentPreviewUrl(previewUrl);
     return () => URL.revokeObjectURL(previewUrl);
   }, [pendingAttachment]);
+
+  useEffect(() => {
+    if (!attachmentPreviewUrl || !pendingAttachment?.type.startsWith("video/")) {
+      return;
+    }
+
+    const video = videoPreviewRef.current;
+    video?.load();
+    const playback = video?.play();
+    playback?.catch(() => {});
+  }, [attachmentPreviewUrl, pendingAttachment]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -263,7 +275,16 @@ export default function MessageInput({
               {t("audioUnsupported")}
             </audio>
           ) : pendingAttachment.type.startsWith("video/") ? (
-            <video controls playsInline preload="metadata" muted={false}>
+            <video
+              ref={videoPreviewRef}
+              src={attachmentPreviewUrl}
+              controls
+              playsInline
+              webkit-playsinline="true"
+              preload="auto"
+              autoPlay
+              muted={false}
+            >
               <source
                 src={attachmentPreviewUrl}
                 type={pendingAttachment.type || "video/mp4"}

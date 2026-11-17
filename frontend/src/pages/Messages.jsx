@@ -9,6 +9,7 @@ import useAuth from "../hooks/useAuth";
 import ConversationList from "../components/messages/ConversationList";
 import MessageList from "../components/messages/MessageList";
 import MessageInput from "../components/messages/MessageInput";
+import MessageShareModal from "../components/messages/MessageShareModal";
 import AudioCallControls from "../components/messages/AudioCallControls";
 import TypingIndicator from "../components/messages/TypingIndicator";
 import Loader from "../components/common/Loader";
@@ -64,6 +65,7 @@ export default function Messages() {
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState(null);
+  const [messageToShare, setMessageToShare] = useState(null);
   const [lastSeenNow, setLastSeenNow] = useState(() => Date.now());
   const [onlineFriends, setOnlineFriends] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -187,6 +189,13 @@ export default function Messages() {
       Date.parse(left.created_at || "") - Date.parse(right.created_at || "")
     ));
   }, [messages, selectedConversation, uploads, user?.id]);
+  const shareableConversations = useMemo(() => {
+    const conversationsById = new Map();
+    [...conversations, ...archivedConversations].forEach((conversation) => {
+      conversationsById.set(String(conversation.id), conversation);
+    });
+    return [...conversationsById.values()];
+  }, [archivedConversations, conversations]);
 
   const handleSend = async (content, replyToId) => {
     try {
@@ -273,6 +282,23 @@ export default function Messages() {
         ? { ...item, content: "", is_deleted: true }
         : item
     )));
+  };
+  const handleForwardMessage = async (conversation, message) => {
+    const content = [message.content?.trim(), message.attachment]
+      .filter(Boolean)
+      .join("\n");
+    if (!content) throw new Error(t("forwardMessageFailed"));
+
+    const forwardedMessage = await messageService.sendText(conversation.id, content);
+    const updateConversation = (item) => String(item.id) === String(conversation.id)
+      ? {
+        ...item,
+        last_message: forwardedMessage,
+        updated_at: forwardedMessage.created_at || new Date().toISOString(),
+      }
+      : item;
+    setConversations((current) => current.map(updateConversation));
+    setArchivedConversations((current) => current.map(updateConversation));
   };
   const handleArchiveConversation = async (conversation, isArchived) => {
     setConversationActionError("");
@@ -530,6 +556,7 @@ export default function Messages() {
               onReply={setReplyTarget}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onShare={setMessageToShare}
               conversationPartner={isDirectConversation ? otherUser : null}
               showVerificationWarning={showVerificationWarning}
               latestConversationMessageId={latestConversationMessageId}
@@ -597,6 +624,14 @@ export default function Messages() {
           )));
         }}
         onLeave={handleLeaveGroup}
+      />
+      <MessageShareModal
+        open={Boolean(messageToShare)}
+        onClose={() => setMessageToShare(null)}
+        message={messageToShare}
+        conversations={shareableConversations}
+        currentUser={user}
+        onSend={handleForwardMessage}
       />
     </div>
   );
