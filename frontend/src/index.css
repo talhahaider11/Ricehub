@@ -1078,6 +1078,7 @@ textarea:focus-visible {
 
 .message.mine {
   align-items: flex-end;
+  padding: 3px;
 }
 
 .message-receipt {
@@ -8190,13 +8191,14 @@ body {
 .messages-shell .message-bubble--call-log {
   width: min(280px, 72vw);
   min-width: 0;
-  padding: 2px;
+  padding: 5px;
   background: transparent !important;
   box-shadow: none;
 }
 
 .message-call-card {
   display: flex;
+  flex-direction: colum;
   width: 100%;
   min-height: 64px;
   align-items: center;
@@ -8259,7 +8261,7 @@ button.message-call-card {
 .message-call-time {
   align-self: flex-end;
   flex: 0 0 auto;
-  color: var(--text-secondary);
+  color: black;
   font-size: 0.68rem;
 }
 
