@@ -7,18 +7,20 @@ const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, "media
 const secureContextDescriptor = Object.getOwnPropertyDescriptor(window, "isSecureContext");
 const peerConnectionDescriptor = Object.getOwnPropertyDescriptor(window, "RTCPeerConnection");
 const mediaStreamDescriptor = Object.getOwnPropertyDescriptor(window, "MediaStream");
+const setSinkIdDescriptor = Object.getOwnPropertyDescriptor(
+  HTMLMediaElement.prototype,
+  "setSinkId"
+);
 
 function createStream() {
   const audioTrack = { kind: "audio", enabled: true, stop: vi.fn() };
-  const videoTrack = { kind: "video", enabled: true, stop: vi.fn() };
-  const tracks = [audioTrack, videoTrack];
+  const tracks = [audioTrack];
   return {
     audioTrack,
-    videoTrack,
     stream: {
       getTracks: () => tracks,
       getAudioTracks: () => [audioTrack],
-      getVideoTracks: () => [videoTrack],
+      getVideoTracks: () => [],
     },
   };
 }
@@ -59,11 +61,11 @@ class MockPeerConnection {
     this.close = vi.fn();
     this.createOffer = vi.fn().mockResolvedValue({
       type: "offer",
-      sdp: "v=0\r\nm=audio\r\nm=video\r\n",
+      sdp: "v=0\r\nm=audio\r\n",
     });
     this.createAnswer = vi.fn().mockResolvedValue({
       type: "answer",
-      sdp: "v=0\r\nm=audio\r\nm=video\r\n",
+      sdp: "v=0\r\nm=audio\r\n",
     });
     this.setLocalDescription = vi.fn(async (description) => {
       this.localDescription = description;
@@ -159,6 +161,11 @@ afterEach(() => {
   } else {
     delete window.MediaStream;
   }
+  if (setSinkIdDescriptor) {
+    Object.defineProperty(HTMLMediaElement.prototype, "setSinkId", setSinkIdDescriptor);
+  } else {
+    delete HTMLMediaElement.prototype.setSinkId;
+  }
 });
 
 describe("AudioCallControls", () => {
@@ -182,10 +189,34 @@ describe("AudioCallControls", () => {
       conversationId: 3,
       mode: "audio",
     });
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /video call/i })).not.toBeInTheDocument();
+  });
+
+  it("allows a voice call to start while the socket reconnects", () => {
+    const startCall = vi.fn();
+
+    render(
+      <CallContext.Provider value={{
+        activeCall: null,
+        connected: false,
+        startCall,
+      }}>
+        <AudioCallButtons peer={peer} conversationId={3} />
+      </CallContext.Provider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Start audio call" }));
+
+    expect(startCall).toHaveBeenCalledWith({
+      peer,
+      conversationId: 3,
+      mode: "audio",
+    });
   });
 
   it("starts and ends an audio call, releasing the local tracks", async () => {
-    const { stream, audioTrack, videoTrack } = createStream();
+    const { stream, audioTrack } = createStream();
     const getUserMedia = mockMedia(stream);
 
     const { context } = renderCall();
@@ -196,7 +227,6 @@ describe("AudioCallControls", () => {
         peerId: 2,
         conversationId: 3,
         callId,
-        callType: "audio",
         signalType: "offer",
         signal: expect.objectContaining({ type: "offer" }),
       }));
@@ -208,7 +238,42 @@ describe("AudioCallControls", () => {
       status: "cancelled",
     }));
     expect(audioTrack.stop).toHaveBeenCalledOnce();
-    expect(videoTrack.stop).toHaveBeenCalledOnce();
+  });
+
+  it("routes call audio to the speaker and back to the earpiece", async () => {
+    const { stream } = createStream();
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+    const enumerateDevices = vi.fn().mockResolvedValue([
+      { kind: "audiooutput", deviceId: "speaker-output", label: "Phone speaker" },
+      { kind: "audiooutput", deviceId: "earpiece-output", label: "Earpiece" },
+    ]);
+    const setSinkId = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(HTMLMediaElement.prototype, "setSinkId", {
+      configurable: true,
+      value: setSinkId,
+    });
+    mockMedia(stream, getUserMedia);
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia, enumerateDevices },
+    });
+    const { context } = renderCall();
+
+    await waitFor(() => expect(context.sendCallSignal).toHaveBeenCalledWith(
+      expect.objectContaining({ signalType: "offer" })
+    ));
+    const audio = screen.getByLabelText("Remote call audio");
+    const speakerButton = screen.getByRole("button", {
+      name: "Turn speaker audio on",
+    });
+
+    fireEvent.click(speakerButton);
+    await waitFor(() => expect(setSinkId).toHaveBeenLastCalledWith("speaker-output"));
+    expect(audio).toHaveProperty("volume", 1);
+    expect(speakerButton).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Turn speaker audio off" }));
+    await waitFor(() => expect(setSinkId).toHaveBeenLastCalledWith("earpiece-output"));
   });
 
   it("minimizes an active call without ending it and restores it from the chat control", async () => {
@@ -248,28 +313,28 @@ describe("AudioCallControls", () => {
 
     expect(context.sendCallSignal).toHaveBeenLastCalledWith(expect.objectContaining({
       signalType: "hangup",
-      status: "missed",
+      status: "unanswered",
     }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("No answer");
   });
 
-  it("shows incoming video calls and allows the recipient to answer", async () => {
+  it("shows incoming voice calls and allows the recipient to answer", async () => {
     const { stream } = createStream();
     const getUserMedia = mockMedia(stream);
     const signal = {
       id: 1,
         from_user_id: 2,
         signal_type: "offer",
-        call_type: "video",
-        signal: { type: "offer", sdp: "v=0\r\nm=video\r\n" },
+        call_type: "audio",
+        signal: { type: "offer", sdp: "v=0\r\nm=audio\r\n" },
     };
     const { context } = renderCall({
       activeCall: {
         peer,
         peerId: 2,
         conversationId: 3,
-        mode: "video",
+        mode: "audio",
         callId,
         direction: "incoming",
       },
@@ -282,7 +347,7 @@ describe("AudioCallControls", () => {
     await waitFor(() => {
       expect(getUserMedia).toHaveBeenCalledWith({
         audio: true,
-        video: { facingMode: { ideal: "user" } },
+        video: false,
       });
       expect(context.sendCallSignal).toHaveBeenCalledWith(expect.objectContaining({
         signalType: "answer",
@@ -302,7 +367,7 @@ describe("AudioCallControls", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Microphone permission is required for audio calls"
     );
-    expect(screen.getByRole("group")).toHaveTextContent("Allow Camera and Microphone");
+    expect(screen.getByRole("group")).toHaveTextContent("Allow microphone access");
     fireEvent.click(screen.getByRole("button", { name: "Try the call again" }));
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
   });

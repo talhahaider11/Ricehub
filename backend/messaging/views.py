@@ -33,6 +33,7 @@ from .services import (
     get_or_create_conversation,
     restore_conversation_memberships,
 )
+from .consumers import relay_call_signal
 from .permissions import is_conversation_member
 from users.privacy import (
     can_message_between,
@@ -44,6 +45,21 @@ from search.services import search_users
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+class CallSignalFallbackView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        error = async_to_sync(relay_call_signal)(request.user, request.data)
+        if error:
+            response_status = (
+                status.HTTP_503_SERVICE_UNAVAILABLE
+                if error == "Call signal could not be delivered."
+                else status.HTTP_400_BAD_REQUEST
+            )
+            return Response({"detail": error}, status=response_status)
+        return Response({"detail": "Call signal delivered."})
 
 
 def get_active_group_conversation(conversation_id, user, *, lock=False):

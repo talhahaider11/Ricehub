@@ -84,6 +84,16 @@ class ConversationMember(models.Model):
 
 
 class Message(models.Model):
+    class MessageType(models.TextChoices):
+        TEXT = "text", "Text"
+        CALL_LOG = "call_log", "Call log"
+
+    class CallStatus(models.TextChoices):
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+        MISSED = "missed", "Missed"
+        UNANSWERED = "unanswered", "Unanswered"
+
     class AttachmentType(models.TextChoices):
         FILE = "file", "File"
         AUDIO = "audio", "Voice note"
@@ -103,11 +113,22 @@ class Message(models.Model):
     )
 
     content = models.TextField()
+    message_type = models.CharField(
+        max_length=20,
+        choices=MessageType.choices,
+        default=MessageType.TEXT,
+    )
     call_id = models.UUIDField(
         null=True,
         blank=True,
         unique=True,
     )
+    call_status = models.CharField(
+        max_length=20,
+        choices=CallStatus.choices,
+        blank=True,
+    )
+    call_duration_seconds = models.PositiveIntegerField(null=True, blank=True)
 
     reply_to = models.ForeignKey(
         "self",

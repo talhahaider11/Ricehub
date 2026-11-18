@@ -194,6 +194,11 @@ const messageService = {
     return response.data;
   },
 
+  async sendCallSignal(signal) {
+    const response = await api.post("/messages/calls/signal/", signal);
+    return response.data;
+  },
+
   async editMessage(messageId, content) {
     const response = await api.patch(
       `/messages/messages/${messageId}/edit/`,

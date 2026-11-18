@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import {
   Mic,
   MicOff,
   Minimize2,
   Phone,
   PhoneOff,
-  RefreshCw,
-  Video,
-  VideoOff,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -20,6 +18,7 @@ const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
 ];
 const CALL_RING_TIMEOUT_MS = 30_000;
+const VoiceCallAudio = registerPlugin("VoiceCallAudio");
 
 function formatCallDuration(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -28,40 +27,28 @@ function formatCallDuration(totalSeconds) {
 }
 
 export function AudioCallButtons({ peer, conversationId }) {
-  const { activeCall, connected, startCall } = useCall();
+  const { activeCall, startCall } = useCall();
   const { t } = useLanguage();
-  const disabled = !connected || !conversationId || Boolean(activeCall);
+  const isCallActive = Boolean(activeCall);
+  const disabled = !isCallActive && !conversationId;
 
   return (
     <div className="audio-call-controls" aria-label={t("audioCall")}>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => startCall({ peer, conversationId, mode: "audio" })}
-        aria-label={t("startAudioCall")}
-        title={t("startAudioCall")}
+        onClick={() => {
+          if (isCallActive) {
+            window.dispatchEvent(new Event("ricehub:restore-call"));
+          } else {
+            startCall({ peer, conversationId, mode: "audio" });
+          }
+        }}
+        aria-label={t(isCallActive ? "returnToCall" : "startAudioCall")}
+        title={t(isCallActive ? "returnToCall" : "startAudioCall")}
       >
         <Phone size={17} aria-hidden="true" />
       </button>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => startCall({ peer, conversationId, mode: "video" })}
-        aria-label={t("startVideoCall")}
-        title={t("startVideoCall")}
-      >
-        <Video size={17} aria-hidden="true" />
-      </button>
-      {activeCall && (
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new Event("ricehub:restore-call"))}
-          aria-label={t("returnToCall")}
-          title={t("returnToCall")}
-        >
-          <Phone size={17} aria-hidden="true" />
-        </button>
-      )}
     </div>
   );
 }
@@ -75,50 +62,87 @@ export default function AudioCallControls() {
     clearCallSignal,
     error: signalingError,
     sendCallSignal: sendPersonalCallSignal,
-    user: currentUser,
   } = useCall();
   const peerId = activeCall?.peerId;
   const peer = activeCall?.peer;
   const callSignal = callSignals[0] || null;
-  const sendCallSignal = useCallback((targetId, signalType, signal, status) => {
+  const sendCallSignal = useCallback((
+    targetId,
+    signalType,
+    signal,
+    status,
+    durationSeconds,
+  ) => {
     if (!activeCall) throw new Error("There is no active call.");
     sendPersonalCallSignal({
       peerId: targetId,
       conversationId: activeCall.conversationId,
       callId: activeCall.callId,
-      callType: activeCall.mode,
       signalType,
       signal,
       status,
+      durationSeconds,
+      callerId: activeCall.callerId,
     });
   }, [activeCall, sendPersonalCallSignal]);
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
   const incomingOfferRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
-  const callStageRef = useRef(null);
-  const localVideoContainerRef = useRef(null);
-  const localVideoDragRef = useRef(null);
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
   const processedCallSignalRef = useRef(null);
   const callSignalSentRef = useRef(false);
   const endedCallRef = useRef(false);
-  const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [callState, setCallState] = useState("idle");
   const [callMode, setCallMode] = useState(null);
   const [callMinimized, setCallMinimized] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [muted, setMuted] = useState(false);
-  const [cameraOff, setCameraOff] = useState(false);
-  const [cameraFacing, setCameraFacing] = useState("user");
-  const [cameraSwitching, setCameraSwitching] = useState(false);
-  const [localVideoPosition, setLocalVideoPosition] = useState(null);
-  const [speakerEnabled, setSpeakerEnabled] = useState(true);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
   const [error, setError] = useState("");
   const [permissionDenied, setPermissionDenied] = useState(false);
+
+  const setAudioOutputRoute = useCallback(async (speakerOn, active = true) => {
+    const audio = remoteAudioRef.current;
+    if (audio) audio.volume = 1;
+
+    if (Capacitor.isNativePlatform()) {
+      await VoiceCallAudio.setSpeakerEnabled({ enabled: speakerOn, active });
+      return;
+    }
+
+    if (!active) {
+      if (typeof audio?.setSinkId === "function") await audio.setSinkId("");
+      return;
+    }
+    if (typeof audio?.setSinkId === "function") {
+      const outputs = await navigator.mediaDevices?.enumerateDevices?.() || [];
+      const speaker = outputs.find((device) => (
+        device.kind === "audiooutput" && /speaker|loudspeaker/i.test(device.label)
+      ));
+      const earpiece = outputs.find((device) => (
+        device.kind === "audiooutput" && /earpiece|receiver/i.test(device.label)
+      ));
+      const defaultOutput = outputs.find((device) => (
+        device.kind === "audiooutput" && device.deviceId === "default"
+      ));
+      const sinkId = speakerOn
+        ? speaker?.deviceId || defaultOutput?.deviceId || ""
+        : earpiece?.deviceId || defaultOutput?.deviceId || "";
+      await audio.setSinkId(sinkId);
+      return;
+    }
+
+    const audioSession = navigator.audioSession;
+    if (audioSession && "type" in audioSession) {
+      audioSession.type = speakerOn ? "playback" : "play-and-record";
+      return;
+    }
+    if (active) {
+      throw new Error(t("speakerRoutingUnsupported"));
+    }
+  }, [t]);
 
   const closeCall = useCallback((preserveCallMode = false, preserveActiveCall = false) => {
     if (peerConnectionRef.current) {
@@ -131,36 +155,34 @@ export default function AudioCallControls() {
     incomingOfferRef.current = null;
     pendingCandidatesRef.current = [];
     callSignalSentRef.current = false;
-    setLocalStream(null);
     setRemoteStream(null);
     setCallDuration(0);
     if (!preserveCallMode) setCallMode(null);
     setMuted(false);
-    setCameraOff(false);
-    setCameraFacing("user");
-    setCameraSwitching(false);
-    setLocalVideoPosition(null);
-    localVideoDragRef.current = null;
-    setSpeakerEnabled(true);
+    setIsSpeakerOn(false);
+    void setAudioOutputRoute(false, false).catch((routeError) => {
+      console.error("Call audio route could not be restored:", routeError);
+      setError(routeError.message || t("speakerRoutingFailed"));
+    });
     setPermissionDenied(false);
     setCallState("idle");
     setCallMinimized(false);
     if (!preserveActiveCall) clearActiveCall();
-  }, [clearActiveCall]);
+  }, [clearActiveCall, setAudioOutputRoute, t]);
 
-  const createPeerConnection = useCallback(async (mode) => {
+  const createPeerConnection = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
-      throw new Error(
-        mode === "video" ? t("videoCallUnsupported") : t("audioCallUnsupported")
-      );
+      throw new Error(t("audioCallUnsupported"));
     }
 
+    if (Capacitor.isNativePlatform()) {
+      await setAudioOutputRoute(isSpeakerOn, true);
+    }
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: mode === "video" ? { facingMode: { ideal: "user" } } : false,
+      video: false,
     });
     localStreamRef.current = stream;
-    setLocalStream(stream);
 
     const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerConnectionRef.current = connection;
@@ -192,7 +214,7 @@ export default function AudioCallControls() {
       }
     };
     return connection;
-  }, [closeCall, peerId, sendCallSignal, t]);
+  }, [closeCall, isSpeakerOn, peerId, sendCallSignal, setAudioOutputRoute, t]);
 
   const flushPendingCandidates = useCallback(async (connection) => {
     const pending = pendingCandidatesRef.current.splice(0);
@@ -202,18 +224,11 @@ export default function AudioCallControls() {
   }, []);
 
   useEffect(() => {
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = localStream;
-    }
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = remoteStream;
-      remoteVideoRef.current.muted = !speakerEnabled;
-    }
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current.muted = !speakerEnabled;
+      remoteAudioRef.current.volume = 1;
     }
-  }, [localStream, remoteStream, speakerEnabled]);
+  }, [remoteStream]);
 
   useEffect(() => {
     if (callState !== "connected") {
@@ -236,13 +251,13 @@ export default function AudioCallControls() {
       try {
         if (callSignal.signal_type === "offer") {
           if (callState !== "idle") {
-            sendCallSignal(peerId, "reject", {}, "rejected");
+            sendCallSignal(peerId, "reject", {}, "missed");
             return;
           }
           callSignalSentRef.current = true;
           endedCallRef.current = false;
           incomingOfferRef.current = callSignal.signal;
-          setCallMode(callSignal.call_type || "audio");
+          setCallMode("audio");
           setCallMinimized(false);
           setCallState("incoming");
           setError("");
@@ -288,10 +303,10 @@ export default function AudioCallControls() {
       return;
     }
 
-    setCallMode(activeCall.mode);
+    setCallMode("audio");
     setCallMinimized(false);
     if (activeCall.direction === "outgoing" && callState === "idle") {
-      void startCall(activeCall.mode);
+      void startCall();
     }
   }, [activeCall?.callId]);
 
@@ -322,11 +337,22 @@ export default function AudioCallControls() {
       oscillator.start();
       oscillator.stop(audioContext.currentTime + 0.46);
     };
+    const resumeAudio = () => {
+      if (!audioContext || audioContext.state !== "suspended") return;
+      audioContext.resume()
+        .then(ring)
+        .catch((ringError) => {
+          console.warn("Call ringtone could not be resumed:", ringError);
+        });
+    };
 
     try {
       audioContext = new AudioContext();
-      const resume = audioContext.resume();
-      resume?.catch(() => {});
+      audioContext.resume().catch((ringError) => {
+        console.warn("Call ringtone could not be started:", ringError);
+      });
+      window.addEventListener("pointerdown", resumeAudio, { once: true });
+      window.addEventListener("keydown", resumeAudio, { once: true });
       ring();
       ringTimer = window.setInterval(ring, 1800);
     } catch (ringError) {
@@ -335,6 +361,8 @@ export default function AudioCallControls() {
 
     return () => {
       if (ringTimer) window.clearInterval(ringTimer);
+      window.removeEventListener("pointerdown", resumeAudio);
+      window.removeEventListener("keydown", resumeAudio);
       oscillators.forEach((oscillator) => {
         try {
           oscillator.stop();
@@ -357,9 +385,15 @@ export default function AudioCallControls() {
   useEffect(() => () => {
     peerConnectionRef.current?.close();
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    if (Capacitor.isNativePlatform()) {
+      VoiceCallAudio.setSpeakerEnabled({ enabled: false, active: false })
+        .catch((routeError) => {
+          console.error("Call audio route could not be restored:", routeError);
+        });
+    }
   }, []);
 
-  const startCall = async (mode) => {
+  const startCall = async () => {
     setError("");
     setPermissionDenied(false);
     callSignalSentRef.current = false;
@@ -369,11 +403,11 @@ export default function AudioCallControls() {
       return;
     }
 
-    setCallMode(mode);
+    setCallMode("audio");
     setCallMinimized(false);
     setCallState("calling");
     try {
-      const connection = await createPeerConnection(mode);
+      const connection = await createPeerConnection();
       const offer = await connection.createOffer();
       await connection.setLocalDescription(offer);
       sendCallSignal(
@@ -388,7 +422,7 @@ export default function AudioCallControls() {
         || callError.name === "SecurityError";
       if (denied) {
         setPermissionDenied(true);
-        setError(t(mode === "video" ? "videoCallPermissionDenied" : "callPermissionDenied"));
+        setError(t("callPermissionDenied"));
       } else {
         setError(callError.message || t("callStartFailed"));
       }
@@ -401,7 +435,7 @@ export default function AudioCallControls() {
     setError("");
     setPermissionDenied(false);
     try {
-      const connection = await createPeerConnection(callMode);
+      const connection = await createPeerConnection();
       await connection.setRemoteDescription(incomingOfferRef.current);
       await flushPendingCandidates(connection);
       const answer = await connection.createAnswer();
@@ -415,7 +449,7 @@ export default function AudioCallControls() {
     } catch (callError) {
       if (callError.name === "NotAllowedError" || callError.name === "SecurityError") {
         setPermissionDenied(true);
-        setError(t(callMode === "video" ? "videoCallPermissionDenied" : "callPermissionDenied"));
+        setError(t("callPermissionDenied"));
       } else {
         setError(callError.message || t("incomingCallAnswerFailed"));
         closeCall();
@@ -428,18 +462,21 @@ export default function AudioCallControls() {
       endedCallRef.current = true;
       try {
         if (callSignalSentRef.current) {
-          const incoming = callState === "incoming";
+          const incoming = activeCall?.direction === "incoming";
           const status = statusOverride
-            || (incoming
-              ? "rejected"
-              : ["calling", "ringing"].includes(callState)
-                ? "cancelled"
-                : undefined);
+            || (callState === "connected"
+              ? "completed"
+              : incoming
+                ? "missed"
+                : ["calling", "ringing"].includes(callState)
+                  ? "cancelled"
+                  : "cancelled");
           sendCallSignal(
             peerId,
             incoming ? "reject" : "hangup",
-            { mode: callMode || "audio" },
-            status
+            { mode: "audio" },
+            status,
+            status === "completed" ? callDuration : undefined
           );
         }
       } catch (signalError) {
@@ -447,13 +484,13 @@ export default function AudioCallControls() {
       }
     }
     closeCall();
-  }, [callMode, callState, closeCall, peerId, sendCallSignal, t]);
+  }, [activeCall?.direction, callDuration, callState, closeCall, peerId, sendCallSignal, t]);
 
   useEffect(() => {
     if (!["ringing", "incoming"].includes(callState)) return undefined;
     const timer = window.setTimeout(() => {
       setError(t("callNoAnswer"));
-      endCall(activeCall?.direction === "incoming" ? "unanswered" : "missed");
+      endCall(activeCall?.direction === "incoming" ? "missed" : "unanswered");
     }, CALL_RING_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
   }, [activeCall?.direction, callState, endCall, t]);
@@ -466,119 +503,15 @@ export default function AudioCallControls() {
     setMuted(nextMuted);
   };
 
-  const toggleCamera = () => {
-    const nextCameraOff = !cameraOff;
-    localStreamRef.current?.getVideoTracks().forEach((track) => {
-      track.enabled = !nextCameraOff;
-    });
-    setCameraOff(nextCameraOff);
-  };
-
-  const handleLocalVideoPointerDown = (event) => {
-    if (event.button > 0 || !callStageRef.current || !localVideoContainerRef.current) {
-      return;
-    }
-
-    const stageRect = callStageRef.current.getBoundingClientRect();
-    const videoRect = localVideoContainerRef.current.getBoundingClientRect();
-    localVideoDragRef.current = {
-      pointerId: event.pointerId,
-      pointerX: Number.isFinite(event.clientX) ? event.clientX : 0,
-      pointerY: Number.isFinite(event.clientY) ? event.clientY : 0,
-      left: videoRect.left - stageRect.left,
-      top: videoRect.top - stageRect.top,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-
-  const handleLocalVideoPointerMove = (event) => {
-    const drag = localVideoDragRef.current;
-    const stage = callStageRef.current;
-    const preview = localVideoContainerRef.current;
-    if (!drag || drag.pointerId !== event.pointerId || !stage || !preview) return;
-
-    const maxLeft = Math.max(0, stage.clientWidth - preview.offsetWidth);
-    const maxTop = Math.max(0, stage.clientHeight - preview.offsetHeight);
-    const pointerX = Number.isFinite(event.clientX) ? event.clientX : drag.pointerX;
-    const pointerY = Number.isFinite(event.clientY) ? event.clientY : drag.pointerY;
-    setLocalVideoPosition({
-      left: Math.min(maxLeft, Math.max(0, drag.left + pointerX - drag.pointerX)),
-      top: Math.min(maxTop, Math.max(0, drag.top + pointerY - drag.pointerY)),
-    });
-  };
-
-  const handleLocalVideoPointerEnd = (event) => {
-    if (localVideoDragRef.current?.pointerId !== event.pointerId) return;
-    localVideoDragRef.current = null;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-  };
-
-  const moveLocalVideoWithKeyboard = (event) => {
-    const preview = localVideoContainerRef.current;
-    const stage = callStageRef.current;
-    if (!preview || !stage || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
-      return;
-    }
-
-    event.preventDefault();
-    const rect = preview.getBoundingClientRect();
-    const stageRect = stage.getBoundingClientRect();
-    const currentLeft = localVideoPosition?.left ?? rect.left - stageRect.left;
-    const currentTop = localVideoPosition?.top ?? rect.top - stageRect.top;
-    const offset = event.shiftKey ? 20 : 8;
-    const maxLeft = Math.max(0, stage.clientWidth - preview.offsetWidth);
-    const maxTop = Math.max(0, stage.clientHeight - preview.offsetHeight);
-    setLocalVideoPosition({
-      left: Math.min(maxLeft, Math.max(0, currentLeft
-        + (event.key === "ArrowRight" ? offset : event.key === "ArrowLeft" ? -offset : 0))),
-      top: Math.min(maxTop, Math.max(0, currentTop
-        + (event.key === "ArrowDown" ? offset : event.key === "ArrowUp" ? -offset : 0))),
-    });
-  };
-
-  const switchCamera = async () => {
-    const stream = localStreamRef.current;
-    const connection = peerConnectionRef.current;
-    if (!stream || !connection || cameraSwitching) return;
-
-    const nextFacing = cameraFacing === "user" ? "environment" : "user";
-    let replacementStream;
-    let replacedTrack = false;
-    setCameraSwitching(true);
-    setError("");
+  const toggleSpeaker = async () => {
+    const nextSpeakerOn = !isSpeakerOn;
     try {
-      replacementStream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: { exact: nextFacing } },
-      });
-      if (peerConnectionRef.current !== connection || localStreamRef.current !== stream) {
-        replacementStream.getTracks().forEach((track) => track.stop());
-        return;
-      }
-
-      const replacementTrack = replacementStream.getVideoTracks()[0];
-      const videoSender = connection.getSenders().find((sender) => sender.track?.kind === "video");
-      if (!replacementTrack || !videoSender) {
-        throw new Error(t("callCameraSwitchFailed"));
-      }
-
-      replacementTrack.enabled = !cameraOff;
-      const oldVideoTracks = stream.getVideoTracks();
-      const updatedStream = new MediaStream([
-        ...stream.getAudioTracks(),
-        replacementTrack,
-      ]);
-      await videoSender.replaceTrack(replacementTrack);
-      replacedTrack = true;
-      localStreamRef.current = updatedStream;
-      setLocalStream(updatedStream);
-      oldVideoTracks.forEach((track) => track.stop());
-      setCameraFacing(nextFacing);
-    } catch {
-      if (!replacedTrack) replacementStream?.getTracks().forEach((track) => track.stop());
-      setError(t("callCameraSwitchFailed"));
-    } finally {
-      setCameraSwitching(false);
+      await setAudioOutputRoute(nextSpeakerOn, true);
+      setIsSpeakerOn(nextSpeakerOn);
+      setError("");
+    } catch (routeError) {
+      console.error("Call speaker route could not be changed:", routeError);
+      setError(routeError.message || t("speakerRoutingFailed"));
     }
   };
 
@@ -587,7 +520,7 @@ export default function AudioCallControls() {
     peer?.last_name,
   ].filter(Boolean).join(" ") || peer?.username || t("conversation");
   const callStatus = callState === "incoming"
-    ? t(callMode === "video" ? "incomingVideoCall" : "incomingCall")
+    ? t("incomingCall")
     : callState === "connected"
       ? `${t("callConnected")} · ${formatCallDuration(callDuration)}`
       : callState === "connecting"
@@ -614,7 +547,7 @@ export default function AudioCallControls() {
       {permissionDenied && callState === "idle" && (
         <div className="call-setup-permission-help" role="group">
           <p>{t("callMediaPermissionSteps")}</p>
-          <button type="button" onClick={() => void startCall(callMode || "audio")}>
+          <button type="button" onClick={() => void startCall()}>
             {t("requestCallPermissionAgain")}
           </button>
         </div>
@@ -631,7 +564,7 @@ export default function AudioCallControls() {
       )}
       {showCallScreen && createPortal(
         <section
-          className={`call-screen${callMode === "video" ? " call-screen-video" : ""}${callMinimized ? " call-screen-minimized" : ""}`}
+          className={`call-screen${callMinimized ? " call-screen-minimized" : ""}`}
           role="dialog"
           aria-modal={!callMinimized}
           aria-hidden={callMinimized}
@@ -652,71 +585,21 @@ export default function AudioCallControls() {
             </button>
           </header>
 
-          <main className="call-screen-stage" ref={callStageRef}>
-            {callMode === "video" ? (
-              <>
-                {remoteStream ? (
-                  <video
-                    ref={remoteVideoRef}
-                    className="call-remote-video"
-                    autoPlay
-                    playsInline
-                    aria-label={t("remoteCallVideo")}
-                  />
-                ) : (
-                  <div className="call-screen-waiting">
-                    <Avatar user={peer} size="large" />
-                    <p>{callStatus}</p>
-                  </div>
-                )}
-                {localStream && (
-                  <div
-                    ref={localVideoContainerRef}
-                    className="call-local-video"
-                    role="button"
-                    tabIndex={0}
-                    aria-label={t("moveLocalVideo")}
-                    onPointerDown={handleLocalVideoPointerDown}
-                    onPointerMove={handleLocalVideoPointerMove}
-                    onPointerUp={handleLocalVideoPointerEnd}
-                    onPointerCancel={handleLocalVideoPointerEnd}
-                    onKeyDown={moveLocalVideoWithKeyboard}
-                    style={localVideoPosition
-                      ? {
-                        left: localVideoPosition.left,
-                        top: localVideoPosition.top,
-                        right: "auto",
-                        bottom: "auto",
-                      }
-                      : undefined}
-                  >
-                    {cameraOff ? (
-                      <Avatar user={currentUser} size="medium" />
-                    ) : (
-                      <video
-                        ref={localVideoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        aria-label={t("localCallVideo")}
-                      />
-                    )}
-                    <span>{t("you")}</span>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="call-screen-waiting">
-                <Avatar user={peer} size="large" />
-                <p>{callStatus}</p>
-                <audio
-                  ref={remoteAudioRef}
-                  autoPlay
-                  aria-label={t("remoteCallAudio")}
-                />
-              </div>
+          <main className="call-screen-stage">
+            <div className="call-screen-waiting">
+              <Avatar user={peer} size="large" />
+              <p>{callStatus}</p>
+              <audio
+                ref={remoteAudioRef}
+                autoPlay
+                aria-label={t("remoteCallAudio")}
+              />
+            </div>
+            {(error || signalingError) && (
+              <p className="call-screen-error" role="alert">
+                {error || signalingError}
+              </p>
             )}
-            {error && <p className="call-screen-error" role="alert">{error}</p>}
             {permissionDenied && (
               <div className="message-permission-help call-permission-help" role="group">
                 <p>{t("callMediaPermissionSteps")}</p>
@@ -724,7 +607,7 @@ export default function AudioCallControls() {
                   type="button"
                   onClick={() => callState === "incoming"
                     ? void acceptCall()
-                    : void startCall(callMode)}
+                    : void startCall()}
                 >
                   {t("requestCallPermissionAgain")}
                 </button>
@@ -750,9 +633,7 @@ export default function AudioCallControls() {
                   onClick={() => void acceptCall()}
                   aria-label={t("answerCall")}
                 >
-                  {callMode === "video"
-                    ? <Video size={23} aria-hidden="true" />
-                    : <Phone size={23} aria-hidden="true" />}
+                  <Phone size={23} aria-hidden="true" />
                   <span>{t("answerCall")}</span>
                 </button>
               </>
@@ -772,41 +653,16 @@ export default function AudioCallControls() {
                 </button>
                 <button
                   type="button"
-                  className={!speakerEnabled ? "is-active" : ""}
-                  onClick={() => setSpeakerEnabled((enabled) => !enabled)}
-                  aria-label={speakerEnabled ? t("speakerOff") : t("speakerOn")}
-                  aria-pressed={!speakerEnabled}
+                  className={isSpeakerOn ? "is-active" : ""}
+                  onClick={() => void toggleSpeaker()}
+                  aria-label={isSpeakerOn ? t("speakerOff") : t("speakerOn")}
+                  aria-pressed={isSpeakerOn}
                 >
-                  {speakerEnabled
+                  {isSpeakerOn
                     ? <Volume2 size={22} aria-hidden="true" />
                     : <VolumeX size={22} aria-hidden="true" />}
                   <span>{t("speaker")}</span>
                 </button>
-                {callMode === "video" && (
-                  <>
-                    <button
-                      type="button"
-                      className={cameraOff ? "is-active" : ""}
-                      onClick={toggleCamera}
-                      aria-label={cameraOff ? t("cameraOn") : t("cameraOff")}
-                      aria-pressed={cameraOff}
-                    >
-                      {cameraOff
-                        ? <VideoOff size={22} aria-hidden="true" />
-                        : <Video size={22} aria-hidden="true" />}
-                      <span>{cameraOff ? t("cameraOn") : t("cameraOff")}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void switchCamera()}
-                      disabled={cameraSwitching}
-                      aria-label={t(cameraFacing === "user" ? "switchToBackCamera" : "switchToFrontCamera")}
-                    >
-                      <RefreshCw size={22} aria-hidden="true" />
-                      <span>{t(cameraFacing === "user" ? "switchToBackCamera" : "switchToFrontCamera")}</span>
-                    </button>
-                  </>
-                )}
                 <button
                   type="button"
                   className="call-control-end"

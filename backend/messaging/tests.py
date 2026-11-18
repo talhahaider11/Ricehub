@@ -743,16 +743,19 @@ class CallEndedMessageTests(TransactionTestCase):
         result, created = async_to_sync(consumer.create_call_ended_message)(
             call_id,
             "cancelled",
+            caller_id=self.user.pk,
         )
         consumer.user = self.friend
         second_result, second_created = async_to_sync(
             consumer.create_call_ended_message
-        )(call_id, "missed")
+        )(call_id, "missed", caller_id=self.user.pk)
 
         self.assertTrue(created)
         self.assertFalse(second_created)
         self.assertEqual(result["id"], second_result["id"])
-        self.assertEqual(result["content"], "Call ended")
+        self.assertEqual(result["content"], "")
+        self.assertEqual(result["message_type"], "call_log")
+        self.assertEqual(result["call_status"], "cancelled")
         self.assertEqual(result["sender"], self.user.pk)
         self.assertEqual(
             Message.objects.filter(
@@ -762,10 +765,12 @@ class CallEndedMessageTests(TransactionTestCase):
             1,
         )
 
-    def test_personal_signaling_routes_to_the_recipient_user_group(self):
+    @patch("messaging.consumers.get_channel_layer")
+    def test_personal_signaling_routes_to_the_recipient_user_group(self, get_layer):
         consumer = CallSignalingConsumer()
         consumer.user = self.user
-        consumer.channel_layer = type("Layer", (), {"group_send": AsyncMock()})()
+        channel_layer = type("Layer", (), {"group_send": AsyncMock()})()
+        get_layer.return_value = channel_layer
         consumer.send_json = AsyncMock()
         call_id = uuid.uuid4()
 
@@ -779,8 +784,8 @@ class CallEndedMessageTests(TransactionTestCase):
             "signal": {"type": "offer", "sdp": "v=0\r\nm=audio\r\n"},
         })
 
-        consumer.channel_layer.group_send.assert_awaited_once()
-        group_name, event = consumer.channel_layer.group_send.await_args.args
+        channel_layer.group_send.assert_awaited_once()
+        group_name, event = channel_layer.group_send.await_args.args
         self.assertEqual(group_name, f"user_{self.friend.id}")
         self.assertEqual(event["caller_id"], self.user.id)
         self.assertEqual(event["caller_name"], self.user.username)
@@ -788,4 +793,152 @@ class CallEndedMessageTests(TransactionTestCase):
         self.assertEqual(event["conversation_id"], self.conversation.id)
         self.assertEqual(event["call_type"], "audio")
         self.assertEqual(event["call_id"], str(call_id))
+        self.assertEqual(event["call_type"], "audio")
         self.assertFalse(Message.objects.filter(call_id=call_id).exists())
+
+    def test_incoming_offer_is_sent_as_an_incoming_call_event(self):
+        consumer = CallSignalingConsumer()
+        consumer.send_json = AsyncMock()
+
+        async_to_sync(consumer.call_signal_event)({
+            "from_user_id": self.user.pk,
+            "caller_id": self.user.pk,
+            "caller_name": self.user.username,
+            "caller_avatar": None,
+            "conversation_id": self.conversation.pk,
+            "call_id": str(uuid.uuid4()),
+            "call_type": "audio",
+            "signal_type": "offer",
+            "signal": {"type": "offer", "sdp": "v=0\r\nm=audio\r\n"},
+        })
+
+        event = consumer.send_json.await_args.args[0]
+        self.assertEqual(event["type"], "incoming_call")
+        self.assertEqual(event["caller_id"], self.user.pk)
+        self.assertEqual(event["caller_name"], self.user.username)
+        self.assertEqual(event["conversation_id"], self.conversation.pk)
+        self.assertEqual(event["signal_type"], "offer")
+
+    def test_call_socket_responds_to_heartbeats(self):
+        consumer = CallSignalingConsumer()
+        consumer.send_json = AsyncMock()
+
+        async_to_sync(consumer.receive_json)({"type": "ping"})
+
+        consumer.send_json.assert_awaited_once_with({"type": "pong"})
+
+
+class CallSignalFallbackTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="fallback-caller",
+            email="fallback-caller@example.com",
+            password="StrongPassword123",
+            is_verified=True,
+        )
+        self.friend = User.objects.create_user(
+            username="fallback-friend",
+            email="fallback-friend@example.com",
+            password="StrongPassword123",
+            is_verified=True,
+        )
+        self.conversation = Conversation.objects.create()
+        self.conversation.participants.add(self.user, self.friend)
+        self.client.force_authenticate(self.user)
+
+    @patch("messaging.consumers.get_channel_layer")
+    def test_rest_fallback_routes_call_signal_to_user_group(self, get_layer):
+        channel_layer = type("Layer", (), {"group_send": AsyncMock()})()
+        get_layer.return_value = channel_layer
+        call_id = uuid.uuid4()
+
+        response = self.client.post(
+            "/api/messages/calls/signal/",
+            {
+                "type": "call_signal",
+                "to_user_id": self.friend.pk,
+                "conversation_id": self.conversation.pk,
+                "call_id": str(call_id),
+                "call_type": "audio",
+                "signal_type": "offer",
+                "signal": {"type": "offer", "sdp": "v=0\r\nm=audio\r\n"},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        channel_layer.group_send.assert_awaited_once()
+        group_name, event = channel_layer.group_send.await_args.args
+        self.assertEqual(group_name, f"user_{self.friend.pk}")
+        self.assertEqual(event["caller_id"], self.user.pk)
+        self.assertEqual(event["conversation_id"], self.conversation.pk)
+        self.assertEqual(event["signal_type"], "offer")
+        self.assertFalse(Message.objects.filter(call_id=call_id).exists())
+
+    @patch("messaging.consumers.get_channel_layer")
+    def test_rest_fallback_rejects_video_sdp(self, get_layer):
+        get_layer.return_value = type("Layer", (), {"group_send": AsyncMock()})()
+        response = self.client.post(
+            "/api/messages/calls/signal/",
+            {
+                "type": "call_signal",
+                "to_user_id": self.friend.pk,
+                "conversation_id": self.conversation.pk,
+                "call_id": str(uuid.uuid4()),
+                "call_type": "video",
+                "signal_type": "offer",
+                "signal": {"type": "offer", "sdp": "v=0\r\nm=video\r\n"},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["detail"], "Only audio calls are supported.")
+
+    @patch("messaging.consumers.get_channel_layer")
+    def test_call_end_fallback_persists_one_structured_log(self, get_layer):
+        channel_layer = type("Layer", (), {"group_send": AsyncMock()})()
+        get_layer.return_value = channel_layer
+        call_id = uuid.uuid4()
+        payload = {
+            "type": "call_signal",
+            "to_user_id": self.friend.pk,
+            "conversation_id": self.conversation.pk,
+            "caller_id": self.user.pk,
+            "call_id": str(call_id),
+            "call_type": "audio",
+            "signal_type": "hangup",
+            "signal": {},
+            "status": "completed",
+            "duration_seconds": 43,
+        }
+
+        response = self.client.post(
+            "/api/messages/calls/signal/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        call_log = Message.objects.get(call_id=call_id)
+        self.assertEqual(call_log.message_type, Message.MessageType.CALL_LOG)
+        self.assertEqual(call_log.call_status, Message.CallStatus.COMPLETED)
+        self.assertEqual(call_log.call_duration_seconds, 43)
+        self.assertEqual(call_log.sender_id, self.user.pk)
+
+        self.client.force_authenticate(self.friend)
+        payload.update({
+            "to_user_id": self.user.pk,
+            "signal_type": "hangup",
+            "status": "missed",
+        })
+        duplicate_response = self.client.post(
+            "/api/messages/calls/signal/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(duplicate_response.status_code, 200)
+        self.assertEqual(Message.objects.filter(call_id=call_id).count(), 1)
+        call_log.refresh_from_db()
+        self.assertEqual(call_log.call_status, Message.CallStatus.COMPLETED)

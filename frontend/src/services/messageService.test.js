@@ -43,6 +43,28 @@ describe("messageService", () => {
     );
   });
 
+  it("uses the REST call-signal fallback when a call socket is unavailable", async () => {
+    apiMocks.post.mockResolvedValue({ data: { detail: "Call signal delivered." } });
+    const frame = {
+      type: "call_signal",
+      to_user_id: 2,
+      conversation_id: 42,
+      call_id: "call-id",
+      caller_id: 1,
+      call_type: "audio",
+      signal_type: "ice_candidate",
+      signal: { candidate: "candidate" },
+    };
+
+    await expect(messageService.sendCallSignal(frame))
+      .resolves.toEqual({ detail: "Call signal delivered." });
+
+    expect(apiMocks.post).toHaveBeenCalledWith(
+      "/messages/calls/signal/",
+      frame
+    );
+  });
+
   it("loads paginated conversations in bounded parallel batches", async () => {
     let firstBatchStartedResolve;
     let secondBatchStartedResolve;

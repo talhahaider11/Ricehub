@@ -396,4 +396,55 @@ describe("MessageList", () => {
     expect(profileLink.compareDocumentPosition(screen.getByRole("alert")) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
   });
+
+  it("renders a completed voice call with its duration and timestamp", () => {
+    render(
+      <MessageList
+        messages={[{
+          id: 4,
+          sender: { id: 7 },
+          message_type: "call_log",
+          call_id: "call-4",
+          call_status: "completed",
+          call_duration_seconds: 135,
+          created_at: "2025-01-10T12:52:00Z",
+        }]}
+        currentUser={{ id: 7 }}
+      />
+    );
+
+    expect(screen.getByText("Voice call")).toBeInTheDocument();
+    expect(screen.getByText("2 min 15 sec")).toBeInTheDocument();
+    expect(screen.getByText("Voice call").closest(".message-bubble"))
+      .toHaveClass("message-bubble--call-log");
+    expect(screen.getByText("Voice call").closest(".message-call-card"))
+      .toContainElement(screen.getByText("2 min 15 sec"));
+  });
+
+  it("lets the recipient call back from a missed voice call card", () => {
+    const onCallBack = vi.fn();
+    const message = {
+      id: 5,
+      sender: { id: 8 },
+      message_type: "call_log",
+      call_id: "call-5",
+      call_status: "unanswered",
+      created_at: "2025-01-10T12:52:00Z",
+    };
+
+    render(
+      <MessageList
+        messages={[message]}
+        currentUser={{ id: 7 }}
+        onCallBack={onCallBack}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Missed voice call. Tap to call back",
+    }));
+
+    expect(onCallBack).toHaveBeenCalledWith(message);
+    expect(screen.getByText("Tap to call back")).toBeInTheDocument();
+  });
 });

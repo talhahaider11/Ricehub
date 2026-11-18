@@ -4,6 +4,7 @@ import uuid
 
 from channels.db import database_sync_to_async
 from channels.exceptions import ChannelFull
+from channels.layers import get_channel_layer
 from channels.generic.websocket import AsyncJsonWebsocketConsumer, AsyncWebsocketConsumer
 from redis.exceptions import RedisError
 
@@ -17,7 +18,13 @@ from users.privacy import can_message_between
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-CALL_LOG_STATUSES = {"cancelled", "missed", "unanswered"}
+CALL_SIGNAL_TYPES = {"offer", "answer", "ice_candidate", "reject", "hangup"}
+CALL_LOG_STATUSES = {
+    Message.CallStatus.COMPLETED,
+    Message.CallStatus.CANCELLED,
+    Message.CallStatus.MISSED,
+    Message.CallStatus.UNANSWERED,
+}
 
 
 @database_sync_to_async
@@ -58,20 +65,31 @@ def get_call_user_details(user):
 
 
 @database_sync_to_async
-def save_call_ended_message(user, conversation_id, call_id, status):
-    if not isinstance(status, str) or status not in CALL_LOG_STATUSES:
+def save_call_ended_message(
+    user,
+    conversation_id,
+    call_id,
+    status,
+    caller_id,
+    duration_seconds,
+):
+    if status not in CALL_LOG_STATUSES:
         return None, False
-
     conversation = (
         Conversation.objects
         .filter(
             id=conversation_id,
             conversation_type=Conversation.ConversationType.DIRECT,
-            participants=user,
+            participants__id__in=[user.pk, caller_id],
         )
+        .distinct()
         .first()
     )
-    if not conversation:
+    if (
+        not conversation
+        or not conversation.participants.filter(pk=user.pk).exists()
+        or not conversation.participants.filter(pk=caller_id).exists()
+    ):
         return None, False
 
     membership = ConversationMember.objects.filter(
@@ -85,8 +103,11 @@ def save_call_ended_message(user, conversation_id, call_id, status):
         call_id=call_id,
         defaults={
             "conversation": conversation,
-            "sender": user,
-            "content": "Call ended",
+            "sender_id": caller_id,
+            "content": "",
+            "message_type": Message.MessageType.CALL_LOG,
+            "call_status": status,
+            "call_duration_seconds": duration_seconds,
         },
     )
     if message.conversation_id != conversation.id:
@@ -105,10 +126,114 @@ def save_call_ended_message(user, conversation_id, call_id, status):
         "sender_username": message.sender.username,
         "verification_warning": not message.sender.is_verified,
         "content": message.content,
+        "message_type": message.message_type,
         "call_id": str(message.call_id),
+        "call_status": message.call_status,
+        "call_duration_seconds": message.call_duration_seconds,
         "created_at": message.created_at.isoformat(),
         "is_read": message.is_read,
     }, created
+
+
+async def relay_call_signal(user, data):
+    if not isinstance(data, dict) or data.get("type") != "call_signal":
+        return "Call signal is invalid."
+
+    signal_type = data.get("signal_type")
+    target_user_id = data.get("to_user_id")
+    conversation_id = data.get("conversation_id")
+    signal = data.get("signal", {})
+    try:
+        call_id = uuid.UUID(str(data.get("call_id")))
+    except (ValueError, TypeError, AttributeError):
+        call_id = None
+
+    caller_id = data.get("caller_id", user.id)
+    if (
+        not isinstance(signal_type, str)
+        or signal_type not in CALL_SIGNAL_TYPES
+        or not isinstance(target_user_id, int)
+        or isinstance(target_user_id, bool)
+        or not isinstance(conversation_id, int)
+        or isinstance(conversation_id, bool)
+        or not isinstance(caller_id, int)
+        or isinstance(caller_id, bool)
+        or caller_id not in {user.id, target_user_id}
+        or (signal_type == "offer" and caller_id != user.id)
+        or not isinstance(signal, dict)
+        or len(json.dumps(data)) > 20_000
+        or call_id is None
+    ):
+        return "Call signal is invalid."
+
+    if not await is_valid_call_peer(user.id, conversation_id, target_user_id):
+        return "This conversation is not available for audio calls."
+
+    if data.get("call_type", "audio") != "audio":
+        return "Only audio calls are supported."
+    description = signal.get("sdp", "")
+    if isinstance(description, str) and "m=video" in description:
+        return "Only audio calls are supported."
+
+    sender = await get_call_user_details(user)
+    call_status = data.get("status") or signal.get("status")
+    if not isinstance(call_status, str) or call_status not in CALL_LOG_STATUSES:
+        call_status = (
+            Message.CallStatus.CANCELLED
+            if signal_type in {"reject", "hangup"}
+            else None
+        )
+    duration_seconds = data.get("duration_seconds")
+    if (
+        not isinstance(duration_seconds, int)
+        or isinstance(duration_seconds, bool)
+        or not 0 <= duration_seconds <= 86_400
+    ):
+        duration_seconds = None
+    event = {
+        "type": "call_signal_event",
+        "from_user_id": user.id,
+        "caller_id": caller_id,
+        **sender,
+        "conversation_id": conversation_id,
+        "call_id": str(call_id),
+        "call_type": "audio",
+        "signal_type": signal_type,
+        "signal": signal,
+        "status": call_status,
+    }
+
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        logger.error("Call signal from user %s has no channel layer.", user.id)
+        return "Call signal could not be delivered."
+    try:
+        await channel_layer.group_send(f"user_{target_user_id}", event)
+    except (ChannelFull, RedisError, OSError, TimeoutError):
+        logger.exception("Call signal from user %s could not be routed.", user.id)
+        return "Call signal could not be delivered."
+
+    if signal_type in {"reject", "hangup"}:
+        message, created = await save_call_ended_message(
+            user,
+            conversation_id,
+            call_id,
+            call_status,
+            caller_id,
+            duration_seconds,
+        )
+        if message and created:
+            try:
+                await channel_layer.group_send(
+                    f"chat_{conversation_id}",
+                    {"type": "chat_message", "message": message},
+                )
+            except (ChannelFull, RedisError, OSError, TimeoutError):
+                logger.exception(
+                    "Call end message %s was saved but could not be broadcast.",
+                    message["id"],
+                )
+    return None
 
 
 class CallSignalingConsumer(AsyncJsonWebsocketConsumer):
@@ -133,96 +258,16 @@ class CallSignalingConsumer(AsyncJsonWebsocketConsumer):
             )
 
     async def receive_json(self, data, **kwargs):
-        if not isinstance(data, dict) or data.get("type") != "call_signal":
-            await self.send_json({"type": "error", "message": "Call signal is invalid."})
+        if isinstance(data, dict) and data.get("type") == "ping":
+            await self.send_json({"type": "pong"})
             return
-
-        signal_type = data.get("signal_type")
-        target_user_id = data.get("to_user_id")
-        conversation_id = data.get("conversation_id")
-        signal = data.get("signal", {})
-        try:
-            call_id = uuid.UUID(str(data.get("call_id")))
-        except (ValueError, TypeError, AttributeError):
-            call_id = None
-
-        if (
-            not isinstance(signal_type, str)
-            or signal_type not in {"offer", "answer", "ice_candidate", "reject", "hangup"}
-            or not isinstance(target_user_id, int)
-            or isinstance(target_user_id, bool)
-            or not isinstance(conversation_id, int)
-            or isinstance(conversation_id, bool)
-            or not isinstance(signal, dict)
-            or len(json.dumps(data)) > 20_000
-            or call_id is None
-        ):
-            await self.send_json({"type": "error", "message": "Call signal is invalid."})
-            return
-
-        if not await is_valid_call_peer(self.user.id, conversation_id, target_user_id):
-            await self.send_json({
-                "type": "error",
-                "message": "This conversation is not available for audio calls.",
-            })
-            return
-
-        call_type = data.get("call_type") or signal.get("mode")
-        if not isinstance(call_type, str) or call_type not in {"audio", "video"}:
-            description = signal.get("sdp", "")
-            call_type = "video" if isinstance(description, str) and "m=video" in description else "audio"
-
-        sender = await get_call_user_details(self.user)
-        status = data.get("status") or signal.get("status")
-        try:
-            await self.channel_layer.group_send(
-                f"user_{target_user_id}",
-                {
-                    "type": "call_signal_event",
-                    "from_user_id": self.user.id,
-                    "caller_id": self.user.id,
-                    **sender,
-                    "conversation_id": conversation_id,
-                    "call_id": str(call_id),
-                    "call_type": call_type,
-                    "signal_type": signal_type,
-                    "signal": signal,
-                    "status": status,
-                },
-            )
-        except (ChannelFull, RedisError, OSError, TimeoutError):
-            logger.exception(
-                "Call signal from user %s could not be routed.",
-                self.user.id,
-            )
-            await self.send_json({
-                "type": "error",
-                "message": "Call signal could not be delivered.",
-            })
-            return
-
-        if signal_type in {"reject", "hangup"}:
-            message, created = await save_call_ended_message(
-                self.user,
-                conversation_id,
-                call_id,
-                status,
-            )
-            if message and created:
-                try:
-                    await self.channel_layer.group_send(
-                        f"chat_{conversation_id}",
-                        {"type": "chat_message", "message": message},
-                    )
-                except (ChannelFull, RedisError, OSError, TimeoutError):
-                    logger.exception(
-                        "Call end message %s was saved but could not be broadcast.",
-                        message["id"],
-                    )
+        error = await relay_call_signal(self.user, data)
+        if error:
+            await self.send_json({"type": "error", "message": error})
 
     async def call_signal_event(self, event):
         await self.send_json({
-            "type": "call_signal",
+            "type": "incoming_call" if event["signal_type"] == "offer" else "call_signal",
             "from_user_id": event["from_user_id"],
             "caller_id": event["caller_id"],
             "caller_name": event["caller_name"],
@@ -353,95 +398,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         elif event_type == "call_signal":
-            signal_type = data.get("signal_type")
-            target_user_id = data.get("to_user_id")
-            signal = data.get("signal", {})
-            call_mode = signal.get("mode", "audio") if isinstance(signal, dict) else None
-            valid_target_id = (
-                isinstance(target_user_id, int)
-                and not isinstance(target_user_id, bool)
+            error = await relay_call_signal(
+                self.user,
+                {**data, "conversation_id": int(self.conversation_id)},
             )
-            try:
-                call_id = uuid.UUID(str(data.get("call_id")))
-            except (ValueError, TypeError, AttributeError):
-                call_id = None
-            if (
-                not isinstance(signal_type, str)
-                or signal_type not in {"offer", "answer", "ice_candidate", "reject", "hangup"}
-                or not valid_target_id
-                or not isinstance(signal, dict)
-                or len(json.dumps(signal)) > 20_000
-                or call_id is None
-            ):
-                await self.send_json({
-                    "type": "error",
-                    "message": "Call signal is invalid.",
-                })
-                return
-            if (
-                not await self.can_send_message()
-                or not await self.is_direct_call_peer(target_user_id)
-            ):
-                await self.send_json({
-                    "type": "error",
-                    "message": "This conversation is not available for audio calls.",
-                })
-                return
-            call_type = data.get("call_type") or call_mode
-            if not isinstance(call_type, str) or call_type not in {"audio", "video"}:
-                description = signal.get("sdp", "")
-                call_type = "video" if isinstance(description, str) and "m=video" in description else "audio"
-            sender = await get_call_user_details(self.user)
-            status = data.get("status") or signal.get("status")
-            try:
-                await self.channel_layer.group_send(
-                    f"user_{target_user_id}",
-                    {
-                        "type": "call_signal_event",
-                        "from_user_id": self.user.id,
-                        "caller_id": self.user.id,
-                        **sender,
-                        "conversation_id": int(self.conversation_id),
-                        "call_id": str(call_id),
-                        "call_type": call_type,
-                        "signal_type": signal_type,
-                        "signal": signal,
-                        "status": status,
-                    },
-                )
-            except (ChannelFull, RedisError, OSError, TimeoutError):
-                logger.exception(
-                    "Call signal from user %s could not be broadcast.",
-                    self.user.id,
-                )
-                await self.send_json({
-                    "type": "error",
-                    "message": "Call signal could not be delivered.",
-                })
-
-            if signal_type in {"hangup", "reject"}:
-                call_message, created = await save_call_ended_message(
-                    self.user,
-                    int(self.conversation_id),
-                    call_id,
-                    status,
-                )
-                if call_message and created:
-                    call_event = {
-                        "type": "chat_message",
-                        "message": call_message,
-                    }
-                    try:
-                        await self.channel_layer.group_send(
-                            self.room_group_name,
-                            call_event,
-                        )
-                    except (ChannelFull, RedisError, OSError, TimeoutError):
-                        logger.exception(
-                            "Call end message %s was saved but could not be broadcast.",
-                            call_message["id"],
-                        )
-                        await self.chat_message(call_event)
+            if error:
+                await self.send_json({"type": "error", "message": error})
             return
 
 
@@ -704,12 +666,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
         verification_warning = not self.user.is_verified
         return message, verification_warning
 
-    async def create_call_ended_message(self, call_id, status):
+    async def create_call_ended_message(
+        self,
+        call_id,
+        status,
+        caller_id=None,
+        duration_seconds=None,
+    ):
         return await save_call_ended_message(
             self.user,
             int(self.conversation_id),
             call_id,
             status,
+            caller_id or self.user.pk,
+            duration_seconds,
         )
 
     @database_sync_to_async

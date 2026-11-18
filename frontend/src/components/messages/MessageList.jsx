@@ -4,7 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { PhoneOff } from "lucide-react";
+import { PhoneIncoming, PhoneMissed, PhoneOutgoing } from "lucide-react";
 import MessageActions from "./MessageActions";
 import { useLanguage } from "../../context/LanguageContext";
 import Avatar from "../common/Avatar";
@@ -34,6 +34,18 @@ function getTimestamp(value, language) {
   };
 }
 
+function formatCallLogDuration(seconds, t) {
+  if (!Number.isInteger(seconds) || seconds < 0) return "";
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes === 0) return t("callDurationSeconds", { count: seconds });
+  if (remainingSeconds === 0) return t("callDurationMinutes", { count: minutes });
+  return t("callDurationMinutesSeconds", {
+    minutes,
+    seconds: remainingSeconds,
+  });
+}
+
 export default function MessageList({
   messages,
   currentUser,
@@ -41,6 +53,7 @@ export default function MessageList({
   onEdit,
   onDelete,
   onShare,
+  onCallBack,
   conversationPartner,
   showVerificationWarning = false,
   latestConversationMessageId,
@@ -188,13 +201,46 @@ export default function MessageList({
           String(currentUser?.id);
 
         const timestamp = getTimestamp(message.created_at, language);
+        const isCallLog = message.message_type === "call_log" || Boolean(message.call_id);
+        const missedIncomingCall = isCallLog
+          && ["missed", "unanswered"].includes(message.call_status)
+          && !mine;
+        const CallIcon = missedIncomingCall
+          ? PhoneMissed
+          : mine
+            ? PhoneOutgoing
+            : PhoneIncoming;
+        const callSubtitle = message.call_status === "completed"
+          ? formatCallLogDuration(message.call_duration_seconds, t)
+          : missedIncomingCall
+            ? t("tapToCallBack")
+            : t("noAnswer");
+        const callCardBody = (
+          <>
+            <span className={[
+              "message-call-icon",
+              missedIncomingCall ? "is-missed" : "",
+            ].filter(Boolean).join(" ")}>
+              <CallIcon size={19} aria-hidden="true" />
+            </span>
+            <span className="message-call-copy">
+              <strong>{t(missedIncomingCall ? "missedVoiceCall" : "voiceCall")}</strong>
+              {callSubtitle && <small>{callSubtitle}</small>}
+            </span>
+            {timestamp && (
+              <time className="message-call-time" dateTime={message.created_at}>
+                {timestamp.time}
+              </time>
+            )}
+          </>
+        );
         const isVisualMedia = Boolean(
           message.attachment
           && ["image", "video"].includes(message.attachment_type)
         );
         const showReceipt = Boolean(
           mine
-          && !message.call_id
+          && !isCallLog
           && showLatestReceipt
           && latestMessage.id === message.id
           && !message.upload_status
@@ -239,7 +285,7 @@ export default function MessageList({
                     ? "message-bubble--audio"
                     : "",
                   message.upload_status === "uploading" ? "message-bubble--uploading" : "",
-                  message.call_id ? "message-bubble--call-log" : "",
+                  isCallLog ? "message-bubble--call-log" : "",
                 ].filter(Boolean).join(" ")}
               >
                 {message.reply_to && (
@@ -251,11 +297,24 @@ export default function MessageList({
                   ? t("messageDeleted")
                   : (
                     <>
-                      {message.call_id ? (
-                        <p className="message-call-log">
-                          <PhoneOff size={15} aria-hidden="true" />
-                          <span>{t("callEndedLog")}</span>
-                        </p>
+                      {isCallLog ? (
+                        missedIncomingCall && onCallBack ? (
+                          <button
+                            type="button"
+                            className="message-call-card message-call-card--missed"
+                            aria-label={`${t("missedVoiceCall")}. ${t("tapToCallBack")}`}
+                            onClick={() => onCallBack(message)}
+                          >
+                            {callCardBody}
+                          </button>
+                        ) : (
+                          <div className={[
+                            "message-call-card",
+                            missedIncomingCall ? "message-call-card--missed" : "",
+                          ].filter(Boolean).join(" ")}>
+                            {callCardBody}
+                          </div>
+                        )
                       ) : message.content && (
                         <p>
                           {message.content.split(/(https?:\/\/[^\s]+)/gi).map((part, index) => (
@@ -334,7 +393,7 @@ export default function MessageList({
                       )}
                     </>
                   )}
-                {!isVisualMedia && timestamp && !message.is_deleted && (
+                {!isVisualMedia && !isCallLog && timestamp && !message.is_deleted && (
                   <time className="message-time" dateTime={message.created_at}>
                     {timestamp.time}
                   </time>
@@ -353,7 +412,7 @@ export default function MessageList({
                   {t("unverifiedWarning")}
                 </small>
               )}
-              {!message.is_deleted && !message.upload_status && !message.call_id && (
+              {!message.is_deleted && !message.upload_status && !isCallLog && (
                 <MessageActions
                   message={message}
                   own={mine}

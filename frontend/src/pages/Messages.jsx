@@ -18,6 +18,7 @@ import { getArrayResults } from "../utils/arrayResults";
 import GroupMemberModal from "../components/messages/GroupMemberModal";
 import { useLanguage } from "../context/LanguageContext";
 import { useChatUploads } from "../context/ChatUploadContext";
+import { useCall } from "../context/CallContext";
 import Avatar from "../components/common/Avatar";
 
 function formatLastSeen(lastSeen, now, t, language) {
@@ -53,6 +54,7 @@ function formatLastSeen(lastSeen, now, t, language) {
 export default function Messages() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
+  const { startCall } = useCall();
   const { uploads, queueVideoUpload } = useChatUploads();
   const location = useLocation();
   const navigate = useNavigate();
@@ -199,6 +201,14 @@ export default function Messages() {
     } finally {
       sendTyping(false);
     }
+  };
+  const handleCallBack = () => {
+    if (!otherUser || !selectedConversation) return;
+    startCall({
+      peer: otherUser,
+      conversationId: selectedConversation,
+      mode: "audio",
+    });
   };
   const handleSendAttachment = async (file, replyToId, attachmentType) => {
     if (attachmentType === "video") {
@@ -493,10 +503,7 @@ export default function Messages() {
                 {otherUser && (
                   <small className="chat-presence" aria-live="polite">
                     {otherUser.is_online === true ? (
-                      <>
-                        <span className="chat-presence-dot" aria-hidden="true" />
-                        {t("activeNow")}
-                      </>
+                      t("activeNow")
                     ) : (
                       formatLastSeen(otherUser.last_seen, lastSeenNow, t, language)
                     )}
@@ -548,6 +555,7 @@ export default function Messages() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onShare={setMessageToShare}
+              onCallBack={handleCallBack}
               conversationPartner={isDirectConversation ? otherUser : null}
               showVerificationWarning={showVerificationWarning}
               latestConversationMessageId={latestConversationMessageId}

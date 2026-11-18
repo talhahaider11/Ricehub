@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import useAuth from "../hooks/useAuth";
+import messageService from "../services/messageService";
 import { ACCESS_TOKEN_KEY, WS_URL } from "../utils/constants";
 
 export const CallContext = createContext(null);
@@ -25,6 +26,7 @@ function createCallId() {
 export function CallProvider({ children }) {
   const { user } = useAuth();
   const socketRef = useRef(null);
+  const heartbeatRef = useRef(null);
   const activeCallRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const reconnectDelayRef = useRef(1000);
@@ -43,33 +45,46 @@ export function CallProvider({ children }) {
     peerId,
     conversationId,
     callId,
-    callType,
     signalType,
     signal = {},
     status,
+    durationSeconds,
+    callerId,
   }) => {
     const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      throw new Error("Call signaling is not connected.");
-    }
-
-    socket.send(JSON.stringify({
+    const frame = {
       type: "call_signal",
       to_user_id: Number(peerId),
       conversation_id: Number(conversationId),
       call_id: callId,
-      call_type: callType,
+      caller_id: Number(callerId || user?.id),
+      call_type: "audio",
       signal_type: signalType,
       signal,
       ...(status ? { status } : {}),
-    }));
-  }, []);
+      ...(Number.isInteger(durationSeconds) ? { duration_seconds: durationSeconds } : {}),
+    };
+    const fallbackToRest = () => {
+      messageService.sendCallSignal(frame).catch((signalError) => {
+        console.error("Fallback call signal could not be delivered:", signalError);
+        setError(signalError.message || "Call signal could not be delivered.");
+      });
+    };
 
-  const startCall = useCallback(({ peer, conversationId, mode }) => {
-    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-      setError("Call signaling is not connected.");
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      fallbackToRest();
       return;
     }
+
+    try {
+      socket.send(JSON.stringify(frame));
+    } catch (sendError) {
+      console.error("Call WebSocket send failed; using REST fallback:", sendError);
+      fallbackToRest();
+    }
+  }, [user?.id]);
+
+  const startCall = useCallback(({ peer, conversationId }) => {
     if (activeCallRef.current) {
       setError("Another call is already active.");
       return;
@@ -78,13 +93,14 @@ export function CallProvider({ children }) {
     updateActiveCall({
       peer,
       peerId: peer.id,
+      callerId: user?.id,
       conversationId,
-      mode,
+      mode: "audio",
       direction: "outgoing",
       callId: createCallId(),
     });
     setError("");
-  }, [updateActiveCall]);
+  }, [updateActiveCall, user?.id]);
 
   const clearCallSignal = useCallback((signalId) => {
     setCallSignals((current) => current.filter((signal) => signal.id !== signalId));
@@ -121,17 +137,28 @@ export function CallProvider({ children }) {
         reconnectDelayRef.current = 1000;
         setConnected(true);
         setError("");
+        if (heartbeatRef.current) window.clearInterval(heartbeatRef.current);
+        heartbeatRef.current = window.setInterval(() => {
+          if (socket.readyState !== WebSocket.OPEN) return;
+          try {
+            socket.send(JSON.stringify({ type: "ping" }));
+          } catch (heartbeatError) {
+            console.error("Call signaling heartbeat failed:", heartbeatError);
+            socket.close();
+          }
+        }, 25_000);
       };
 
       socket.onmessage = (event) => {
         if (!active || socketRef.current !== socket) return;
         try {
           const data = JSON.parse(event.data);
+          if (data.type === "pong") return;
           if (data.type === "error") {
             setError(data.message || "Call signaling failed.");
             return;
           }
-          if (data.type !== "call_signal") return;
+          if (data.type !== "call_signal" && data.type !== "incoming_call") return;
 
           const signal = {
             ...data,
@@ -142,14 +169,15 @@ export function CallProvider({ children }) {
             if (!currentCall) {
               updateActiveCall({
                 peerId: signal.from_user_id,
+                callerId: signal.caller_id || signal.from_user_id,
                 peer: {
-                  id: signal.caller_id || signal.from_user_id,
+                  id: signal.from_user_id,
                   first_name: signal.caller_name,
                   profile_picture: signal.caller_avatar,
                 },
                 conversationId: signal.conversation_id,
                 callId: signal.call_id,
-                mode: signal.call_type,
+                mode: "audio",
                 direction: "incoming",
               });
               setCallSignals([signal]);
@@ -160,9 +188,9 @@ export function CallProvider({ children }) {
                 peerId: signal.from_user_id,
                 conversationId: signal.conversation_id,
                 callId: signal.call_id,
-                callType: signal.call_type,
                 signalType: "reject",
-                status: "rejected",
+                status: "missed",
+                callerId: signal.caller_id || signal.from_user_id,
               });
             } catch (sendError) {
               console.error("Busy call could not be rejected:", sendError);
@@ -192,6 +220,10 @@ export function CallProvider({ children }) {
 
       socket.onclose = () => {
         if (socketRef.current === socket) socketRef.current = null;
+        if (heartbeatRef.current) {
+          window.clearInterval(heartbeatRef.current);
+          heartbeatRef.current = null;
+        }
         if (!active) return;
         setConnected(false);
         reconnectTimerRef.current = window.setTimeout(
@@ -211,6 +243,10 @@ export function CallProvider({ children }) {
       if (reconnectTimerRef.current) {
         window.clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
+      }
+      if (heartbeatRef.current) {
+        window.clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
       }
       if (socketRef.current) {
         socketRef.current.onclose = null;

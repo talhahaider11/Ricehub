@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    CallSignalFallbackView,
     ConversationArchiveView,
     ConversationDeleteView,
     ConversationDetailView,
@@ -20,6 +21,7 @@ from .views import (
 
 
 urlpatterns = [
+    path("calls/signal/", CallSignalFallbackView.as_view(), name="call-signal-fallback"),
     path("group-members/search/", GroupMemberSearchView.as_view(), name="group-member-search"),
     path("conversations/group/",GroupConversationCreateView.as_view(),name="group-conversation-create",),
     path("conversations/<int:conversation_id>/members/",GroupConversationMemberAddView.as_view(),name="group-conversation-member-add",),

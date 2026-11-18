@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   sendText: vi.fn(),
   archiveConversation: vi.fn(),
   deleteConversation: vi.fn(),
+  startCall: vi.fn(),
 }));
 
 vi.mock("../services/messageService", () => ({
@@ -45,6 +46,10 @@ vi.mock("../hooks/useAuth", () => ({
 
 vi.mock("../hooks/useMessages", () => ({
   default: mocks.useMessages,
+}));
+
+vi.mock("../context/CallContext", () => ({
+  useCall: () => ({ startCall: mocks.startCall }),
 }));
 
 vi.mock("../context/ChatUploadContext", () => ({
@@ -141,6 +146,9 @@ describe("Messages", () => {
       expect(screen.getByTestId("message-list")).toBeInTheDocument();
     });
     expect(screen.getAllByText("talha2")).toHaveLength(1);
+    expect(screen.getByText("Active now")).toBeInTheDocument();
+    expect(document.querySelector(".chat-presence-dot")).toBeNull();
+    expect(document.querySelector(".chat-header-online-dot")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start audio call" }))
       .toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Back to conversations" }))
