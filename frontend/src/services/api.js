@@ -41,6 +41,45 @@ api.interceptors.request.use(
 
 let isRefreshing = false;
 let waitingRequests = [];
+let tokenRefreshPromise = null;
+
+export function refreshAccessToken() {
+  if (!tokenRefreshPromise) {
+    const refreshToken =
+      localStorage.getItem(REFRESH_TOKEN_KEY) ||
+      localStorage.getItem("refresh_token");
+
+    if (!refreshToken) {
+      return Promise.reject(new Error("No refresh token available"));
+    }
+
+    tokenRefreshPromise = axios
+      .post(`${BASE_URL}/auth/refresh/`, { refresh: refreshToken })
+      .then((response) => {
+        const newAccessToken = response.data?.access;
+        if (!newAccessToken) {
+          throw new Error("The token refresh response did not include an access token.");
+        }
+
+        localStorage.setItem(ACCESS_TOKEN_KEY, newAccessToken);
+        localStorage.setItem("access_token", newAccessToken);
+        if (response.data.refresh) {
+          localStorage.setItem(REFRESH_TOKEN_KEY, response.data.refresh);
+          localStorage.setItem("refresh_token", response.data.refresh);
+        }
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("token-refreshed"));
+        }
+        return newAccessToken;
+      })
+      .finally(() => {
+        tokenRefreshPromise = null;
+      });
+  }
+
+  return tokenRefreshPromise;
+}
 
 // Queue Processing Helper for Pending Demands
 const processQueue = (error, token = null) => {
@@ -87,30 +126,7 @@ api.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      const refreshToken =
-        localStorage.getItem(REFRESH_TOKEN_KEY) ||
-        localStorage.getItem("refresh_token");
-
-      if (!refreshToken) {
-        throw new Error("No refresh token available");
-      }
-
-      // Separate axios instance call to prevent interceptor loop
-      const response = await axios.post(`${BASE_URL}/auth/refresh/`, {
-        refresh: refreshToken,
-      });
-
-      const newAccessToken = response.data.access;
-
-      // Store updated token in localStorage
-      if (ACCESS_TOKEN_KEY) {
-        localStorage.setItem(ACCESS_TOKEN_KEY, newAccessToken);
-      }
-      localStorage.setItem("access_token", newAccessToken);
-      if (response.data.refresh) {
-        localStorage.setItem(REFRESH_TOKEN_KEY, response.data.refresh);
-        localStorage.setItem("refresh_token", response.data.refresh);
-      }
+      const newAccessToken = await refreshAccessToken();
 
       // Process pending queued requests
       processQueue(null, newAccessToken);

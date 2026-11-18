@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import useAuth from "../hooks/useAuth";
+import { refreshAccessToken } from "../services/api";
 import messageService from "../services/messageService";
 import {
   getNotificationsEnabled,
@@ -15,6 +16,20 @@ import {
 import { ACCESS_TOKEN_KEY, WS_URL } from "../utils/constants";
 
 export const CallContext = createContext(null);
+
+function isJwtExpiring(token) {
+  const payload = token?.split(".")[1];
+  if (!payload) return true;
+
+  try {
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
+    const expiration = JSON.parse(decoded).exp;
+    return !Number.isFinite(expiration) || expiration * 1000 <= Date.now() + 30_000;
+  } catch {
+    return true;
+  }
+}
 
 function createCallId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -162,6 +177,7 @@ export function CallProvider({ children }) {
     }
 
     let active = true;
+    let connectionPending = false;
     const handleSignal = (data) => {
       if (data.type !== "call_signal" && data.type !== "incoming_call") return;
 
@@ -261,16 +277,62 @@ export function CallProvider({ children }) {
       }
     };
 
-    const connect = () => {
-      if (!active) return;
-      const token = localStorage.getItem(ACCESS_TOKEN_KEY)
+    const scheduleReconnect = () => {
+      if (!active || reconnectTimerRef.current) return;
+      reconnectTimerRef.current = window.setTimeout(() => {
+        reconnectTimerRef.current = null;
+        void connect();
+      }, reconnectDelayRef.current);
+      reconnectDelayRef.current = Math.min(
+        reconnectDelayRef.current * 2,
+        15_000
+      );
+    };
+
+    const connect = async () => {
+      if (!active || connectionPending) return;
+      connectionPending = true;
+      let token = localStorage.getItem(ACCESS_TOKEN_KEY)
         || localStorage.getItem("access_token");
-      if (!token) return;
+
+      if (!token || isJwtExpiring(token)) {
+        try {
+          token = await refreshAccessToken();
+        } catch (refreshError) {
+          if (active) {
+            setConnected(false);
+            setError("Call signaling could not refresh the access token.");
+            console.error(
+              "Call signaling access-token refresh failed:",
+              refreshError.response?.status || refreshError.message
+            );
+            if (
+              refreshError.response?.status !== 400
+              && refreshError.response?.status !== 401
+              && refreshError.message !== "No refresh token available"
+            ) {
+              scheduleReconnect();
+            }
+          }
+          connectionPending = false;
+          return;
+        }
+      }
+
+      if (!active) {
+        connectionPending = false;
+        return;
+      }
+
+      token = localStorage.getItem(ACCESS_TOKEN_KEY)
+        || localStorage.getItem("access_token")
+        || token;
 
       const socket = new WebSocket(
         `${WS_URL}/call-signaling/?token=${encodeURIComponent(token)}`
       );
       socketRef.current = socket;
+      connectionPending = false;
 
       socket.onopen = () => {
         if (!active || socketRef.current !== socket) return;
@@ -319,22 +381,37 @@ export function CallProvider({ children }) {
         }
         if (!active) return;
         setConnected(false);
-        reconnectTimerRef.current = window.setTimeout(
-          connect,
-          reconnectDelayRef.current
-        );
-        reconnectDelayRef.current = Math.min(
-          reconnectDelayRef.current * 2,
-          15_000
-        );
+        scheduleReconnect();
       };
     };
 
-    connect();
+    const handleTokenRefreshed = () => {
+      if (!active) return;
+      reconnectDelayRef.current = 1000;
+      if (reconnectTimerRef.current) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      if (heartbeatRef.current) {
+        window.clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
+      if (socketRef.current) {
+        socketRef.current.onclose = null;
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+      setConnected(false);
+      void connect();
+    };
+
+    window.addEventListener("token-refreshed", handleTokenRefreshed);
+    void connect();
     void pollIncomingCalls();
     const incomingCallPoll = window.setInterval(pollIncomingCalls, 1500);
     return () => {
       active = false;
+      window.removeEventListener("token-refreshed", handleTokenRefreshed);
       window.clearInterval(incomingCallPoll);
       if (reconnectTimerRef.current) {
         window.clearTimeout(reconnectTimerRef.current);

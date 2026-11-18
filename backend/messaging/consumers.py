@@ -299,6 +299,11 @@ class CallSignalingConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         self.user = self.scope.get("user")
         if not self.user or not self.user.is_authenticated:
+            auth_error = self.scope.get("jwt_auth_error")
+            logger.warning(
+                "Rejecting call signaling WebSocket connection: %s",
+                auth_error or "ASGI scope has no authenticated user",
+            )
             await self.close(code=4001)
             return
 

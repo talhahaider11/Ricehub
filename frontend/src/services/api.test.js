@@ -36,6 +36,8 @@ describe("API token refresh", () => {
   });
 
   it("persists both tokens when the backend rotates the refresh token", async () => {
+    const tokenRefreshed = vi.fn();
+    window.addEventListener("token-refreshed", tokenRefreshed);
     vi.spyOn(axios, "post").mockResolvedValue({
       data: {
         access: "new-access",
@@ -59,6 +61,8 @@ describe("API token refresh", () => {
     expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBe("new-access");
     expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBe("rotated-refresh");
     expect(localStorage.getItem("refresh_token")).toBe("rotated-refresh");
+    expect(tokenRefreshed).toHaveBeenCalledOnce();
+    window.removeEventListener("token-refreshed", tokenRefreshed);
   });
 
   it("keeps tokens when refresh fails because the network is unavailable", async () => {
