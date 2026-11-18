@@ -15,6 +15,7 @@ def create_notification(
     post_id=None,
     comment_id=None,
     conversation_id=None,
+    call_id=None,
 ):
     # Don't notify the user about their own action
     if sender and recipient == sender:
@@ -46,15 +47,25 @@ def create_notification(
         return None
 
     # Create notification in database
-    notification = Notification.objects.create(
-        recipient=recipient,
-        sender=sender,
-        notification_type=notification_type,
-        message=message,
-        post_id=post_id,
-        comment_id=comment_id,
-        conversation_id=conversation_id,
-    )
+    notification_fields = {
+        "recipient": recipient,
+        "sender": sender,
+        "notification_type": notification_type,
+        "message": message,
+        "post_id": post_id,
+        "comment_id": comment_id,
+        "conversation_id": conversation_id,
+        "call_id": call_id,
+    }
+    if call_id:
+        notification, created = Notification.objects.get_or_create(
+            call_id=call_id,
+            defaults=notification_fields,
+        )
+        if not created:
+            return notification
+    else:
+        notification = Notification.objects.create(**notification_fields)
 
     # Send real-time notification through WebSocket
     try:
@@ -72,10 +83,20 @@ def create_notification(
                         if sender
                         else None
                     ),
+                    "sender_name": (
+                        sender.get_full_name() or sender.username
+                        if sender
+                        else None
+                    ),
                     "post_id": notification.post_id,
                     "comment_id": notification.comment_id,
                     "conversation_id": (
                         notification.conversation_id
+                    ),
+                    "call_id": (
+                        str(notification.call_id)
+                        if notification.call_id
+                        else None
                     ),
                     "created_at": (
                         notification.created_at.isoformat()

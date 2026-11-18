@@ -7,6 +7,17 @@ import notificationService from "../services/notificationService";
 import settingsService from "../services/settingsService";
 import { getArrayResults } from "../utils/arrayResults";
 import { useLanguage } from "../context/LanguageContext";
+import {
+  getNotificationsEnabled,
+  initializeSystemNotifications,
+  setNotificationsEnabled,
+  suppressSystemNotifications,
+} from "../services/systemNotificationService";
+import {
+  initializePushNotifications,
+  registerPushListeners,
+  unregisterPushDevice,
+} from "../services/pushNotificationService";
 
 const preferenceLabelKeys = {
   friend_requests: "friendRequests",
@@ -15,7 +26,6 @@ const preferenceLabelKeys = {
   reactions: "reactionsToPosts",
   messages: "newMessages",
   event_invitations: "eventInvitations",
-  all_notifications: "allowInAppNotifications",
 };
 
 export default function Settings() {
@@ -31,6 +41,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [preferences, setPreferences] = useState(null);
+  const [notificationsEnabled, setNotificationsEnabledState] = useState(
+    getNotificationsEnabled
+  );
   const [preferencesSaving, setPreferencesSaving] = useState(false);
   const [preferencesMessage, setPreferencesMessage] = useState("");
   const [preferencesError, setPreferencesError] = useState("");
@@ -49,7 +62,13 @@ export default function Settings() {
 
   useEffect(() => {
     notificationService.getPreferences()
-      .then(setPreferences)
+      .then((loadedPreferences) => {
+        setPreferences(loadedPreferences);
+        if (typeof loadedPreferences.all_notifications === "boolean") {
+          setNotificationsEnabledState(loadedPreferences.all_notifications);
+          setNotificationsEnabled(loadedPreferences.all_notifications);
+        }
+      })
       .catch(() => setPreferencesError(t("notificationPreferencesLoadFailed")));
     settingsService.getPrivacy()
       .then(setPrivacy)
@@ -64,6 +83,39 @@ export default function Settings() {
       .then(setSecurity)
       .catch(() => setActionError(t("securitySettingsLoadFailed")));
   }, [t]);
+
+  const toggleNotifications = async (enabled) => {
+    setNotificationsEnabledState(enabled);
+    setNotificationsEnabled(enabled);
+    setPreferences((current) => current
+      ? { ...current, all_notifications: enabled }
+      : current);
+    setPreferencesError("");
+
+    if (enabled) {
+      void initializeSystemNotifications().catch((error) => {
+        console.error("System notification setup failed:", error);
+      });
+      void registerPushListeners()
+        .then(initializePushNotifications)
+        .catch((error) => {
+          console.error("Push notification setup failed:", error);
+        });
+    } else {
+      void suppressSystemNotifications();
+      void unregisterPushDevice();
+    }
+
+    try {
+      await notificationService.updatePreferences({
+        all_notifications: enabled,
+      });
+    } catch (error) {
+      setPreferencesError(
+        error.response?.data?.detail || t("notificationPreferencesSaveFailed")
+      );
+    }
+  };
 
   const saveVisibility = async () => {
     setSaving(true);
@@ -411,6 +463,16 @@ export default function Settings() {
             <p className="settings-description">
               {t("notificationsDescription")}
             </p>
+            <label className="settings-option">
+              <span>{t("systemNotificationsToggle")}</span>
+              <input
+                type="checkbox"
+                checked={notificationsEnabled}
+                onChange={(event) => {
+                  void toggleNotifications(event.target.checked);
+                }}
+              />
+            </label>
             {preferences && Object.entries(preferenceLabelKeys).map(([key, labelKey]) => (
               <label className="settings-option" key={key}>
                 <span>{t(labelKey)}</span>

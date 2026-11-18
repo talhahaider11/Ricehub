@@ -90,18 +90,25 @@ from notifications.services import (
 def notify_new_message(
     conversation,
     sender,
+    message=None,
 ):
     recipients = conversation.participants.exclude(
         id=sender.id
     )
+
+    preview = message.content.strip() if message else ""
+    if not preview and message:
+        preview = f"Sent a {message.attachment_type} message."
+    if not preview:
+        preview = "Sent you a message."
+    if len(preview) > 180:
+        preview = f"{preview[:177]}..."
 
     for recipient in recipients:
         create_notification(
             recipient=recipient,
             sender=sender,
             notification_type="message",
-            message=(
-                f"{sender.username} sent you a message."
-            ),
+            message=preview,
             conversation_id=conversation.id,
         )

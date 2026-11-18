@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import timedelta
 
 from asgiref.sync import async_to_sync
 from channels.exceptions import ChannelFull
@@ -19,6 +20,7 @@ from rest_framework.views import APIView
 from redis.exceptions import RedisError
 
 from .models import (
+    CallInvitation,
     Conversation,
     ConversationMember,
     Message,
@@ -31,6 +33,7 @@ from .serializers import (
 from .services import (
     ensure_conversation_memberships,
     get_or_create_conversation,
+    notify_new_message,
     restore_conversation_memberships,
 )
 from .consumers import relay_call_signal
@@ -53,6 +56,14 @@ class CallSignalFallbackView(APIView):
     def post(self, request):
         error = async_to_sync(relay_call_signal)(request.user, request.data)
         if error:
+            if (
+                error == "Call signal could not be delivered."
+                and request.data.get("signal_type") == "offer"
+            ):
+                return Response(
+                    {"detail": "Call queued for incoming-call polling."},
+                    status=status.HTTP_202_ACCEPTED,
+                )
             response_status = (
                 status.HTTP_503_SERVICE_UNAVAILABLE
                 if error == "Call signal could not be delivered."
@@ -60,6 +71,55 @@ class CallSignalFallbackView(APIView):
             )
             return Response({"detail": error}, status=response_status)
         return Response({"detail": "Call signal delivered."})
+
+
+class CallInitiateView(CallSignalFallbackView):
+    def post(self, request):
+        if request.data.get("signal_type") != "offer":
+            return Response(
+                {"detail": "Call initiation requires an offer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().post(request)
+
+
+class IncomingCallsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        recent_cutoff = timezone.now() - timedelta(seconds=30)
+        invitations = (
+            CallInvitation.objects
+            .filter(
+                recipient=request.user,
+                state=CallInvitation.State.RINGING,
+                created_at__gte=recent_cutoff,
+            )
+            .select_related("caller")
+            .order_by("created_at")
+        )
+        return Response([
+            {
+                "type": "incoming_call",
+                "from_user_id": invitation.caller_id,
+                "caller_id": invitation.caller_id,
+                "caller_name": (
+                    invitation.caller.get_full_name()
+                    or invitation.caller.username
+                ),
+                "caller_avatar": (
+                    invitation.caller.profile_picture.url
+                    if invitation.caller.profile_picture
+                    else None
+                ),
+                "conversation_id": invitation.conversation_id,
+                "call_id": str(invitation.call_id),
+                "call_type": "audio",
+                "signal_type": "offer",
+                "signal": invitation.offer,
+            }
+            for invitation in invitations
+        ])
 
 
 def get_active_group_conversation(conversation_id, user, *, lock=False):
@@ -813,6 +873,11 @@ class MessageListCreateView(
             conversation=conversation,
         )
 
+        notify_new_message(
+            conversation,
+            self.request.user,
+            serializer.instance,
+        )
         restore_conversation_memberships(conversation)
         conversation.save()
         message_data = MessageSerializer(

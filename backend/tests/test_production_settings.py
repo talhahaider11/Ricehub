@@ -49,8 +49,17 @@ assert settings.STORAGES["staticfiles"]["BACKEND"] == (
     "whitenoise.storage.CompressedStaticFilesStorage"
 )
 assert settings.CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] == [
-    {"address": "rediss://test.example:6379/0", "protocol": 2}
+    {
+        "address": "rediss://test.example:6379/0",
+        "protocol": 2,
+        "socket_connect_timeout": 10,
+        "socket_timeout": None,
+        "retry_on_timeout": True,
+        "health_check_interval": 30,
+    }
 ]
+assert settings.CHANNEL_LAYERS["default"]["CONFIG"]["capacity"] == 1500
+assert settings.CHANNEL_LAYERS["default"]["CONFIG"]["expiry"] == 10
 assert settings.CACHES["default"]["BACKEND"] == "django_redis.cache.RedisCache"
 assert settings.CACHES["default"]["LOCATION"] == "rediss://test.example:6379/0"
 assert settings.CACHES["default"]["OPTIONS"]["CONNECTION_POOL_KWARGS"] == {

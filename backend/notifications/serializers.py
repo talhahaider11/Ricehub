@@ -51,6 +51,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             "post_id",
             "comment_id",
             "conversation_id",
+            "call_id",
             "is_read",
             "created_at",
         ]

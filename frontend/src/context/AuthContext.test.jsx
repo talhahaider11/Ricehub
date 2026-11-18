@@ -24,6 +24,19 @@ vi.mock("../services/pushNotificationService", () => ({
   unregisterPushDevice: vi.fn(),
 }));
 
+vi.mock("../services/notificationService", () => ({
+  default: {
+    getPreferences: vi.fn().mockResolvedValue({ all_notifications: true }),
+  },
+}));
+
+vi.mock("../services/systemNotificationService", () => ({
+  getNotificationsEnabled: () => true,
+  initializeSystemNotifications: vi.fn(),
+  setNotificationsEnabled: vi.fn(),
+  suppressSystemNotifications: vi.fn(),
+}));
+
 function AuthStateProbe() {
   const { user, login } = useContext(AuthContext);
 

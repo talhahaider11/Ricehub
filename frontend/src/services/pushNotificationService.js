@@ -1,6 +1,10 @@
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import notificationService from "./notificationService";
+import {
+  getNotificationsEnabled,
+  showSystemNotification,
+} from "./systemNotificationService";
 
 const PUSH_TOKEN_KEY = "ricemarket_push_token";
 const PUSH_CHANNEL_ID = "ricehub_notifications";
@@ -34,7 +38,35 @@ export async function registerPushListeners() {
     PushNotifications.addListener("registrationError", (error) => {
       logPushError("Push registration failed:", error);
     }),
-    PushNotifications.addListener("pushNotificationReceived", () => {
+    PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      const data = notification.data || {};
+      const currentConversationId = new URLSearchParams(
+        window.location.search
+      ).get("conversation_id");
+      const viewingConversation = (
+        Boolean(data.conversation_id)
+        && document.visibilityState === "visible"
+        && window.location.pathname.startsWith("/messages")
+        && String(currentConversationId) === String(data.conversation_id)
+      );
+      const viewingNotifications = (
+        document.visibilityState === "visible"
+        && window.location.pathname.startsWith("/notifications")
+      );
+      if (
+        getNotificationsEnabled()
+        && !viewingConversation
+        && !viewingNotifications
+      ) {
+        void showSystemNotification({
+          id: data.call_id
+            ? `call-${data.call_id}`
+            : data.notification_id || notification.id,
+          title: notification.title || "RiceHub",
+          body: notification.body || "",
+          data,
+        });
+      }
       window.dispatchEvent(new Event("ricemarket:notifications-refresh"));
     }),
     PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
@@ -54,7 +86,7 @@ export async function registerPushListeners() {
 }
 
 export async function initializePushNotifications() {
-  if (!Capacitor.isNativePlatform()) {
+  if (!Capacitor.isNativePlatform() || !getNotificationsEnabled()) {
     return false;
   }
 

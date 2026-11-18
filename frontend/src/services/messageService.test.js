@@ -65,6 +65,20 @@ describe("messageService", () => {
     );
   });
 
+  it("uses the call inbox endpoints for offer initiation and polling", async () => {
+    const offer = { signal_type: "offer", call_id: "call-id" };
+    apiMocks.post.mockResolvedValue({ data: { detail: "queued" } });
+    apiMocks.get.mockResolvedValue({ data: [{ call_id: "call-id" }] });
+
+    await expect(messageService.initiateCall(offer))
+      .resolves.toEqual({ detail: "queued" });
+    await expect(messageService.incomingCalls())
+      .resolves.toEqual([{ call_id: "call-id" }]);
+
+    expect(apiMocks.post).toHaveBeenCalledWith("/calls/initiate/", offer);
+    expect(apiMocks.get).toHaveBeenCalledWith("/calls/incoming/");
+  });
+
   it("loads paginated conversations in bounded parallel batches", async () => {
     let firstBatchStartedResolve;
     let secondBatchStartedResolve;

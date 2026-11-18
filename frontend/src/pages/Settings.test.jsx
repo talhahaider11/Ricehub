@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Settings from "./Settings";
@@ -78,5 +78,33 @@ describe("Settings Urdu localization", () => {
     expect(screen.getByRole("heading", { name: "زبان" })).toBeInTheDocument();
     expect(screen.getByText("آپ کی پروفائل کون دیکھ سکتا ہے؟")).toBeInTheDocument();
     await waitFor(() => expect(settingsService.getPrivacy).toHaveBeenCalled());
+  });
+
+  it("persists the system notification toggle immediately", async () => {
+    notificationService.updatePreferences.mockResolvedValue({
+      all_notifications: false,
+    });
+
+    render(
+      <MemoryRouter>
+        <ThemeProvider>
+          <LanguageProvider>
+            <Settings />
+          </LanguageProvider>
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    const toggle = await screen.findByRole("checkbox", {
+      name: "سسٹم اور کال کی اطلاعات",
+    });
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(notificationService.updatePreferences).toHaveBeenCalledWith({
+        all_notifications: false,
+      });
+    });
+    expect(localStorage.getItem("ricehub_notifications_enabled")).toBe("false");
   });
 });

@@ -29,6 +29,10 @@ class Notification(models.Model):
             "event_invitation",
             "Event Invitation"
         )
+        VOICE_CALL = (
+            "voice_call",
+            "Voice Call"
+        )
         VERIFICATION = (
             "verification",
             "Verification"
@@ -74,6 +78,12 @@ class Notification(models.Model):
     conversation_id = models.PositiveIntegerField(
         null=True,
         blank=True
+    )
+
+    call_id = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
     )
 
     is_read = models.BooleanField(

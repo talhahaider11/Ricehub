@@ -8,6 +8,10 @@ import {
 } from "react";
 import useAuth from "../hooks/useAuth";
 import messageService from "../services/messageService";
+import {
+  getNotificationsEnabled,
+  showSystemNotification,
+} from "../services/systemNotificationService";
 import { ACCESS_TOKEN_KEY, WS_URL } from "../utils/constants";
 
 export const CallContext = createContext(null);
@@ -31,10 +35,14 @@ export function CallProvider({ children }) {
   const reconnectTimerRef = useRef(null);
   const reconnectDelayRef = useRef(1000);
   const nextSignalIdRef = useRef(0);
+  const receivedOfferIdsRef = useRef(new Set());
   const [connected, setConnected] = useState(false);
   const [activeCall, setActiveCall] = useState(null);
   const [callSignals, setCallSignals] = useState([]);
   const [error, setError] = useState("");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    getNotificationsEnabled
+  );
 
   const updateActiveCall = useCallback((nextCall) => {
     activeCallRef.current = nextCall;
@@ -65,11 +73,26 @@ export function CallProvider({ children }) {
       ...(Number.isInteger(durationSeconds) ? { duration_seconds: durationSeconds } : {}),
     };
     const fallbackToRest = () => {
-      messageService.sendCallSignal(frame).catch((signalError) => {
+      const request = signalType === "offer"
+        ? messageService.initiateCall(frame)
+        : messageService.sendCallSignal(frame);
+      request.catch((signalError) => {
         console.error("Fallback call signal could not be delivered:", signalError);
         setError(signalError.message || "Call signal could not be delivered.");
       });
     };
+
+    if (signalType === "offer") {
+      if (socket?.readyState === WebSocket.OPEN) {
+        try {
+          socket.send(JSON.stringify(frame));
+        } catch (sendError) {
+          console.error("Call offer WebSocket send failed:", sendError);
+        }
+      }
+      fallbackToRest();
+      return;
+    }
 
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       fallbackToRest();
@@ -112,6 +135,24 @@ export function CallProvider({ children }) {
   }, [updateActiveCall]);
 
   useEffect(() => {
+    const updateNotificationSetting = () => {
+      setNotificationsEnabled(getNotificationsEnabled());
+    };
+    window.addEventListener(
+      "ricehub:notification-setting-changed",
+      updateNotificationSetting
+    );
+    window.addEventListener("storage", updateNotificationSetting);
+    return () => {
+      window.removeEventListener(
+        "ricehub:notification-setting-changed",
+        updateNotificationSetting
+      );
+      window.removeEventListener("storage", updateNotificationSetting);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!user?.id) {
       setConnected(false);
       setCallSignals([]);
@@ -121,6 +162,105 @@ export function CallProvider({ children }) {
     }
 
     let active = true;
+    const handleSignal = (data) => {
+      if (data.type !== "call_signal" && data.type !== "incoming_call") return;
+
+      const signal = {
+        ...data,
+        id: ++nextSignalIdRef.current,
+      };
+      const currentCall = activeCallRef.current;
+      if (signal.signal_type === "offer") {
+        if (receivedOfferIdsRef.current.has(signal.call_id)) return;
+        receivedOfferIdsRef.current.add(signal.call_id);
+        if (receivedOfferIdsRef.current.size > 100) {
+          receivedOfferIdsRef.current.delete(
+            receivedOfferIdsRef.current.values().next().value
+          );
+        }
+        if (!notificationsEnabled) {
+          sendCallSignal({
+            peerId: signal.from_user_id,
+            conversationId: signal.conversation_id,
+            callId: signal.call_id,
+            signalType: "reject",
+            status: "missed",
+            callerId: signal.caller_id || signal.from_user_id,
+          });
+          return;
+        }
+        if (!currentCall) {
+          updateActiveCall({
+            peerId: signal.from_user_id,
+            callerId: signal.caller_id || signal.from_user_id,
+            peer: {
+              id: signal.from_user_id,
+              first_name: signal.caller_name,
+              profile_picture: signal.caller_avatar,
+            },
+            conversationId: signal.conversation_id,
+            callId: signal.call_id,
+            mode: "audio",
+            direction: "incoming",
+          });
+          setCallSignals([signal]);
+          const currentConversationId = new URLSearchParams(
+            window.location.search
+          ).get("conversation_id");
+          const viewingConversation = (
+            document.visibilityState === "visible"
+            && window.location.pathname.startsWith("/messages")
+            && String(currentConversationId) === String(signal.conversation_id)
+          );
+          if (!viewingConversation) {
+            void showSystemNotification({
+              id: `call-${signal.call_id}`,
+              title: signal.caller_name || "Incoming voice call",
+              body: "Incoming voice call...",
+              data: {
+                notification_type: "call",
+                conversation_id: signal.conversation_id,
+                call_id: signal.call_id,
+              },
+              requireInteraction: true,
+            });
+          }
+          return;
+        }
+        if (currentCall.callId === signal.call_id) return;
+        sendCallSignal({
+          peerId: signal.from_user_id,
+          conversationId: signal.conversation_id,
+          callId: signal.call_id,
+          signalType: "reject",
+          status: "missed",
+          callerId: signal.caller_id || signal.from_user_id,
+        });
+        return;
+      }
+
+      if (
+        currentCall
+        && String(signal.from_user_id) === String(currentCall.peerId)
+        && String(signal.conversation_id) === String(currentCall.conversationId)
+        && signal.call_id === currentCall.callId
+      ) {
+        setCallSignals((current) => [...current, signal]);
+      }
+    };
+
+    const pollIncomingCalls = async () => {
+      try {
+        const incomingCalls = await messageService.incomingCalls();
+        if (!active || !Array.isArray(incomingCalls)) return;
+        incomingCalls.forEach(handleSignal);
+      } catch (pollError) {
+        if (active) {
+          console.warn("Incoming calls could not be polled:", pollError);
+        }
+      }
+    };
+
     const connect = () => {
       if (!active) return;
       const token = localStorage.getItem(ACCESS_TOKEN_KEY)
@@ -146,7 +286,7 @@ export function CallProvider({ children }) {
             console.error("Call signaling heartbeat failed:", heartbeatError);
             socket.close();
           }
-        }, 25_000);
+        }, 20_000);
       };
 
       socket.onmessage = (event) => {
@@ -158,54 +298,7 @@ export function CallProvider({ children }) {
             setError(data.message || "Call signaling failed.");
             return;
           }
-          if (data.type !== "call_signal" && data.type !== "incoming_call") return;
-
-          const signal = {
-            ...data,
-            id: ++nextSignalIdRef.current,
-          };
-          const currentCall = activeCallRef.current;
-          if (signal.signal_type === "offer") {
-            if (!currentCall) {
-              updateActiveCall({
-                peerId: signal.from_user_id,
-                callerId: signal.caller_id || signal.from_user_id,
-                peer: {
-                  id: signal.from_user_id,
-                  first_name: signal.caller_name,
-                  profile_picture: signal.caller_avatar,
-                },
-                conversationId: signal.conversation_id,
-                callId: signal.call_id,
-                mode: "audio",
-                direction: "incoming",
-              });
-              setCallSignals([signal]);
-              return;
-            }
-            try {
-              sendCallSignal({
-                peerId: signal.from_user_id,
-                conversationId: signal.conversation_id,
-                callId: signal.call_id,
-                signalType: "reject",
-                status: "missed",
-                callerId: signal.caller_id || signal.from_user_id,
-              });
-            } catch (sendError) {
-              console.error("Busy call could not be rejected:", sendError);
-            }
-            return;
-          }
-
-          if (
-            currentCall
-            && String(signal.from_user_id) === String(currentCall.peerId)
-            && String(signal.conversation_id) === String(currentCall.conversationId)
-            && signal.call_id === currentCall.callId
-          ) {
-            setCallSignals((current) => [...current, signal]);
-          }
+          handleSignal(data);
         } catch (parseError) {
           console.error("Call signaling message could not be read:", parseError);
           setError("Call signaling message could not be read.");
@@ -238,8 +331,11 @@ export function CallProvider({ children }) {
     };
 
     connect();
+    void pollIncomingCalls();
+    const incomingCallPoll = window.setInterval(pollIncomingCalls, 1500);
     return () => {
       active = false;
+      window.clearInterval(incomingCallPoll);
       if (reconnectTimerRef.current) {
         window.clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
@@ -255,7 +351,12 @@ export function CallProvider({ children }) {
       }
       setConnected(false);
     };
-  }, [sendCallSignal, updateActiveCall, user?.id]);
+  }, [
+    notificationsEnabled,
+    sendCallSignal,
+    updateActiveCall,
+    user?.id,
+  ]);
 
   return (
     <CallContext.Provider

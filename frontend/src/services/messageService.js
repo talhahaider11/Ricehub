@@ -199,6 +199,16 @@ const messageService = {
     return response.data;
   },
 
+  async initiateCall(signal) {
+    const response = await api.post("/calls/initiate/", signal);
+    return response.data;
+  },
+
+  async incomingCalls() {
+    const response = await api.get("/calls/incoming/");
+    return response.data;
+  },
+
   async editMessage(messageId, content) {
     const response = await api.patch(
       `/messages/messages/${messageId}/edit/`,

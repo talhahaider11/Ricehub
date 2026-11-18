@@ -12,6 +12,13 @@ import {
   registerPushListeners,
   unregisterPushDevice,
 } from "../services/pushNotificationService";
+import {
+  getNotificationsEnabled,
+  initializeSystemNotifications,
+  setNotificationsEnabled,
+  suppressSystemNotifications,
+} from "../services/systemNotificationService";
+import notificationService from "../services/notificationService";
 
 import { ACCESS_TOKEN_KEY } from "../utils/constants";
 
@@ -25,6 +32,25 @@ export function AuthProvider({ children }) {
   // Helper function: Jab user authenticated ho tab Push Notifications setup honge
   const setupNotifications = async () => {
     try {
+      let enabled = getNotificationsEnabled();
+      try {
+        const preferences = await notificationService.getPreferences();
+        if (typeof preferences.all_notifications === "boolean") {
+          enabled = preferences.all_notifications;
+          setNotificationsEnabled(enabled);
+        }
+      } catch (preferenceError) {
+        console.warn(
+          "Notification preferences could not be synchronized:",
+          preferenceError
+        );
+      }
+      if (!enabled) {
+        await suppressSystemNotifications();
+        await unregisterPushDevice();
+        return;
+      }
+      await initializeSystemNotifications();
       await registerPushListeners();
       await initializePushNotifications();
     } catch (error) {

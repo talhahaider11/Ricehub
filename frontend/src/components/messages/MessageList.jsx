@@ -203,7 +203,7 @@ export default function MessageList({
         const timestamp = getTimestamp(message.created_at, language);
         const isCallLog = message.message_type === "call_log" || Boolean(message.call_id);
         const missedIncomingCall = isCallLog
-          && ["missed", "unanswered"].includes(message.call_status)
+          && ["missed", "unanswered", "cancelled"].includes(message.call_status)
           && !mine;
         const CallIcon = missedIncomingCall
           ? PhoneMissed
@@ -214,7 +214,9 @@ export default function MessageList({
           ? formatCallLogDuration(message.call_duration_seconds, t)
           : missedIncomingCall
             ? t("tapToCallBack")
-            : t("noAnswer");
+            : message.call_status === "cancelled"
+              ? t("callEnded")
+              : t("noAnswer");
         const callCardBody = (
           <>
             <span className={[

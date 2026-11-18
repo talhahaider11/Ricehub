@@ -10,7 +10,9 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from friendships.models import FriendRequest
+from notifications.models import Notification
 from messaging.models import (
+    CallInvitation,
     Conversation,
     ConversationMember,
     Message,
@@ -55,6 +57,24 @@ class MessagingFeatureTests(APITestCase):
             receiver=self.friend,
             status=FriendRequest.Status.ACCEPTED,
         )
+
+    def test_sent_chat_message_creates_a_sender_preview_notification(self):
+        self.make_friends()
+
+        response = self.client.post(
+            f"/api/messages/conversations/{self.conversation.pk}/messages/",
+            {"content": "Can you review this?"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        notification = Notification.objects.get(recipient=self.friend)
+        self.assertEqual(
+            notification.notification_type,
+            Notification.NotificationType.MESSAGE,
+        )
+        self.assertEqual(notification.message, "Can you review this?")
+        self.assertEqual(notification.conversation_id, self.conversation.pk)
 
     def test_group_conversation_can_include_a_non_friend(self):
         response = self.client.post(
@@ -716,6 +736,28 @@ class AdminsOnlyGroupConsumerTests(TransactionTestCase):
         message, _ = async_to_sync(consumer.create_message)("Allowed message")
         self.assertEqual(message.content, "Allowed message")
 
+    def test_websocket_marks_unread_messages_read(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender=self.admin,
+            content="Read receipt check",
+        )
+        consumer = ChatConsumer()
+        consumer.user = self.member
+        consumer.conversation_id = self.conversation.pk
+
+        result = async_to_sync(consumer.mark_messages_read)()
+
+        message.refresh_from_db()
+        membership = ConversationMember.objects.get(
+            conversation=self.conversation,
+            user=self.member,
+        )
+        self.assertTrue(result["enabled"])
+        self.assertEqual(result["message_ids"], [message.pk])
+        self.assertTrue(message.is_read)
+        self.assertIsNotNone(membership.last_read_at)
+
 
 class CallEndedMessageTests(TransactionTestCase):
     def setUp(self):
@@ -874,6 +916,94 @@ class CallSignalFallbackTests(APITestCase):
         self.assertEqual(event["conversation_id"], self.conversation.pk)
         self.assertEqual(event["signal_type"], "offer")
         self.assertFalse(Message.objects.filter(call_id=call_id).exists())
+
+    @patch("messaging.consumers.get_channel_layer")
+    def test_initiated_call_is_available_to_poll_and_removed_after_answer(
+        self,
+        get_layer,
+    ):
+        channel_layer = type("Layer", (), {"group_send": AsyncMock()})()
+        get_layer.return_value = channel_layer
+        call_id = uuid.uuid4()
+        offer = {
+            "type": "call_signal",
+            "to_user_id": self.friend.pk,
+            "conversation_id": self.conversation.pk,
+            "call_id": str(call_id),
+            "call_type": "audio",
+            "signal_type": "offer",
+            "signal": {"type": "offer", "sdp": "v=0\r\nm=audio\r\n"},
+        }
+
+        response = self.client.post(
+            "/api/calls/initiate/",
+            offer,
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        invitation = CallInvitation.objects.get(call_id=call_id)
+        self.assertEqual(invitation.state, CallInvitation.State.RINGING)
+        call_notification = Notification.objects.get(call_id=call_id)
+        self.assertEqual(
+            call_notification.notification_type,
+            Notification.NotificationType.VOICE_CALL,
+        )
+        self.assertEqual(call_notification.conversation_id, self.conversation.pk)
+
+        self.client.force_authenticate(self.friend)
+        incoming_response = self.client.get("/api/calls/incoming/")
+        self.assertEqual(len(incoming_response.data), 1)
+        self.assertEqual(incoming_response.data[0]["call_id"], str(call_id))
+        self.assertEqual(incoming_response.data[0]["signal"], offer["signal"])
+
+        answer = {
+            **offer,
+            "to_user_id": self.user.pk,
+            "caller_id": self.user.pk,
+            "signal_type": "answer",
+            "signal": {"type": "answer", "sdp": "v=0\r\nm=audio\r\n"},
+        }
+        answer_response = self.client.post(
+            "/api/messages/calls/signal/",
+            answer,
+            format="json",
+        )
+        self.assertEqual(answer_response.status_code, 200)
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.state, CallInvitation.State.ANSWERED)
+        self.assertEqual(self.client.get("/api/calls/incoming/").data, [])
+
+    @patch("messaging.consumers.get_channel_layer")
+    def test_call_offer_is_still_queued_when_channel_delivery_times_out(
+        self,
+        get_layer,
+    ):
+        channel_layer = type(
+            "Layer",
+            (),
+            {"group_send": AsyncMock(side_effect=TimeoutError)},
+        )()
+        get_layer.return_value = channel_layer
+        call_id = uuid.uuid4()
+
+        response = self.client.post(
+            "/api/calls/initiate/",
+            {
+                "type": "call_signal",
+                "to_user_id": self.friend.pk,
+                "conversation_id": self.conversation.pk,
+                "call_id": str(call_id),
+                "call_type": "audio",
+                "signal_type": "offer",
+                "signal": {"type": "offer", "sdp": "v=0\r\nm=audio\r\n"},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertTrue(CallInvitation.objects.filter(call_id=call_id).exists())
+        self.client.force_authenticate(self.friend)
+        self.assertEqual(len(self.client.get("/api/calls/incoming/").data), 1)
 
     @patch("messaging.consumers.get_channel_layer")
     def test_rest_fallback_rejects_video_sdp(self, get_layer):

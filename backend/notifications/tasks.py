@@ -33,7 +33,7 @@ def _build_message(notification, device):
     }
     if notification.sender_id:
         data["sender_id"] = str(notification.sender_id)
-    for field in ("post_id", "comment_id", "conversation_id"):
+    for field in ("post_id", "comment_id", "conversation_id", "call_id"):
         value = getattr(notification, field)
         if value is not None:
             data[field] = str(value)
@@ -41,7 +41,11 @@ def _build_message(notification, device):
     return messaging.Message(
         token=device.token,
         notification=messaging.Notification(
-            title=f"RiceHub · {notification.get_notification_type_display()}",
+            title=(
+                notification.sender.get_full_name() or notification.sender.username
+                if notification.sender
+                else f"RiceHub · {notification.get_notification_type_display()}"
+            ),
             body=notification.message,
         ),
         data=data,

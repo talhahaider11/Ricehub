@@ -11,8 +11,8 @@ from redis.exceptions import RedisError
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from .models import Conversation, ConversationMember, Message
-from .services import restore_conversation_memberships
+from .models import CallInvitation, Conversation, ConversationMember, Message
+from .services import notify_new_message, restore_conversation_memberships
 from users.privacy import can_message_between
 
 
@@ -135,6 +135,49 @@ def save_call_ended_message(
     }, created
 
 
+@database_sync_to_async
+def save_call_invitation(call_id, conversation_id, caller_id, recipient_id, offer):
+    invitation, _ = CallInvitation.objects.get_or_create(
+        call_id=call_id,
+        defaults={
+            "conversation_id": conversation_id,
+            "caller_id": caller_id,
+            "recipient_id": recipient_id,
+            "offer": offer,
+        },
+    )
+    is_matching_invitation = (
+        invitation.conversation_id == conversation_id
+        and invitation.caller_id == caller_id
+        and invitation.recipient_id == recipient_id
+        and invitation.offer == offer
+    )
+    if is_matching_invitation and invitation.state == CallInvitation.State.RINGING:
+        from notifications.models import Notification
+        from notifications.services import create_notification
+
+        caller = User.objects.get(pk=caller_id)
+        recipient = User.objects.get(pk=recipient_id)
+        create_notification(
+            recipient=recipient,
+            sender=caller,
+            notification_type=Notification.NotificationType.VOICE_CALL,
+            message=f"Incoming voice call from {caller.get_full_name() or caller.username}.",
+            conversation_id=conversation_id,
+            call_id=call_id,
+        )
+    return is_matching_invitation
+
+
+@database_sync_to_async
+def update_call_invitation(call_id, conversation_id, state):
+    CallInvitation.objects.filter(
+        call_id=call_id,
+        conversation_id=conversation_id,
+        state="ringing",
+    ).update(state=state)
+
+
 async def relay_call_signal(user, data):
     if not isinstance(data, dict) or data.get("type") != "call_signal":
         return "Call signal is invalid."
@@ -203,6 +246,17 @@ async def relay_call_signal(user, data):
         "status": call_status,
     }
 
+    if signal_type == "offer":
+        invitation_saved = await save_call_invitation(
+            call_id,
+            conversation_id,
+            user.id,
+            target_user_id,
+            signal,
+        )
+        if not invitation_saved:
+            return "Call id is already associated with another call."
+
     channel_layer = get_channel_layer()
     if not channel_layer:
         logger.error("Call signal from user %s has no channel layer.", user.id)
@@ -212,6 +266,11 @@ async def relay_call_signal(user, data):
     except (ChannelFull, RedisError, OSError, TimeoutError):
         logger.exception("Call signal from user %s could not be routed.", user.id)
         return "Call signal could not be delivered."
+
+    if signal_type == "answer":
+        await update_call_invitation(call_id, conversation_id, "answered")
+    elif signal_type in {"reject", "hangup"}:
+        await update_call_invitation(call_id, conversation_id, "ended")
 
     if signal_type in {"reject", "hangup"}:
         message, created = await save_call_ended_message(
@@ -659,6 +718,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             content=content,
             reply_to=reply_to,
         )
+        notify_new_message(conversation, self.user, message)
 
         restore_conversation_memberships(conversation)
         conversation.save()
@@ -760,7 +820,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         unread = conversation.messages.filter(is_read=False).exclude(sender=self.user)
         message_ids = list(unread.values_list("id", flat=True))
         unread.update(is_read=True)
-        from .models import ConversationMember
         ConversationMember.objects.update_or_create(
             conversation=conversation,
             user=self.user,

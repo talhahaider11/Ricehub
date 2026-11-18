@@ -13,9 +13,14 @@ import {
 import { useLanguage } from "../../context/LanguageContext";
 import { useCall } from "../../context/CallContext";
 import Avatar from "../common/Avatar";
+import {
+  dismissSystemNotification,
+  getNotificationsEnabled,
+} from "../../services/systemNotificationService";
 
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
 ];
 const CALL_RING_TIMEOUT_MS = 30_000;
 const VoiceCallAudio = registerPlugin("VoiceCallAudio");
@@ -102,6 +107,27 @@ export default function AudioCallControls() {
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
   const [error, setError] = useState("");
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    getNotificationsEnabled
+  );
+
+  useEffect(() => {
+    const updateNotificationSetting = () => {
+      setNotificationsEnabled(getNotificationsEnabled());
+    };
+    window.addEventListener(
+      "ricehub:notification-setting-changed",
+      updateNotificationSetting
+    );
+    window.addEventListener("storage", updateNotificationSetting);
+    return () => {
+      window.removeEventListener(
+        "ricehub:notification-setting-changed",
+        updateNotificationSetting
+      );
+      window.removeEventListener("storage", updateNotificationSetting);
+    };
+  }, []);
 
   const setAudioOutputRoute = useCallback(async (speakerOn, active = true) => {
     const audio = remoteAudioRef.current;
@@ -145,6 +171,9 @@ export default function AudioCallControls() {
   }, [t]);
 
   const closeCall = useCallback((preserveCallMode = false, preserveActiveCall = false) => {
+    if (activeCall?.callId) {
+      void dismissSystemNotification(`call-${activeCall.callId}`);
+    }
     if (peerConnectionRef.current) {
       peerConnectionRef.current.onconnectionstatechange = null;
       peerConnectionRef.current.close();
@@ -168,7 +197,7 @@ export default function AudioCallControls() {
     setCallState("idle");
     setCallMinimized(false);
     if (!preserveActiveCall) clearActiveCall();
-  }, [clearActiveCall, setAudioOutputRoute, t]);
+  }, [activeCall?.callId, clearActiveCall, setAudioOutputRoute, t]);
 
   const createPeerConnection = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
@@ -314,7 +343,7 @@ export default function AudioCallControls() {
     const ringing = callState === "calling"
       || callState === "ringing"
       || callState === "incoming";
-    if (!ringing) return undefined;
+    if (!ringing || !notificationsEnabled) return undefined;
 
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return undefined;
@@ -374,7 +403,7 @@ export default function AudioCallControls() {
         audioContext.close().catch(() => {});
       }
     };
-  }, [callState]);
+  }, [callState, notificationsEnabled]);
 
   useEffect(() => {
     const restoreCall = () => setCallMinimized(false);
@@ -495,6 +524,21 @@ export default function AudioCallControls() {
     return () => window.clearTimeout(timer);
   }, [activeCall?.direction, callState, endCall, t]);
 
+  useEffect(() => {
+    if (!notificationsEnabled && callState === "incoming") {
+      endCall("missed");
+    }
+  }, [callState, endCall, notificationsEnabled]);
+
+  useEffect(() => {
+    if (
+      activeCall?.callId
+      && ["connecting", "connected"].includes(callState)
+    ) {
+      void dismissSystemNotification(`call-${activeCall.callId}`);
+    }
+  }, [activeCall?.callId, callState]);
+
   const toggleMute = () => {
     const nextMuted = !muted;
     localStreamRef.current?.getAudioTracks().forEach((track) => {
@@ -592,6 +636,7 @@ export default function AudioCallControls() {
               <audio
                 ref={remoteAudioRef}
                 autoPlay
+                playsInline
                 aria-label={t("remoteCallAudio")}
               />
             </div>

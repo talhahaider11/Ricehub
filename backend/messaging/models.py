@@ -180,3 +180,39 @@ class Message(models.Model):
             f"{self.sender.username}: "
             f"{self.content[:40]}"
         )
+
+
+class CallInvitation(models.Model):
+    class State(models.TextChoices):
+        RINGING = "ringing", "Ringing"
+        ANSWERED = "answered", "Answered"
+        ENDED = "ended", "Ended"
+
+    call_id = models.UUIDField(unique=True)
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="call_invitations",
+    )
+    caller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="outgoing_call_invitations",
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="incoming_call_invitations",
+    )
+    offer = models.JSONField()
+    state = models.CharField(
+        max_length=12,
+        choices=State.choices,
+        default=State.RINGING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["recipient", "state", "created_at"]),
+        ]

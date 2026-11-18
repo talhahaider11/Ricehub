@@ -7,6 +7,11 @@ import {
 import notificationService from "../services/notificationService";
 import useAuth from "../hooks/useAuth";
 import { getArrayResults } from "../utils/arrayResults";
+import { ACCESS_TOKEN_KEY, WS_URL } from "../utils/constants";
+import {
+  getNotificationsEnabled,
+  showSystemNotification,
+} from "../services/systemNotificationService";
 
 export const NotificationContext = createContext(null);
 
@@ -83,6 +88,117 @@ export function NotificationProvider({ children }) {
       window.removeEventListener("ricemarket:notifications-refresh", refreshOnPush);
     };
   }, [loadNotifications]);
+
+  useEffect(() => {
+    if (!user?.id || typeof WebSocket === "undefined") return undefined;
+    let active = true;
+    let socket;
+    let reconnectTimer;
+    let reconnectDelay = 1000;
+
+    const connect = () => {
+      if (!active || !getNotificationsEnabled()) return;
+      const token = localStorage.getItem(ACCESS_TOKEN_KEY)
+        || localStorage.getItem("access_token");
+      if (!token) return;
+
+      try {
+        socket = new WebSocket(
+          `${WS_URL}/notifications/?token=${encodeURIComponent(token)}`
+        );
+      } catch (socketError) {
+        console.error("Notification WebSocket could not be opened:", socketError);
+        reconnectTimer = window.setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, 15_000);
+        return;
+      }
+
+      socket.onopen = () => {
+        reconnectDelay = 1000;
+      };
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type !== "notification" || !data.notification) return;
+          const item = data.notification;
+          void loadNotifications();
+          const currentConversationId = new URLSearchParams(
+            window.location.search
+          ).get("conversation_id");
+          const viewingConversation = (
+            Boolean(item.conversation_id)
+            &&
+            document.visibilityState === "visible"
+            && window.location.pathname.startsWith("/messages")
+            && String(currentConversationId) === String(item.conversation_id)
+          );
+          const viewingNotifications = (
+            document.visibilityState === "visible"
+            && window.location.pathname.startsWith("/notifications")
+          );
+          if (viewingConversation || viewingNotifications) return;
+          void showSystemNotification({
+            id: item.call_id ? `call-${item.call_id}` : item.id,
+            title: item.sender_name || "RiceHub",
+            body: item.message || "You have a new notification.",
+            data: {
+              notification_id: item.id,
+              notification_type: item.type,
+              sender_id: item.sender_id,
+              conversation_id: item.conversation_id,
+              post_id: item.post_id,
+              comment_id: item.comment_id,
+              call_id: item.call_id,
+            },
+          });
+        } catch (socketError) {
+          console.error("Notification WebSocket message could not be read:", socketError);
+        }
+      };
+      socket.onerror = () => {
+        socket?.close();
+      };
+      socket.onclose = () => {
+        if (!active || !getNotificationsEnabled()) return;
+        reconnectTimer = window.setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, 15_000);
+      };
+    };
+
+    const updateSocketForPreference = () => {
+      if (getNotificationsEnabled()) {
+        if (!socket || socket.readyState === WebSocket.CLOSED) connect();
+        return;
+      }
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+        socket = null;
+      }
+    };
+
+    connect();
+    window.addEventListener(
+      "ricehub:notification-setting-changed",
+      updateSocketForPreference
+    );
+    return () => {
+      active = false;
+      window.removeEventListener(
+        "ricehub:notification-setting-changed",
+        updateSocketForPreference
+      );
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+    };
+  }, [user?.id, loadNotifications]);
 
   const unreadCount =
     totalUnreadCount ?? notifications.filter((item) => !item.is_read).length;

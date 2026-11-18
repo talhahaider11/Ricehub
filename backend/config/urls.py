@@ -75,6 +75,7 @@ urlpatterns = [
     path("api/", include("comments.urls")),
     path("api/", include("reactions.urls")),
     path("api/friends/", include("friendships.urls")),
+    path("api/calls/", include("messaging.call_urls")),
     path("api/messages/", include("messaging.urls")),
     path("api/notifications/", include("notifications.urls")),
     path("api/search/", include("search.urls")),

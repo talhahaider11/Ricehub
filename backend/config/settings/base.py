@@ -123,8 +123,14 @@ CHANNEL_LAYERS = {
                 {
                     "address": REDIS_URL,
                     "protocol": 2,
+                    "socket_connect_timeout": 10,
+                    "socket_timeout": None,
+                    "retry_on_timeout": True,
+                    "health_check_interval": 30,
                 }
             ],
+            "capacity": 1500,
+            "expiry": 10,
         },
     },
 }
