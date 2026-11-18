@@ -8073,13 +8073,13 @@ body {
   max-width: min(75vw, 100%);
   box-sizing: border-box;
   flex-direction: column;
-  gap: 5px;
-  padding: 8px 12px;
+  gap: 3px;
+  padding: 5px 10px;
   overflow-wrap: break-word;
   word-break: break-word;
   border-radius: 20px 20px 20px 6px;
-  background: transparent;
-  color: var(--text-primary);
+  background: darkgrey;
+  color: black;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
 }
 
@@ -8156,7 +8156,7 @@ body {
   border-color: transparent;
   border-radius: 20px 20px 6px 20px;
   background: linear-gradient(125deg, var(--accent-primary), var(--accent-secondary));
-  color: #fff;
+  color: black;
 }
 
 .message-bubble p {
@@ -8200,58 +8200,10 @@ body {
   width: 100%;
   min-height: 56px;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 15px;
-  background: color-mix(in srgb, #22c55e 15%, var(--surface));
-  color: var(--text-primary);
-  text-align: left;
-}
-
-button.message-call-card {
-  cursor: pointer;
-}
-
-button.message-call-card:hover {
-  background: color-mix(in srgb, #22c55e 23%, var(--surface));
-}
-
-.message-call-card--missed {
-  background: var(--surface-secondary);
-}
-
-.message-call-icon {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
-  place-items: center;
-  border-radius: 50%;
-  background: color-mix(in srgb, #22c55e 16%, var(--surface));
-  color: #168a46;
-}
-
-.message-call-icon.is-missed {
-  background: color-mix(in srgb, var(--danger) 13%, var(--surface));
-  color: var(--danger);
-}
-
-.message-call-copy {
-  display: grid;
-  min-width: 0;
-  flex: 1;
-  gap: 2px;
-}
-
-.message-call-copy strong {
-  font-size: 0.86rem;
-  font-weight: 650;
-}
-
-.message-call-copy small {
+  gap: 6px;
+  margin: 0;
   color: var(--text-secondary);
-  font-size: 0.74rem;
+  font-size: 0.88rem;
 }
 
 .message-call-time {
@@ -8395,9 +8347,9 @@ button.message-call-card:hover {
   align-items: center;
   gap: 2px;
   padding: 0 6px 0 16px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid mediumspringgreen;
   border-radius: 26px;
-  background: var(--bg-app);
+  background: transparent
 }
 
 .messages-shell .message-composer-field input {
