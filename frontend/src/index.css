@@ -8086,7 +8086,7 @@ body {
   word-break: break-word;
   border-radius: 20px 20px 20px 6px;
   background: darkgrey;
-  color: var(--text-primary);
+  color: black;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
 }
 
