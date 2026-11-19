@@ -3,6 +3,7 @@ import { useState } from "react";
 import { getMediaAsset } from "../../services/mediaService";
 import storyService from "../../services/storyService";
 import MediaUploader from "../media/MediaUploader";
+import VideoPreview from "../media/VideoPreview";
 
 const PROCESSING_POLL_INTERVAL_MS = 2000;
 const MAX_PROCESSING_POLLS = 150;
@@ -44,6 +45,7 @@ export default function StoryUploader({ onCreated }) {
   const [caption, setCaption] = useState("");
   const [visibility, setVisibility] = useState("friends");
   const [media, setMedia] = useState(null);
+  const [videoPreviewFile, setVideoPreviewFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [processingSeconds, setProcessingSeconds] = useState(0);
   const [error, setError] = useState("");
@@ -68,6 +70,7 @@ export default function StoryUploader({ onCreated }) {
       window.dispatchEvent(new Event("ricehub:stories-updated"));
       setCaption("");
       setMedia(null);
+      setVideoPreviewFile(null);
       onCreated?.();
     } catch (publishError) {
       console.error("Story could not be published:", publishError);
@@ -103,11 +106,17 @@ export default function StoryUploader({ onCreated }) {
         maxFiles={1}
         multiple={false}
         accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+        onFileSelected={(file, mediaType) => {
+          setVideoPreviewFile(mediaType === "video" ? file : null);
+        }}
         onUploaded={(assets) => {
-          setMedia(assets?.[0] || null);
+          const asset = assets?.[0];
+          setMedia(asset || null);
+          if (asset?.media_type !== "video") setVideoPreviewFile(null);
           setError("");
         }}
       />
+      {videoPreviewFile && <VideoPreview file={videoPreviewFile} />}
       {media && (
         <p className="story-upload-status">
           {media.original_filename || "Media selected"} · {media.processing_status}

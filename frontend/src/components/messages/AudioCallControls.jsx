@@ -24,6 +24,7 @@ const ICE_SERVERS = [
 ];
 const CALL_RING_TIMEOUT_MS = 30_000;
 const VoiceCallAudio = registerPlugin("VoiceCallAudio");
+const AndroidAudio = registerPlugin("AndroidAudio");
 
 function formatCallDuration(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -344,6 +345,21 @@ export default function AudioCallControls() {
       || callState === "ringing"
       || callState === "incoming";
     if (!ringing || !notificationsEnabled) return undefined;
+
+    if (Capacitor.isNativePlatform()) {
+      if (Capacitor.getPlatform() !== "android" || callState !== "incoming") {
+        return undefined;
+      }
+
+      AndroidAudio.playDefaultRingtone().catch((ringError) => {
+        console.error("The default call ringtone could not be played:", ringError);
+      });
+      return () => {
+        AndroidAudio.stopDefaultRingtone().catch((ringError) => {
+          console.error("The default call ringtone could not be stopped:", ringError);
+        });
+      };
+    }
 
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return undefined;

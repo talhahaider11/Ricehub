@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(VoiceCallAudioPlugin.class);
+        registerPlugin(AndroidAudioPlugin.class);
         super.onCreate(savedInstanceState);
     }
 

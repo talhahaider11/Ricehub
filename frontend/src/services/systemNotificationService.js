@@ -38,12 +38,11 @@ export async function initializeSystemNotifications() {
 
     if (Capacitor.getPlatform() === "android") {
       await LocalNotifications.createChannel({
-        id: "ricehub_notifications",
+        id: "ricehub_notifications_v2",
         name: "RiceHub notifications",
         description: "Messages, calls, and account activity",
         importance: 5,
         visibility: 1,
-        sound: "default",
       });
     }
     if (!nativeActionListener) {
@@ -96,7 +95,7 @@ export async function showSystemNotification({
           title,
           body,
           ...(Capacitor.getPlatform() === "android"
-            ? { channelId: "ricehub_notifications" }
+            ? { channelId: "ricehub_notifications_v2" }
             : {}),
           extra: data,
         }],

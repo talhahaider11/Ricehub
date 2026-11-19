@@ -24,7 +24,15 @@ describe("MediaUploader", () => {
 
   it("captures photos and videos with separate native inputs and uploads both", async () => {
     const onUploaded = vi.fn();
-    render(<MediaUploader maxFiles={2} multiple={false} onUploaded={onUploaded} />);
+    const onFileSelected = vi.fn();
+    render(
+      <MediaUploader
+        maxFiles={2}
+        multiple={false}
+        onUploaded={onUploaded}
+        onFileSelected={onFileSelected}
+      />
+    );
 
     const photoInput = screen.getByLabelText("Take photo");
     const videoInput = screen.getByLabelText("Record video");
@@ -60,11 +68,13 @@ describe("MediaUploader", () => {
       );
       expect(onUploaded).toHaveBeenNthCalledWith(1, [
         expect.objectContaining({ id: 21, media_type: "image" }),
-      ]);
+      ], [photo]);
       expect(onUploaded).toHaveBeenNthCalledWith(2, [
         expect.objectContaining({ id: 21, media_type: "video" }),
-      ]);
+      ], [video]);
     });
+    expect(onFileSelected).toHaveBeenCalledWith(photo, "image");
+    expect(onFileSelected).toHaveBeenCalledWith(video, "video");
     expect(photoInput).toHaveValue("");
     expect(videoInput).toHaveValue("");
   });

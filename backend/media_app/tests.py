@@ -96,8 +96,9 @@ class MediaUploadTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertFalse(MediaAsset.objects.exists())
 
+    @patch("media_app.services._has_active_video_workers", return_value=True)
     @patch("media_app.services.process_video.delay")
-    def test_video_upload_is_queued_and_not_reported_ready(self, enqueue):
+    def test_video_upload_is_queued_and_not_reported_ready(self, enqueue, _workers):
         video = SimpleUploadedFile(
             "clip.mp4",
             b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00",
@@ -114,6 +115,50 @@ class MediaUploadTests(APITestCase):
         self.assertEqual(response.data["processing_status"], "pending")
         self.assertEqual(response.data["mime_type"], "video/mp4")
         enqueue.assert_called_once_with(response.data["id"])
+
+    @patch("media_app.services._has_active_video_workers", return_value=False)
+    @patch("media_app.services.process_video.delay")
+    def test_video_upload_is_ready_when_no_workers_are_available(
+        self, enqueue, _workers
+    ):
+        video = SimpleUploadedFile(
+            "clip.mp4",
+            b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00",
+            content_type="video/mp4",
+        )
+
+        response = self.client.post(
+            "/api/media/upload/",
+            {"file": video, "media_type": MediaAsset.MediaType.VIDEO},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["processing_status"], "ready")
+        self.assertTrue(response.data["url"])
+        enqueue.assert_not_called()
+
+    @patch("media_app.services._has_active_video_workers", return_value=True)
+    @patch(
+        "media_app.services.process_video.delay",
+        side_effect=RuntimeError("broker unavailable"),
+    )
+    def test_video_upload_is_ready_when_enqueueing_fails(self, _enqueue, _workers):
+        video = SimpleUploadedFile(
+            "clip.mp4",
+            b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00",
+            content_type="video/mp4",
+        )
+
+        response = self.client.post(
+            "/api/media/upload/",
+            {"file": video, "media_type": MediaAsset.MediaType.VIDEO},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["processing_status"], "ready")
+        self.assertTrue(response.data["url"])
 
     def test_post_can_attach_media_only_owned_by_the_request_user(self):
         asset = self.upload_image()

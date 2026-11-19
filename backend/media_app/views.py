@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from config.throttling import MediaUploadRateThrottle
 from .models import MediaAsset
 from .serializers import MediaAssetSerializer, MediaUploadSerializer
-from .services import MediaQueueUnavailable, delete_unattached_media, upload_media
+from .services import delete_unattached_media, upload_media
 
 
 class MediaUploadView(generics.GenericAPIView):
@@ -30,11 +30,6 @@ class MediaUploadView(generics.GenericAPIView):
         except DjangoValidationError as error:
             detail = error.message_dict if hasattr(error, "message_dict") else error.messages
             raise serializers.ValidationError(detail) from error
-        except MediaQueueUnavailable as error:
-            return Response(
-                {"detail": str(error)},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
 
         output = MediaAssetSerializer(asset, context=self.get_serializer_context())
         return Response(output.data, status=status.HTTP_201_CREATED)

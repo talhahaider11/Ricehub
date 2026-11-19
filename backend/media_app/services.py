@@ -1,10 +1,11 @@
+import logging
 from pathlib import Path
 from uuid import uuid4
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils.text import get_valid_filename
-from kombu.exceptions import OperationalError
 
 from .image_processing import generate_thumbnail
 from .models import MediaAsset
@@ -12,8 +13,43 @@ from .tasks import process_video
 from .validators import validate_media_file
 
 
-class MediaQueueUnavailable(Exception):
-    pass
+logger = logging.getLogger(__name__)
+
+
+def _has_active_video_workers():
+    try:
+        workers = process_video.app.control.inspect(timeout=0.5).ping()
+    except Exception:
+        logger.warning(
+            "Could not check for active video-processing workers.",
+            exc_info=True,
+        )
+        return False
+    return bool(workers)
+
+
+def _mark_video_ready(asset):
+    asset.processing_status = MediaAsset.ProcessingStatus.READY
+    asset.save(update_fields=["processing_status", "updated_at"])
+
+
+def _queue_video_processing(asset):
+    if not getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+        if not _has_active_video_workers():
+            logger.warning(
+                "No active video-processing workers; serving the original video."
+            )
+            _mark_video_ready(asset)
+            return
+
+    try:
+        process_video.delay(asset.pk)
+    except Exception:
+        logger.warning(
+            "Video processing could not be queued; serving the original video.",
+            exc_info=True,
+        )
+        _mark_video_ready(asset)
 
 
 def upload_media(owner, uploaded_file, media_type):
@@ -48,14 +84,7 @@ def upload_media(owner, uploaded_file, media_type):
                 asset.delete()
 
     if media_type == MediaAsset.MediaType.VIDEO:
-        try:
-            process_video.delay(asset.pk)
-        except OperationalError as error:
-            asset.file.delete(save=False)
-            asset.delete()
-            raise MediaQueueUnavailable(
-                "The video processing queue is unavailable. Please try again."
-            ) from error
+        _queue_video_processing(asset)
 
     return asset
 

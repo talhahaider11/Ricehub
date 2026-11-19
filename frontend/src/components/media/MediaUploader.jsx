@@ -22,6 +22,7 @@ function getErrorMessage(error) {
 export default function MediaUploader({
   maxFiles = 10,
   onUploaded,
+  onFileSelected,
   accept = "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime",
   multiple = true,
   showCamera = true,
@@ -40,6 +41,7 @@ export default function MediaUploader({
     setError("");
     setUploading(true);
     const uploaded = [];
+    const uploadedFiles = [];
     try {
       for (const file of files) {
         const mediaType = getMediaType(file);
@@ -55,6 +57,7 @@ export default function MediaUploader({
           );
         }
 
+        onFileSelected?.(file, mediaType);
         setFilename(file.name);
         setProgress(0);
         const asset = await uploadMedia(file, mediaType, (event) => {
@@ -63,10 +66,11 @@ export default function MediaUploader({
           }
         });
         uploaded.push(asset);
+        uploadedFiles.push(file);
       }
-      onUploaded?.(uploaded);
+      onUploaded?.(uploaded, uploadedFiles);
     } catch (uploadError) {
-      if (uploaded.length) onUploaded?.(uploaded);
+      if (uploaded.length) onUploaded?.(uploaded, uploadedFiles);
       setError(getErrorMessage(uploadError));
     } finally {
       setUploading(false);

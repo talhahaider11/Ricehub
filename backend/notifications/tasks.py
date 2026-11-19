@@ -52,8 +52,7 @@ def _build_message(notification, device):
         android=messaging.AndroidConfig(
             priority="high",
             notification=messaging.AndroidNotification(
-                channel_id="ricehub_notifications",
-                sound="default",
+                channel_id="ricehub_notifications_v2",
             ),
         ),
         apns=messaging.APNSConfig(

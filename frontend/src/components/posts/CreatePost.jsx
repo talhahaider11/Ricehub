@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   FileText,
@@ -12,6 +12,7 @@ import useAuth from "../../hooks/useAuth";
 import Avatar from "../common/Avatar";
 import Button from "../common/Button";
 import MediaUploader from "../media/MediaUploader";
+import VideoPreview from "../media/VideoPreview";
 import { deleteMedia } from "../../services/mediaService";
 import { MAX_POST_MEDIA_COUNT } from "../../utils/constants";
 
@@ -25,10 +26,12 @@ export default function CreatePost({
   const [visibility, setVisibility] = useState("public");
   const [postType, setPostType] = useState(initialPostType);
   const [mediaAssets, setMediaAssets] = useState([]);
+  const [videoPreviews, setVideoPreviews] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [error, setError] = useState("");
+  const nextVideoPreviewId = useRef(0);
 
   useEffect(() => {
     const openMenu = () => setCreateMenuOpen(true);
@@ -56,6 +59,7 @@ export default function CreatePost({
       const post = await postService.create(formData);
       setContent("");
       setMediaAssets([]);
+      setVideoPreviews([]);
       setPostType("post");
       onCreated?.(post);
     } catch (createError) {
@@ -73,6 +77,9 @@ export default function CreatePost({
     try {
       await deleteMedia(assetId);
       setMediaAssets((assets) => assets.filter((asset) => asset.id !== assetId));
+      setVideoPreviews((previews) =>
+        previews.filter((preview) => preview.asset?.id !== assetId)
+      );
     } catch (removeError) {
       setError(
         removeError.response?.data?.detail ||
@@ -144,22 +151,43 @@ export default function CreatePost({
 
       <MediaUploader
         maxFiles={MAX_POST_MEDIA_COUNT - mediaAssets.length}
-        onUploaded={(uploaded) =>
-          setMediaAssets((current) => [...current, ...uploaded])
-        }
+        onFileSelected={(file, mediaType) => {
+          if (mediaType === "video") {
+            nextVideoPreviewId.current += 1;
+            setVideoPreviews((current) => [
+              ...current,
+              {
+                id: nextVideoPreviewId.current,
+                file,
+              },
+            ]);
+          }
+        }}
+        onUploaded={(uploaded, files = []) => {
+          setMediaAssets((current) => [
+            ...current,
+            ...uploaded,
+          ]);
+          const assetsByFile = new Map(
+            files.map((file, index) => [file, uploaded[index]])
+          );
+          setVideoPreviews((previews) =>
+            previews.map((preview) => ({
+              ...preview,
+              asset: assetsByFile.get(preview.file) || preview.asset,
+            }))
+          );
+        }}
       />
-      {mediaAssets.length > 0 && (
+      {(mediaAssets.some((asset) => asset.media_type !== "video")
+        || videoPreviews.length > 0) && (
         <div className="media-uploaded-list" aria-label="Uploaded media">
-          {mediaAssets.map((asset) => (
+          {mediaAssets.filter((asset) => asset.media_type !== "video").map((asset) => (
             <div className="media-uploaded-item" key={asset.id}>
-              {asset.media_type === "video" ? (
-                <video src={asset.url} controls playsInline preload="metadata" />
-              ) : (
-                <img
-                  src={asset.thumbnail_url || asset.url}
-                  alt={asset.original_filename || "Selected media"}
-                />
-              )}
+              <img
+                src={asset.thumbnail_url || asset.url}
+                alt={asset.original_filename || "Selected media"}
+              />
               <span>{asset.original_filename}</span>
               <button
                 type="button"
@@ -168,6 +196,23 @@ export default function CreatePost({
               >
                 ✕
               </button>
+            </div>
+          ))}
+          {videoPreviews.map((preview) => (
+            <div className="media-uploaded-item" key={preview.id}>
+              <VideoPreview file={preview.file} />
+              <span>
+                {preview.asset?.original_filename || preview.file.name}
+              </span>
+              {preview.asset && (
+                <button
+                  type="button"
+                  onClick={() => void removeMedia(preview.asset.id)}
+                  aria-label={`Remove ${preview.asset.original_filename || "uploaded media"}`}
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
         </div>

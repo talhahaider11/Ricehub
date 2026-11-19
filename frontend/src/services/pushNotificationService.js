@@ -7,7 +7,7 @@ import {
 } from "./systemNotificationService";
 
 const PUSH_TOKEN_KEY = "ricemarket_push_token";
-const PUSH_CHANNEL_ID = "ricehub_notifications";
+const PUSH_CHANNEL_ID = "ricehub_notifications_v2";
 let listenerRegistration;
 
 function logPushError(message, error) {
@@ -109,7 +109,6 @@ export async function initializePushNotifications() {
         description: "Messages, friend activity, and post updates",
         importance: 5,
         visibility: 1,
-        sound: "default",
       });
     }
 
