@@ -29,7 +29,7 @@ async function waitForMediaReady(mediaId, onProgress) {
     const asset = await getMediaAsset(mediaId);
     if (asset.processing_status === "ready") return asset;
     if (asset.processing_status === "failed") {
-      throw new Error("Video processing failed. Please upload another video.");
+      return asset;
     }
 
     onProgress?.(Math.round(((attempt + 1) * PROCESSING_POLL_INTERVAL_MS) / 1000));
@@ -105,6 +105,7 @@ export default function StoryUploader({ onCreated }) {
       <MediaUploader
         maxFiles={1}
         multiple={false}
+        useInAppVideoRecorder
         accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
         onFileSelected={(file, mediaType) => {
           setVideoPreviewFile(mediaType === "video" ? file : null);

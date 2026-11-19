@@ -9,6 +9,7 @@ import { uploadMedia } from "../../services/mediaService";
 import { getMediaType } from "../../utils/media";
 import UploadProgress from "./UploadProgress";
 import NativeCameraActions from "./NativeCameraActions";
+import InAppVideoRecorder from "./InAppVideoRecorder";
 
 function getErrorMessage(error) {
   return (
@@ -26,11 +27,13 @@ export default function MediaUploader({
   accept = "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime",
   multiple = true,
   showCamera = true,
+  useInAppVideoRecorder = false,
 }) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [filename, setFilename] = useState("");
   const [error, setError] = useState("");
+  const [recorderOpen, setRecorderOpen] = useState(false);
   async function uploadFiles(files) {
     if (!files.length) return;
     if (files.length > maxFiles) {
@@ -95,10 +98,30 @@ export default function MediaUploader({
         />
       </label>
 
-      {showCamera && (
+      {showCamera && useInAppVideoRecorder && (
+        <button
+          type="button"
+          className="native-camera-trigger"
+          disabled={uploading || maxFiles <= 0}
+          onClick={() => setRecorderOpen(true)}
+        >
+          <ImagePlus size={18} />
+          Camera
+        </button>
+      )}
+      {showCamera && !useInAppVideoRecorder && (
         <NativeCameraActions
           disabled={uploading || maxFiles <= 0}
           onCapture={(file) => uploadFiles([file])}
+        />
+      )}
+      {recorderOpen && (
+        <InAppVideoRecorder
+          onCapture={(file) => {
+            setRecorderOpen(false);
+            void uploadFiles([file]);
+          }}
+          onClose={() => setRecorderOpen(false)}
         />
       )}
       {uploading && <UploadProgress progress={progress} filename={filename} />}

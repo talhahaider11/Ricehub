@@ -351,13 +351,21 @@ export default function AudioCallControls() {
         return undefined;
       }
 
-      AndroidAudio.playDefaultRingtone().catch((ringError) => {
-        console.error("The default call ringtone could not be played:", ringError);
-      });
-      return () => {
-        AndroidAudio.stopDefaultRingtone().catch((ringError) => {
-          console.error("The default call ringtone could not be stopped:", ringError);
+      if (window.RiceHubNativeAudio) {
+        window.RiceHubNativeAudio.playDefaultRingtone();
+      } else {
+        AndroidAudio.playDefaultRingtone().catch((ringError) => {
+          console.error("The default call ringtone could not be played:", ringError);
         });
+      }
+      return () => {
+        if (window.RiceHubNativeAudio) {
+          window.RiceHubNativeAudio.stopDefaultRingtone();
+        } else {
+          AndroidAudio.stopDefaultRingtone().catch((ringError) => {
+            console.error("The default call ringtone could not be stopped:", ringError);
+          });
+        }
       };
     }
 

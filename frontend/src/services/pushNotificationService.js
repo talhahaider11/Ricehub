@@ -7,7 +7,7 @@ import {
 } from "./systemNotificationService";
 
 const PUSH_TOKEN_KEY = "ricemarket_push_token";
-const PUSH_CHANNEL_ID = "ricehub_notifications_v2";
+const PUSH_CHANNEL_ID = "ricehub_system_default_v2";
 let listenerRegistration;
 
 function logPushError(message, error) {

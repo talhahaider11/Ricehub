@@ -1,21 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 export default function VideoPreview({ file, src, ...videoProps }) {
   const videoRef = useRef(null);
-  const [previewUrl, setPreviewUrl] = useState("");
+  const previewUrl = useMemo(
+    () => (file ? URL.createObjectURL(file) : ""),
+    [file]
+  );
+  const videoSrc = file ? previewUrl : src;
 
   useEffect(() => {
-    if (!file) {
-      setPreviewUrl("");
-      return undefined;
-    }
+    if (!previewUrl) return undefined;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
 
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-
-  const videoSrc = file ? previewUrl : src;
   useEffect(() => {
     if (videoSrc) videoRef.current?.load();
   }, [videoSrc]);

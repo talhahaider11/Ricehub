@@ -75,7 +75,7 @@ describe("pushNotificationService", () => {
     expect(mocks.addListener).toHaveBeenCalledTimes(4);
     expect(mocks.checkPermissions).toHaveBeenCalledOnce();
     expect(mocks.createChannel).toHaveBeenCalledWith({
-      id: "ricehub_notifications_v2",
+      id: "ricehub_system_default_v2",
       name: "RiceHub notifications",
       description: "Messages, friend activity, and post updates",
       importance: 5,
