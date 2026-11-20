@@ -6,7 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import storyService from "../services/storyService";
@@ -43,6 +43,7 @@ function HomeCacheProbe() {
 describe("StoryViewer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     useAuth.mockReturnValue({ user: { id: 1 } });
     messageService.createConversation.mockResolvedValue({ id: 17 });
     messageService.sendText.mockResolvedValue({});
@@ -73,6 +74,10 @@ describe("StoryViewer", () => {
         },
       ],
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("shows story progress and moves to the next story", async () => {
@@ -247,6 +252,14 @@ describe("StoryViewer", () => {
     );
 
     await screen.findByText("My story");
+    const topActions = document.querySelector(".story-fullscreen-top-actions");
+    expect(within(topActions).getByRole("button", { name: "Pause story" }))
+      .toBeInTheDocument();
+    expect(within(topActions).getByRole("button", { name: "Close story" }))
+      .toBeInTheDocument();
+    expect(within(topActions).queryByRole("button", { name: /Seen by|Delete story/ }))
+      .not.toBeInTheDocument();
+    expect(document.querySelector(".story-owner-footer")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Seen by 1" }));
     expect(await screen.findByText("liker")).toBeInTheDocument();
     expect(screen.getByLabelText("Liked this story")).toBeInTheDocument();
@@ -290,6 +303,11 @@ describe("StoryViewer", () => {
 
     expect(await screen.findByText("Video story")).toBeInTheDocument();
     const video = document.querySelector("video");
+    expect(video).not.toHaveAttribute("controls");
+    expect(video).toHaveAttribute("autoplay");
+    expect(video).toHaveAttribute("controlslist", "nodownload noplaybackrate");
+    expect(video).toHaveAttribute("disablepictureinpicture");
+    expect(document.querySelector(".story-paused-indicator")).toBeNull();
     Object.defineProperty(video, "duration", { configurable: true, value: 10 });
     Object.defineProperty(video, "currentTime", { configurable: true, value: 5 });
     fireEvent.timeUpdate(video);
@@ -299,6 +317,40 @@ describe("StoryViewer", () => {
 
     fireEvent.ended(video);
     expect(await screen.findByText("Next story")).toBeInTheDocument();
+  });
+
+  it("retries blocked video autoplay muted and offers an unmute action", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play")
+      .mockReset()
+      .mockRejectedValueOnce(new Error("Autoplay blocked"))
+      .mockResolvedValue(undefined);
+    storyService.list.mockResolvedValue({
+      results: [
+        {
+          id: 4,
+          author: { id: 2, username: "author" },
+          media_type: "video",
+          media_url: "/video.mp4",
+          created_at: "2026-11-02T10:00:00Z",
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/stories/4"]}>
+        <Routes>
+          <Route path="/stories/:id" element={<StoryViewer />} />
+          <Route path="/" element={<p>Story viewer closed</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const unmuteButton = await screen.findByRole("button", { name: "Tap to unmute" });
+    expect(document.querySelector("video").muted).toBe(true);
+    fireEvent.click(unmuteButton);
+    await waitFor(() => expect(document.querySelector("video").muted).toBe(false));
+    expect(screen.queryByRole("button", { name: "Tap to unmute" }))
+      .not.toBeInTheDocument();
   });
 
   it("automatically advances image stories after five seconds", async () => {

@@ -33,7 +33,9 @@ export default function ForYou() {
     setError("");
 
     try {
-      const response = await getForYouFeed();
+      const response = refresh
+        ? await getForYouFeed({}, { refresh: true })
+        : await getForYouFeed();
       const results = getArrayResults(response, "For You feed");
       setPosts(results);
       setNextCursor(cursorFromUrl(response.next));

@@ -1,25 +1,28 @@
 import api from "./api";
+import { cachedRequest, clearCachedRequests } from "./requestCache";
 
 const postService = {
   async list(page = 1, sort = "recent", authorId) {
     if (sort === "for_you") {
-      const response = await api.get("/feed/", {
-        params: { page },
+      return cachedRequest(`feed:following:${JSON.stringify({ page })}`, async () => {
+        const response = await api.get("/feed/", {
+          params: { page },
+        });
+        return response.data;
       });
-
-      return response.data;
     }
 
-    const response = await api.get("/posts/", {
-      params: {
-        page,
-        page_size: 10,
-        sort,
-        ...(authorId ? { author: authorId } : {}),
-      },
+    const params = {
+      page,
+      page_size: 10,
+      sort,
+      ...(authorId ? { author: authorId } : {}),
+    };
+    const key = `posts:list:${JSON.stringify(params)}`;
+    return cachedRequest(key, async () => {
+      const response = await api.get("/posts/", { params });
+      return response.data;
     });
-
-    return response.data;
   },
 
   async trackFeedView(postId) {
@@ -46,6 +49,8 @@ const postService = {
       }
     );
 
+    clearCachedRequests("posts:");
+    clearCachedRequests("feed:");
     return response.data;
   },
 
@@ -55,11 +60,16 @@ const postService = {
       data
     );
 
+    clearCachedRequests("posts:");
+    clearCachedRequests("feed:");
     return response.data;
   },
 
   async remove(id) {
-    return api.delete(`/posts/${id}/`);
+    const response = await api.delete(`/posts/${id}/`);
+    clearCachedRequests("posts:");
+    clearCachedRequests("feed:");
+    return response;
   },
 
   async comments(postId) {

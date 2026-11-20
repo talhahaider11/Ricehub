@@ -41,7 +41,7 @@ export default function useStories(authorId, initialStories = []) {
       setError("");
     } catch (loadError) {
       console.error("Stories could not be loaded:", loadError);
-      setError("Stories could not be loaded.");
+      setError(loadError.message || "Stories could not be loaded.");
     } finally {
       setLoading(false);
     }

@@ -1,11 +1,15 @@
 import api from "./api";
+import { cachedRequest, clearCachedRequests } from "./requestCache";
 
 const storyService = {
   async list(authorId) {
-    const response = await api.get("/stories/", {
-      params: authorId ? { author: authorId } : undefined,
+    const key = `stories:${authorId == null ? "all" : authorId}`;
+    return cachedRequest(key, async () => {
+      const response = await api.get("/stories/", {
+        params: authorId ? { author: authorId } : undefined,
+      });
+      return response.data;
     });
-    return response.data;
   },
 
   async createStory(mediaId, visibility = "friends", caption = "") {
@@ -14,6 +18,7 @@ const storyService = {
       visibility,
       caption,
     });
+    clearCachedRequests("stories:");
     return response.data;
   },
 
@@ -33,7 +38,9 @@ const storyService = {
   },
 
   async remove(storyId) {
-    return api.delete(`/stories/${storyId}/delete/`);
+    const response = await api.delete(`/stories/${storyId}/delete/`);
+    clearCachedRequests("stories:");
+    return response;
   },
 
   async viewers(storyId) {

@@ -22,6 +22,7 @@ describe("API URL construction", () => {
 describe("API token refresh", () => {
   let originalAdapter;
   const responseInterceptor = api.interceptors.response.handlers[0].rejected;
+  const requestInterceptor = api.interceptors.request.handlers[0].fulfilled;
 
   beforeEach(() => {
     localStorage.clear();
@@ -77,5 +78,30 @@ describe("API token refresh", () => {
 
     expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBe("expired-access");
     expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBe("current-refresh");
+  });
+
+  it("uses Retry-After for a friendly 429 cooldown without retrying automatically", async () => {
+    const error = {
+      config: { method: "get", url: "/stories/" },
+      response: {
+        status: 429,
+        headers: { "retry-after": "5" },
+      },
+    };
+
+    await expect(responseInterceptor(error)).rejects.toMatchObject({
+      retryAfterMs: 5000,
+      message: "You're refreshing too fast. Please wait 5 seconds and tap Try again.",
+    });
+
+    await expect(requestInterceptor({
+      method: "get",
+      url: "/stories/",
+      headers: {},
+    })).rejects.toMatchObject({
+      isRateLimitError: true,
+      retryAfterMs: expect.any(Number),
+      message: expect.stringContaining("Please wait"),
+    });
   });
 });

@@ -26,6 +26,16 @@ const isLoginRequest = (config) =>
 // Request Interceptor: Attach Access Token on every outgoing request
 api.interceptors.request.use(
   (config) => {
+    const key = rateLimitKey(config);
+    const cooldown = rateLimitCooldowns.get(key);
+    if (cooldown && cooldown.until > Date.now()) {
+      const delayMs = cooldown.until - Date.now();
+      const error = new Error(rateLimitMessage(delayMs));
+      error.retryAfterMs = delayMs;
+      error.isRateLimitError = true;
+      return Promise.reject(error);
+    }
+
     const token =
       localStorage.getItem(ACCESS_TOKEN_KEY) ||
       localStorage.getItem("access_token");
@@ -42,6 +52,25 @@ api.interceptors.request.use(
 let isRefreshing = false;
 let waitingRequests = [];
 let tokenRefreshPromise = null;
+const rateLimitCooldowns = new Map();
+const rateLimitAttempts = new Map();
+
+function rateLimitKey(config) {
+  return `${(config.method || "get").toLowerCase()}:${config.url || ""}`;
+}
+
+function rateLimitMessage(delayMs) {
+  const seconds = Math.max(1, Math.ceil(delayMs / 1000));
+  return `You're refreshing too fast. Please wait ${seconds} second${seconds === 1 ? "" : "s"} and tap Try again.`;
+}
+
+function retryAfterMilliseconds(header) {
+  if (!header) return 0;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(header);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : 0;
+}
 
 export function refreshAccessToken() {
   if (!tokenRefreshPromise) {
@@ -96,10 +125,30 @@ const processQueue = (error, token = null) => {
 
 // Response Interceptor: Handle 401 Unauthorized & Smooth Token Refresh
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const key = rateLimitKey(response.config || {});
+    rateLimitCooldowns.delete(key);
+    rateLimitAttempts.delete(key);
+    return response;
+  },
 
   async (error) => {
     const originalRequest = error.config;
+
+    if (error.isRateLimitError) return Promise.reject(error);
+
+    if (error.response?.status === 429) {
+      const key = rateLimitKey(originalRequest || {});
+      const attempts = (rateLimitAttempts.get(key) || 0) + 1;
+      rateLimitAttempts.set(key, attempts);
+      const exponentialDelay = Math.min(1000 * (2 ** (attempts - 1)), 60 * 1000);
+      const serverDelay = retryAfterMilliseconds(error.response.headers?.["retry-after"]);
+      const delayMs = Math.max(exponentialDelay, serverDelay);
+      rateLimitCooldowns.set(key, { until: Date.now() + delayMs });
+      error.retryAfterMs = delayMs;
+      error.message = rateLimitMessage(delayMs);
+      return Promise.reject(error);
+    }
 
     if (isLoginRequest(originalRequest || {})) {
       return Promise.reject(error);

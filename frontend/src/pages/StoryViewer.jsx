@@ -45,8 +45,8 @@ export default function StoryViewer() {
   const [actionError, setActionError] = useState("");
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
   const [likePending, setLikePending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
   const [replyText, setReplyText] = useState("");
@@ -73,7 +73,7 @@ export default function StoryViewer() {
       })
       .catch((loadError) => {
         console.error("Stories could not be loaded:", loadError);
-        if (active) setError(t("storyLoadFailed"));
+        if (active) setError(loadError.message || t("storyLoadFailed"));
       });
     return () => { active = false; };
   }, [cachedStories, id, t, user?.id]);
@@ -110,8 +110,10 @@ export default function StoryViewer() {
   const currentIndex =
     group?.stories.findIndex((story) => String(story.id) === String(id)) ?? -1;
   const story = group?.stories[currentIndex];
-  const isOwner = story
-    && String(story.author?.id) === String(user?.id);
+  const isOwner = story && (
+    story.is_owner === true
+    || String(story.author?.id ?? story.user?.id) === String(user?.id)
+  );
   const mediaUrl =
     story?.video || story?.image || story?.media_url || story?.media;
   const isVideo = story?.media_type === "video"
@@ -152,9 +154,10 @@ export default function StoryViewer() {
     setProgress(0);
     progressRef.current = 0;
     setIsPaused(false);
+    setIsMuted(false);
     setReplyText("");
     setReplyStatus("");
-    if (story && String(story.author?.id) !== String(user?.id)) {
+    if (story && !isOwner) {
       storyService.markViewed(story.id)
         .then(() => {
           setStories((current) => current.map((item) => (
@@ -170,11 +173,10 @@ export default function StoryViewer() {
           console.error("Story view could not be recorded:", viewError);
         });
     }
-  }, [story?.id, user?.id]);
+  }, [isOwner, story?.id]);
 
   useEffect(() => {
     setIsLiked(Boolean(story?.is_liked));
-    setLikeCount(story?.like_count || 0);
     setActionError("");
     setViewersOpen(false);
     setViewers([]);
@@ -189,7 +191,6 @@ export default function StoryViewer() {
     try {
       const result = await storyService.toggleLike(story.id);
       setIsLiked(Boolean(result.is_liked));
-      setLikeCount(result.like_count || 0);
       setStories((current) => current.map((item) => (
         String(item.id) === String(story.id)
           ? {
@@ -248,7 +249,11 @@ export default function StoryViewer() {
     setViewersError("");
     try {
       const result = await storyService.viewers(story.id);
-      setViewers(getArrayResults(result, "Story viewers"));
+      setViewers(
+        getArrayResults(result, "Story viewers").sort(
+          (left, right) => Number(Boolean(right.is_liked)) - Number(Boolean(left.is_liked))
+        )
+      );
     } catch (viewersLoadError) {
       console.error("Story viewers could not be loaded:", viewersLoadError);
       setViewersError(t("storyViewersLoadFailed"));
@@ -284,13 +289,31 @@ export default function StoryViewer() {
     }
   };
 
+  const startVideo = useCallback(async () => {
+    const video = videoRef.current;
+    if (!isVideo || !video) return;
+
+    try {
+      await video.play();
+      setIsPaused(false);
+      setIsMuted(video.muted);
+    } catch {
+      video.muted = true;
+      setIsMuted(true);
+      try {
+        await video.play();
+        setIsPaused(false);
+      } catch {
+        setIsPaused(true);
+      }
+    }
+  }, [isVideo]);
+
   const togglePlayback = () => {
     if (isVideo && videoRef.current) {
       const video = videoRef.current;
       if (video.paused) {
-        const playRequest = video.play();
-        playRequest?.catch(() => setIsPaused(true));
-        setIsPaused(false);
+        void startVideo();
       } else {
         video.pause();
         setIsPaused(true);
@@ -299,6 +322,30 @@ export default function StoryViewer() {
     }
     setIsPaused((current) => !current);
   };
+
+  const unmuteVideo = async (event) => {
+    event.stopPropagation();
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = false;
+    try {
+      await video.play();
+      setIsMuted(false);
+      setIsPaused(false);
+    } catch {
+      video.muted = true;
+      setIsMuted(true);
+      setIsPaused(true);
+    }
+  };
+
+  useEffect(() => {
+    if (!story || !isVideo) return undefined;
+    void startVideo();
+    return () => {
+      videoRef.current?.pause();
+    };
+  }, [isVideo, startVideo, story?.id]);
 
   useEffect(() => {
     if (!story || isVideo || isPaused) return undefined;
@@ -373,68 +420,11 @@ export default function StoryViewer() {
                 {new Date(story.created_at).toLocaleTimeString()}
               </time>
             </div>
-            <div className="story-fullscreen-actions">
-              {isOwner ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={showViewers}
-                    aria-label={`${t("seenBy")} ${story.view_count || 0}`}
-                    title={t("seenBy")}
-                  >
-                    <Eye size={18} />
-                    <span>{story.view_count || 0}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={deleteStory}
-                    disabled={deletePending}
-                    aria-label={t("deleteStory")}
-                    title={t("deleteStory")}
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </>
-              ) : null}
-            </div>
           </header>
           {mediaUrl && (isVideo
             ? (
-              <video
-                key={story.id}
-                ref={videoRef}
-                src={getMediaUrl(mediaUrl)}
-                poster={story.thumbnail_url ? getMediaUrl(story.thumbnail_url) : undefined}
-                controls
-                autoPlay={!isPaused}
-                playsInline
-                preload="metadata"
-                onClick={(event) => {
-                  const bounds = event.currentTarget.getBoundingClientRect();
-                  const nativeControlsHeight = Math.min(64, bounds.height * 0.18);
-                  if (
-                    bounds.height > 0
-                    && event.clientY >= bounds.bottom - nativeControlsHeight
-                  ) return;
-                  togglePlayback();
-                }}
-                onTimeUpdate={(event) => {
-                  const video = event.currentTarget;
-                  if (Number.isFinite(video.duration) && video.duration > 0) {
-                    setProgress((video.currentTime / video.duration) * 100);
-                  }
-                }}
-                onPlay={() => setIsPaused(false)}
-                onPause={() => setIsPaused(true)}
-                onEnded={() => move(1)}
-              />
-            )
-            : (
-              <img
-                src={getMediaUrl(mediaUrl)}
-                alt="Story"
-                decoding="async"
-                fetchpriority="high"
+              <div
+                className="story-media-stage"
                 role="button"
                 tabIndex={0}
                 aria-label={t(isPaused ? "resumeStory" : "pauseStory")}
@@ -445,23 +435,96 @@ export default function StoryViewer() {
                     togglePlayback();
                   }
                 }}
-              />
+              >
+                <video
+                  key={story.id}
+                  className="select-none pointer-events-none"
+                  ref={videoRef}
+                  src={getMediaUrl(mediaUrl)}
+                  poster={story.thumbnail_url ? getMediaUrl(story.thumbnail_url) : undefined}
+                  autoPlay
+                  playsInline
+                  webkit-playsinline="true"
+                  preload="auto"
+                  controlsList="nodownload noplaybackrate"
+                  disablePictureInPicture
+                  onContextMenu={(event) => event.preventDefault()}
+                  onLoadedData={() => void startVideo()}
+                  onTimeUpdate={(event) => {
+                    const video = event.currentTarget;
+                    if (Number.isFinite(video.duration) && video.duration > 0) {
+                      setProgress((video.currentTime / video.duration) * 100);
+                    }
+                  }}
+                  onPlay={(event) => {
+                    setIsPaused(false);
+                    setIsMuted(event.currentTarget.muted);
+                  }}
+                  onPause={() => setIsPaused(true)}
+                  onEnded={() => move(1)}
+                />
+                {isMuted && (
+                  <button
+                    type="button"
+                    className="story-unmute-pill"
+                    onClick={unmuteVideo}
+                  >
+                    Tap to unmute
+                  </button>
+                )}
+              </div>
+            )
+            : (
+              <div
+                className="story-media-stage"
+                role="button"
+                tabIndex={0}
+                aria-label={t(isPaused ? "resumeStory" : "pauseStory")}
+                onClick={togglePlayback}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    togglePlayback();
+                  }
+                }}
+              >
+                <img
+                  className="select-none pointer-events-none"
+                  src={getMediaUrl(mediaUrl)}
+                  alt="Story"
+                  decoding="async"
+                  fetchpriority="high"
+                  draggable={false}
+                  onContextMenu={(event) => event.preventDefault()}
+                />
+              </div>
             ))}
-          {isPaused && (
-            <button
-              type="button"
-              className="story-paused-indicator"
-              onClick={togglePlayback}
-              aria-label={t("resumeStory")}
-            >
-              <Play size={28} fill="currentColor" />
-            </button>
-          )}
           {(story.caption || story.text) && (
             <p className="story-fullscreen-caption">{story.caption || story.text}</p>
           )}
           {actionError && <p className="story-action-error" role="alert">{actionError}</p>}
-          {!isOwner && (
+          {isOwner ? (
+            <footer className="story-fullscreen-footer story-owner-footer">
+              <button
+                type="button"
+                onClick={showViewers}
+                aria-label={`${t("seenBy")} ${story.view_count || 0}`}
+                title={t("seenBy")}
+              >
+                <Eye size={18} />
+                <span>{story.view_count || 0}</span>
+              </button>
+              <button
+                type="button"
+                onClick={deleteStory}
+                disabled={deletePending}
+                aria-label={t("deleteStory")}
+                title={t("deleteStory")}
+              >
+                <Trash2 size={18} />
+              </button>
+            </footer>
+          ) : (
             <footer className="story-fullscreen-footer">
               <form className="story-reply-form" onSubmit={sendStoryReply}>
                 <input
@@ -494,7 +557,6 @@ export default function StoryViewer() {
                 title={isLiked ? t("unlikeStory") : t("likeStory")}
               >
                 <Heart size={21} fill={isLiked ? "currentColor" : "none"} />
-                <span>{likeCount}</span>
               </button>
               {replyStatus && (
                 <span className="story-reply-status" role="status">{replyStatus}</span>

@@ -18,7 +18,7 @@ from .permissions import can_view_story
 from .serializers import StorySerializer
 from .services import delete_story, mark_story_viewed
 
-ACTIVE_STORY_LIMIT = 100
+ACTIVE_STORY_LIMIT = 50
 
 
 class StoryListCreateView(generics.ListCreateAPIView):
