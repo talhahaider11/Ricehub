@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from feed.cache import invalidate_feed
 
 from rest_framework import serializers
@@ -7,6 +8,10 @@ from media_app.models import MediaAsset
 from media_app.serializers import MediaAssetSerializer
 from .models import Hashtag, Post
 from .hashtag_services import sync_post_hashtags
+from .media_cleanup import (
+    cleanup_orphaned_media_assets,
+    cleanup_unreferenced_post_files,
+)
 
 
 User = get_user_model()
@@ -246,10 +251,39 @@ class PostSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data.pop("hashtags", None)
         media_ids = validated_data.pop("media_ids", None)
+        previous_files = [
+            (field.storage, field.name)
+            for field in (instance.image, instance.video)
+            if field
+        ]
+        previous_media_ids = (
+            set(instance.media_assets.values_list("pk", flat=True))
+            if media_ids is not None
+            else set()
+        )
         validated_data["moderation_status"] = Post.ModerationStatus.APPROVED
         post = super().update(instance, validated_data)
+        current_file_names = {
+            field.name for field in (post.image, post.video) if field
+        }
+        removed_files = [
+            (storage, name)
+            for storage, name in previous_files
+            if name not in current_file_names
+        ]
+        if removed_files:
+            transaction.on_commit(
+                lambda: cleanup_unreferenced_post_files(removed_files)
+            )
         if media_ids is not None:
             post.media_assets.set(self._requested_media_assets)
+            removed_media_ids = previous_media_ids - {
+                asset.pk for asset in self._requested_media_assets
+            }
+            if removed_media_ids:
+                transaction.on_commit(
+                    lambda: cleanup_orphaned_media_assets(removed_media_ids)
+                )
 
         sync_post_hashtags(post)
         invalidate_feed(post.author_id)

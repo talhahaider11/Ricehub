@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import CreateGroupModal from "../components/messages/CreateGroupModal";
 import friendService from "../services/friendService";
 import messageService from "../services/messageService";
+import { getCachedConversations } from "../services/messageCache";
 import useMessages from "../hooks/useMessages";
 import useAuth from "../hooks/useAuth";
 import ConversationList from "../components/messages/ConversationList";
@@ -58,11 +59,17 @@ export default function Messages() {
   const { uploads, queueVideoUpload } = useChatUploads();
   const location = useLocation();
   const navigate = useNavigate();
-  const [conversations, setConversations] = useState([]);
-  const [archivedConversations, setArchivedConversations] = useState([]);
+  const inboxCache = getCachedConversations(false, user?.id);
+  const archivedCache = getCachedConversations(true, user?.id);
+  const [conversations, setConversations] = useState(
+    inboxCache?.data.results || []
+  );
+  const [archivedConversations, setArchivedConversations] = useState(
+    archivedCache?.data.results || []
+  );
   const [showArchived, setShowArchived] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!inboxCache);
   const [error, setError] = useState("");
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
@@ -102,7 +109,7 @@ export default function Messages() {
   useEffect(() => {
     let active = true;
     messageService
-      .conversations()
+      .conversations({}, { userId: user?.id })
       .then((data) => {
         if (!active) return;
         const items = getArrayResults(data, "Conversations");
@@ -136,25 +143,32 @@ export default function Messages() {
       })
       .catch((loadError) => {
         console.error("Conversations could not be loaded:", loadError);
-        if (active) setError(t("conversationLoadFailed"));
+        if (active && !getCachedConversations(false, user?.id)) {
+          setError(t("conversationLoadFailed"));
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
       });
-    messageService.conversations({ archived: true })
+    messageService.conversations(
+      { archived: true },
+      { userId: user?.id }
+    )
       .then((data) => {
         if (!active) return;
         setArchivedConversations(getArrayResults(data, "Archived conversations"));
       })
       .catch((archiveLoadError) => {
         console.error("Archived conversations could not be loaded:", archiveLoadError);
-        if (active) setConversationActionError(t("conversationLoadFailed"));
+        if (active && !getCachedConversations(true, user?.id)) {
+          setConversationActionError(t("conversationLoadFailed"));
+        }
       });
 
     return () => {
       active = false;
     };
-  }, [location.search, location.state?.conversationId, t]);
+  }, [location.search, location.state?.conversationId, t, user?.id]);
 
   const {
     messages,
@@ -164,6 +178,9 @@ export default function Messages() {
     sendMessage,
     sendTyping,
     conversationHidden,
+    hasOlderMessages,
+    loadingOlder,
+    loadOlderMessages,
   } = useMessages(selectedConversation);
 
   const visibleMessages = useMemo(() => {
@@ -357,7 +374,10 @@ export default function Messages() {
   const handleShowArchived = async () => {
     setConversationActionError("");
     try {
-      const data = await messageService.conversations({ archived: true });
+      const data = await messageService.conversations(
+        { archived: true },
+        { userId: user?.id, refresh: true }
+      );
       setArchivedConversations(getArrayResults(data, "Archived conversations"));
       setShowArchived(true);
     } catch (archiveLoadError) {
@@ -387,7 +407,10 @@ export default function Messages() {
     if (!selectedConversation) return undefined;
     let active = true;
     const refreshPresence = () => {
-      messageService.conversations({ archived: showArchived })
+      messageService.conversations(
+        { archived: showArchived },
+        { userId: user?.id, refresh: true }
+      )
         .then((data) => {
           if (!active) return;
           const items = getArrayResults(data, "Conversations");
@@ -407,7 +430,7 @@ export default function Messages() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [selectedConversation, showArchived]);
+  }, [selectedConversation, showArchived, user?.id]);
   const isDirectConversation = Boolean(
     activeConversation
     && !activeConversation.is_group
@@ -559,6 +582,9 @@ export default function Messages() {
               conversationPartner={isDirectConversation ? otherUser : null}
               showVerificationWarning={showVerificationWarning}
               latestConversationMessageId={latestConversationMessageId}
+              hasOlderMessages={hasOlderMessages}
+              loadingOlder={loadingOlder}
+              onLoadOlder={loadOlderMessages}
             />
 
             <TypingIndicator

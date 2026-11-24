@@ -57,10 +57,17 @@ export default function MessageList({
   conversationPartner,
   showVerificationWarning = false,
   latestConversationMessageId,
+  hasOlderMessages = false,
+  loadingOlder = false,
+  onLoadOlder,
 }) {
   const { t, language } = useLanguage();
   const bottomRef =
     useRef(null);
+  const listRef = useRef(null);
+  const previousScrollHeightRef = useRef(0);
+  const preserveScrollRef = useRef(false);
+  const loadingOlderRef = useRef(false);
   const longPressTimer = useRef(null);
   const longPressOrigin = useRef(null);
   const replySwipeOrigin = useRef(null);
@@ -74,10 +81,35 @@ export default function MessageList({
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
+    const list = listRef.current;
+    if (preserveScrollRef.current && list) {
+      list.scrollTop = list.scrollHeight - previousScrollHeightRef.current;
+      preserveScrollRef.current = false;
+    } else {
+      bottomRef.current?.scrollIntoView({
+        behavior: "smooth",
+      });
+    }
   }, [messages]);
+
+  const handleScroll = () => {
+    const list = listRef.current;
+    if (
+      !list
+      || list.scrollTop > 48
+      || !hasOlderMessages
+      || loadingOlder
+      || loadingOlderRef.current
+    ) return;
+    loadingOlderRef.current = true;
+    previousScrollHeightRef.current = list.scrollHeight;
+    preserveScrollRef.current = true;
+    Promise.resolve(onLoadOlder?.()).then((loaded) => {
+      if (!loaded) preserveScrollRef.current = false;
+    }).finally(() => {
+      loadingOlderRef.current = false;
+    });
+  };
 
   const latestMessage = messages[messages.length - 1];
   const showLatestReceipt = Boolean(
@@ -172,7 +204,8 @@ export default function MessageList({
   let previousDay = "";
 
   return (
-    <div className="message-list">
+    <div className="message-list" ref={listRef} onScroll={handleScroll}>
+      {loadingOlder && <p className="message-history-loading" role="status">Loading older messages...</p>}
       {conversationPartner && (
         <section className="chat-profile-hero">
           <Avatar user={conversationPartner} size="large" />

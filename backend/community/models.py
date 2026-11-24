@@ -273,6 +273,13 @@ class Event(models.Model):
     description = models.TextField(max_length=4000, blank=True)
     location = models.CharField(max_length=255, blank=True)
     starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField(blank=True, null=True)
+    banner = models.ImageField(
+        upload_to="events/%Y/%m/",
+        blank=True,
+        null=True,
+        validators=[validate_post_image],
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

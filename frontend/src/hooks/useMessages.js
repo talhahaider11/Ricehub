@@ -6,6 +6,10 @@ import {
 } from "react";
 
 import messageService from "../services/messageService";
+import {
+  cacheMessages,
+  getCachedMessages,
+} from "../services/messageCache";
 import useAuth from "./useAuth";
 import { getArrayResults } from "../utils/arrayResults";
 
@@ -30,21 +34,31 @@ function mergeMessages(loadedMessages, currentMessages) {
 
 export default function useMessages(conversationId) {
   const { user } = useAuth();
+  const cachedHistory = getCachedMessages(conversationId, user?.id);
   const socketRef = useRef(null);
   const conversationIdRef = useRef(conversationId);
+  const [messagesConversationId, setMessagesConversationId] = useState(conversationId);
   const heartbeatRef = useRef(null);
   const reconnectRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const isMountedRef = useRef(true);
+  const messagesRef = useRef(cachedHistory?.messages || []);
+  const olderPageRef = useRef(cachedHistory?.nextPage || 2);
+  const olderRequestRef = useRef(false);
 
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(cachedHistory?.messages || []);
   const [connected, setConnected] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!cachedHistory);
+  const [hasOlderMessages, setHasOlderMessages] = useState(
+    Boolean(cachedHistory?.hasOlderMessages)
+  );
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [typingUser, setTypingUser] = useState(false);
   const [callSignals, setCallSignals] = useState([]);
   const [conversationHidden, setConversationHidden] = useState(false);
   const [error, setError] = useState("");
   conversationIdRef.current = conversationId;
+  messagesRef.current = messages;
 
   const loadMessages = useCallback(async () => {
     if (!conversationId) return;
@@ -54,29 +68,71 @@ export default function useMessages(conversationId) {
       && String(conversationIdRef.current) === String(requestConversationId)
     );
     try {
-      setLoading(true);
+      if (!messagesRef.current.length) setLoading(true);
       setError("");
       const data = await messageService.messages(conversationId);
       if (isCurrentConversation()) {
         const loadedMessages = getArrayResults(data, "Messages").reverse();
         setMessages((current) => mergeMessages(loadedMessages, current));
+        setHasOlderMessages(Boolean(data.next));
+        olderPageRef.current = data.next ? 2 : 1;
         if (socketRef.current?.readyState === WebSocket.OPEN) {
           socketRef.current.send(JSON.stringify({ type: "read" }));
         }
       }
     } catch (loadError) {
       console.error("Messages could not be loaded:", loadError);
-      if (isCurrentConversation()) setError("Messages could not be loaded.");
+      if (isCurrentConversation() && !messagesRef.current.length) {
+        setError("Messages could not be loaded.");
+      }
     } finally {
       if (isCurrentConversation()) setLoading(false);
     }
   }, [conversationId]);
 
+  const loadOlderMessages = useCallback(async () => {
+    if (
+      !conversationId
+      || !hasOlderMessages
+      || olderRequestRef.current
+    ) return false;
+    olderRequestRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const data = await messageService.messages(
+        conversationId,
+        olderPageRef.current
+      );
+      if (String(conversationIdRef.current) !== String(conversationId)) {
+        return false;
+      }
+      const olderMessages = getArrayResults(data, "Messages").reverse();
+      setMessages((current) => mergeMessages(olderMessages, current));
+      setHasOlderMessages(Boolean(data.next));
+      olderPageRef.current += 1;
+      return olderMessages.length > 0;
+    } catch (loadError) {
+      console.error("Older messages could not be loaded:", loadError);
+      setError("Older messages could not be loaded.");
+      return false;
+    } finally {
+      olderRequestRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [conversationId, hasOlderMessages]);
+
   useEffect(() => {
     let active = true;
     isMountedRef.current = true;
     reconnectAttemptsRef.current = 0;
-    setMessages([]);
+    setMessagesConversationId(conversationId);
+    const cached = getCachedMessages(conversationId, user?.id);
+    setMessages(cached?.messages || []);
+    messagesRef.current = cached?.messages || [];
+    setLoading(!cached);
+    setHasOlderMessages(Boolean(cached?.hasOlderMessages));
+    olderPageRef.current = cached?.nextPage || 2;
+    olderRequestRef.current = false;
     setError("");
     setTypingUser(false);
     setCallSignals([]);
@@ -225,6 +281,21 @@ export default function useMessages(conversationId) {
   }, [conversationId, loadMessages, user?.id]);
 
   useEffect(() => {
+    if (String(messagesConversationId) !== String(conversationId)) return;
+    const hasOlder = messages.length > 30 || hasOlderMessages;
+    cacheMessages(conversationId, user?.id, messages.slice(-30), {
+      hasOlderMessages: hasOlder,
+      nextPage: messages.length > 30 ? 2 : olderPageRef.current,
+    });
+  }, [
+    conversationId,
+    hasOlderMessages,
+    messages,
+    messagesConversationId,
+    user?.id,
+  ]);
+
+  useEffect(() => {
     const handleVideoUploaded = (event) => {
       if (
         String(event.detail?.conversationId) !== String(conversationId)
@@ -292,9 +363,14 @@ export default function useMessages(conversationId) {
   }, []);
 
   return {
-    messages,
+    messages: String(messagesConversationId) === String(conversationId)
+      ? messages
+      : cachedHistory?.messages || [],
     setMessages,
     loading,
+    hasOlderMessages,
+    loadingOlder,
+    loadOlderMessages,
     connected,
     sendMessage,
     sendTyping,

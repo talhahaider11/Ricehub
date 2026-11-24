@@ -1,17 +1,32 @@
 import api from "./api";
 import { prepareImage } from "./mediaService";
 import { ACCESS_TOKEN_KEY, WS_URL } from "../utils/constants";
+import {
+  cacheConversations,
+  clearConversationCaches,
+  getCachedConversations,
+  isConversationCacheFresh,
+} from "./messageCache";
 
 const MAX_PARALLEL_CONVERSATION_PAGES = 4;
 
 const messageService = {
-  async conversations(params = {}) {
+  async conversations(params = {}, { userId, refresh = false } = {}) {
+    const archived = Boolean(params.archived);
+    const cached = getCachedConversations(archived, userId);
+    if (!refresh && isConversationCacheFresh(cached)) {
+      return cached.data;
+    }
+
     const response = await api.get(
       "/messages/conversations/",
       { params }
     );
     const data = response.data;
-    if (!Array.isArray(data?.results) || !data.next) return data;
+    if (!Array.isArray(data?.results) || !data.next) {
+      cacheConversations(data, archived, userId);
+      return data;
+    }
 
     const results = [...data.results];
     const pageSize = Number(params.page_size) || data.results.length;
@@ -47,7 +62,9 @@ const messageService = {
         results.push(...(pageResponse.data.results || []));
         next = pageResponse.data.next;
       }
-      return { ...data, results, next: null };
+      const combined = { ...data, results, next: null };
+      cacheConversations(combined, archived, userId);
+      return combined;
     }
 
     const pageUrls = [];
@@ -72,7 +89,9 @@ const messageService = {
       });
     }
 
-    return { ...data, results, next: null };
+    const combined = { ...data, results, next: null };
+    cacheConversations(combined, archived, userId);
+    return combined;
   },
 
   async createConversation(username) {
@@ -83,6 +102,7 @@ const messageService = {
       }
     );
 
+    clearConversationCaches();
     return response.data;
   },
 
@@ -91,6 +111,7 @@ const messageService = {
       "/messages/conversations/group/",
       { name, user_ids: userIds }
     );
+    clearConversationCaches();
     return response.data;
   },
 
@@ -99,6 +120,7 @@ const messageService = {
       `/messages/conversations/${conversationId}/members/`,
       { user_id: userId }
     );
+    clearConversationCaches();
     return response.data;
   },
 
@@ -107,6 +129,7 @@ const messageService = {
       `/messages/conversations/${conversationId}/members/${userId}/`,
       { role }
     );
+    clearConversationCaches();
     return response.data;
   },
 
@@ -114,6 +137,7 @@ const messageService = {
     const response = await api.delete(
       `/messages/conversations/${conversationId}/members/${userId}/`
     );
+    clearConversationCaches();
     return response.data;
   },
 
@@ -122,6 +146,7 @@ const messageService = {
       `/messages/conversations/${conversationId}/settings/`,
       { admins_only: adminsOnly }
     );
+    clearConversationCaches();
     return response.data;
   },
 
@@ -130,11 +155,14 @@ const messageService = {
       `/messages/conversations/${conversationId}/mute/`,
       { is_muted: isMuted }
     );
+    clearConversationCaches();
     return response.data;
   },
 
   async leaveGroup(conversationId) {
-    return api.delete(`/messages/conversations/${conversationId}/leave/`);
+    const response = await api.delete(`/messages/conversations/${conversationId}/leave/`);
+    clearConversationCaches();
+    return response;
   },
 
   async searchGroupMembers(query = "") {
@@ -148,7 +176,7 @@ const messageService = {
     const response = await api.get(
       `/messages/conversations/${conversationId}/messages/`,
       {
-        params: { page, page_size: 50 },
+        params: { page, page_size: 30 },
       }
     );
 
@@ -163,6 +191,7 @@ const messageService = {
         ...(replyToId ? { reply_to_id: replyToId } : {}),
       }
     );
+    clearConversationCaches();
     return response.data;
   },
 
@@ -183,6 +212,7 @@ const messageService = {
         ...(attachmentType === "video" ? { timeout: 0 } : {}),
       }
     );
+    clearConversationCaches();
     return response.data;
   },
 
@@ -191,6 +221,7 @@ const messageService = {
       `/messages/conversations/${conversationId}/read/`
     );
 
+    clearConversationCaches();
     return response.data;
   },
 
@@ -214,6 +245,7 @@ const messageService = {
       `/messages/messages/${messageId}/edit/`,
       { content }
     );
+    clearConversationCaches();
     return response.data;
   },
 
@@ -221,6 +253,7 @@ const messageService = {
     const response = await api.delete(
       `/messages/messages/${messageId}/delete/`
     );
+    clearConversationCaches();
     return response.data;
   },
 
@@ -229,6 +262,7 @@ const messageService = {
       `/messages/conversations/${conversationId}/archive/`,
       { is_archived: isArchived }
     );
+    clearConversationCaches();
     return response.data;
   },
 
@@ -236,6 +270,7 @@ const messageService = {
     const response = await api.delete(
       `/messages/conversations/${conversationId}/delete/`
     );
+    clearConversationCaches();
     return response.data;
   },
 

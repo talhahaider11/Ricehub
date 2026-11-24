@@ -29,6 +29,7 @@ from .models import (
     MarketplaceListing,
     MarketplaceOrder,
 )
+from .event_cleanup import cleanup_expired_event_media
 from messaging.models import Conversation, ConversationMember
 from .serializers import (
     CommunitySerializer,
@@ -390,6 +391,7 @@ class EventListCreateView(generics.ListCreateAPIView):
     serializer_class = EventSerializer
 
     def get_queryset(self):
+        cleanup_expired_event_media()
         return Event.objects.filter(
             starts_at__gte=timezone.now(),
         ).exclude(
@@ -425,6 +427,7 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Event.objects.select_related("host", "community")
 
     def get_queryset(self):
+        cleanup_expired_event_media()
         return super().get_queryset().filter(
             starts_at__gte=timezone.now(),
         ).exclude(

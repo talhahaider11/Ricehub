@@ -279,6 +279,18 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "").strip()
+R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "").strip()
+R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "").strip()
+R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL", "").strip()
+R2_PUBLIC_DOMAIN = (
+    os.getenv("R2_PUBLIC_DOMAIN", "")
+    .strip()
+    .removeprefix("https://")
+    .removeprefix("http://")
+    .rstrip("/")
+)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
@@ -349,6 +361,43 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+R2_CONFIGURATION = {
+    "R2_ACCESS_KEY_ID": R2_ACCESS_KEY_ID,
+    "R2_SECRET_ACCESS_KEY": R2_SECRET_ACCESS_KEY,
+    "R2_BUCKET_NAME": R2_BUCKET_NAME,
+    "R2_ENDPOINT_URL": R2_ENDPOINT_URL,
+    "R2_PUBLIC_DOMAIN": R2_PUBLIC_DOMAIN,
+}
+if any(R2_CONFIGURATION.values()):
+    missing_r2_settings = [
+        name
+        for name, value in R2_CONFIGURATION.items()
+        if not value
+    ]
+    if missing_r2_settings:
+        raise ValueError(
+            "R2 storage credentials require: "
+            + ", ".join(missing_r2_settings)
+        )
+    if "storages" not in INSTALLED_APPS:
+        INSTALLED_APPS.append("storages")
+    MEDIA_URL = f"https://{R2_PUBLIC_DOMAIN}/"
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": R2_BUCKET_NAME,
+            "endpoint_url": R2_ENDPOINT_URL,
+            "region_name": "auto",
+            "signature_version": "s3v4",
+            "access_key": R2_ACCESS_KEY_ID,
+            "secret_key": R2_SECRET_ACCESS_KEY,
+            "custom_domain": R2_PUBLIC_DOMAIN,
+            "querystring_auth": False,
+            "file_overwrite": False,
+            "object_parameters": {"CacheControl": "max-age=86400"},
+        },
+    }
 
 # CORS and CSRF Settings for Mobile App & Render Frontend
 CORS_ALLOWED_ORIGINS = [

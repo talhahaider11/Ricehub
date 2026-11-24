@@ -9,7 +9,7 @@ const storyService = {
         params: authorId ? { author: authorId } : undefined,
       });
       return response.data;
-    });
+    }, 2 * 60 * 1000);
   },
 
   async createStory(mediaId, visibility = "friends", caption = "") {

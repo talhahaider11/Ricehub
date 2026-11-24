@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
@@ -311,18 +312,27 @@ class StoryAPITests(APITestCase):
             file="media/owned.jpg",
             processing_status=MediaAsset.ProcessingStatus.READY,
         )
+        asset.file.save("owned.jpg", ContentFile(b"shared media"), save=True)
+        self.addCleanup(asset.file.delete, save=False)
         story = Story.objects.create(
             author=self.author,
             text="Owned story",
             media_asset=asset,
         )
+        story.image.save("owned.jpg", ContentFile(b"story media"), save=True)
+        story_media_name = story.image.name
+        self.addCleanup(story.image.delete, save=False)
         self.client.force_authenticate(self.author)
 
-        response = self.client.delete(f"/api/stories/{story.pk}/delete/")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.delete(
+                f"/api/stories/{story.pk}/delete/",
+            )
 
         self.assertEqual(response.status_code, 204)
         self.assertFalse(Story.all_objects.filter(pk=story.pk).exists())
         self.assertTrue(MediaAsset.objects.filter(pk=asset.pk).exists())
+        self.assertFalse(story.image.storage.exists(story_media_name))
 
     def test_active_story_limit_is_enforced(self):
         Story.objects.bulk_create(
@@ -351,6 +361,8 @@ class StoryAPITests(APITestCase):
             file="media/test.jpg",
             processing_status=MediaAsset.ProcessingStatus.READY,
         )
+        image.file.save("test.jpg", ContentFile(b"source image"), save=True)
+        self.addCleanup(image.file.delete, save=False)
         response = self.client.post(
             "/api/stories/create/",
             {"media_id": image.pk, "visibility": "friends"},
@@ -359,11 +371,13 @@ class StoryAPITests(APITestCase):
 
         self.assertEqual(response.status_code, 201)
         story = Story.objects.get(pk=response.data["id"])
+        self.addCleanup(story.image.delete, save=False)
         self.assertEqual(story.media_asset_id, image.pk)
+        self.assertTrue(story.image.name.startswith("stories/images/"))
         self.assertEqual(response.data["media_type"], "image")
         self.assertTrue(
             urlparse(response.data["media_url"]).path.endswith(
-                "media/test.jpg",
+                story.image.name,
             )
         )
         self.assertIn("thumbnail_url", response.data)
@@ -414,6 +428,13 @@ class StoryAPITests(APITestCase):
             text="Expired",
             media_asset=image,
         )
+        expired_story.image.save(
+            "expired.jpg",
+            ContentFile(b"story media"),
+            save=True,
+        )
+        story_media_name = expired_story.image.name
+        self.addCleanup(expired_story.image.delete, save=False)
         Story.all_objects.filter(pk=expired_story.pk).update(
             created_at=timezone.now() - timedelta(hours=24, seconds=1),
         )
@@ -421,9 +442,11 @@ class StoryAPITests(APITestCase):
 
         from .tasks import delete_expired_stories
 
-        deleted_count = delete_expired_stories.run()
+        with self.captureOnCommitCallbacks(execute=True):
+            deleted_count = delete_expired_stories.run()
 
         self.assertEqual(deleted_count, 1)
         self.assertTrue(MediaAsset.objects.filter(pk=image.pk).exists())
+        self.assertFalse(expired_story.image.storage.exists(story_media_name))
         self.assertFalse(Story.all_objects.filter(text="Expired").exists())
         self.assertFalse(StoryView.objects.filter(story=expired_story).exists())

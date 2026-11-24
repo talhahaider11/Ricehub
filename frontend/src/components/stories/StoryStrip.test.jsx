@@ -31,6 +31,7 @@ function StoryRouteProbe() {
 describe("StoryStrip", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     storyService.list.mockResolvedValue({ results: [] });
     storyService.markViewed.mockResolvedValue({});
   });

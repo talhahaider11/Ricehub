@@ -1,3 +1,6 @@
+from pathlib import Path
+from uuid import uuid4
+
 from rest_framework import serializers
 
 from media_app.models import MediaAsset
@@ -149,17 +152,35 @@ class StorySerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        return Story.objects.create(
+        media_asset = validated_data.get("media_asset")
+        story = Story.objects.create(
             author=self.context["request"].user,
             **validated_data,
         )
+        if media_asset:
+            is_video = media_asset.media_type == MediaAsset.MediaType.VIDEO
+            source = media_asset.playable_file if is_video else media_asset.file
+            suffix = Path(source.name).suffix or (".mp4" if is_video else ".jpg")
+            field_name = "video" if is_video else "image"
+            try:
+                with source.open("rb"):
+                    getattr(story, field_name).save(
+                        f"{uuid4().hex}{suffix}",
+                        source,
+                        save=False,
+                    )
+                story.save(update_fields=[field_name])
+            except Exception:
+                story.delete()
+                if getattr(story, field_name):
+                    getattr(story, field_name).delete(save=False)
+                raise
+        return story
 
     def get_media_url(self, story):
-        media_asset = story.media_asset
-        if media_asset:
-            media = media_asset.playable_file
-        else:
-            media = story.image or story.video or story.media
+        media = story.image or story.video or story.media
+        if not media and story.media_asset:
+            media = story.media_asset.playable_file
         if not media:
             return None
         url = media.url
@@ -174,12 +195,12 @@ class StorySerializer(serializers.ModelSerializer):
         return self.get_media_url(story)
 
     def get_media_type(self, story):
-        if story.media_asset:
-            return story.media_asset.media_type
         if story.image:
             return "image"
         if story.video:
             return "video"
+        if story.media_asset:
+            return story.media_asset.media_type
         if not story.media:
             return None
         name = story.media.name.lower()

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import userService from "../services/userService";
 import postService from "../services/postService";
@@ -16,16 +16,38 @@ import useAuth from "../hooks/useAuth";
 import { getArrayResults } from "../utils/arrayResults";
 import { getMediaUrl } from "../utils/constants";
 
+function getCachedProfile(userId) {
+  try {
+    const cached = localStorage.getItem(`ricehub:profile:${userId}`);
+    const profile = cached ? JSON.parse(cached) : null;
+    return profile?.id && String(profile.id) === String(userId)
+      ? profile
+      : null;
+  } catch (error) {
+    console.warn("Cached profile could not be read:", error);
+    return null;
+  }
+}
+
 export default function Profile() {
   const { id } = useParams();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, setUser: setAuthUser } = useAuth();
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
+  const isOwnProfile = String(currentUser?.id) === String(id);
+  const [user, setUser] = useState(() => {
+    if (!isOwnProfile) return null;
+    return {
+      ...(currentUser || {}),
+      ...(getCachedProfile(id) || {}),
+    };
+  });
   const [posts, setPosts] = useState([]);
   const [postsPage, setPostsPage] = useState(1);
   const [hasMorePosts, setHasMorePosts] = useState(false);
   const [loadingMorePosts, setLoadingMorePosts] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isOwnProfile);
   const [postsLoading, setPostsLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
@@ -35,41 +57,67 @@ export default function Profile() {
   const [friends, setFriends] = useState([]);
   const [friendsOpen, setFriendsOpen] = useState(false);
 
-  const isOwnProfile = String(currentUser?.id) === String(id);
+  const updateUser = useCallback((update) => {
+    setUser((current) => {
+      const next = typeof update === "function" ? update(current) : update;
+      if (isOwnProfile && next?.id) {
+        try {
+          localStorage.setItem(`ricehub:profile:${id}`, JSON.stringify(next));
+        } catch (error) {
+          console.warn("Profile could not be cached:", error);
+        }
+      }
+      return next;
+    });
+    if (isOwnProfile && typeof setAuthUser === "function") {
+      setAuthUser(update);
+    }
+  }, [id, isOwnProfile, setAuthUser]);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    const cachedProfile = isOwnProfile ? getCachedProfile(id) : null;
+    const immediateProfile = cachedProfile || (
+      isOwnProfile ? currentUserRef.current : null
+    );
+    setUser(immediateProfile);
+    setLoading(!immediateProfile);
     setPostsLoading(true);
     setError("");
-    setUser(null);
 
-    Promise.all([
-      userService.getUser(id),
-      postService.list(1, "recent", id),
-    ])
-      .then(([profile, postsData]) => {
+    userService.getUser(id)
+      .then((profile) => {
         if (!active) return;
-        setUser(profile);
+        updateUser(profile);
         setFriendshipStatus(profile.friendship_status || "none");
         setFriendRequestId(profile.friend_request_id || null);
+      })
+      .catch((loadError) => {
+        console.error("Profile could not be loaded:", loadError);
+        if (active && !immediateProfile) {
+          setError("This profile could not be loaded.");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    postService.list(1, "recent", id)
+      .then((postsData) => {
+        if (!active) return;
         setPosts(getArrayResults(postsData, "Profile posts"));
         setPostsPage(1);
         setHasMorePosts(Boolean(postsData.next));
       })
       .catch((loadError) => {
-        console.error("Profile could not be loaded:", loadError);
-        if (active) setError("This profile could not be loaded.");
+        console.error("Profile posts could not be loaded:", loadError);
       })
       .finally(() => {
-        if (active) {
-          setLoading(false);
-          setPostsLoading(false);
-        }
+        if (active) setPostsLoading(false);
       });
 
     return () => { active = false; };
-  }, [id]);
+  }, [id, isOwnProfile, updateUser]);
 
   useEffect(() => {
     if (isOwnProfile || !user) return undefined;
@@ -94,7 +142,7 @@ export default function Profile() {
         await friendService.accept(friendRequestId);
         setFriendshipStatus("friends");
         setFriendRequestId(null);
-        setUser((current) => (
+        updateUser((current) => (
           current ? { ...current, friends_count: (current.friends_count || 0) + 1 } : current
         ));
         setActionMessage("Friend request accepted.");

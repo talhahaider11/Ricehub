@@ -106,12 +106,22 @@ class UserSerializer(serializers.ModelSerializer):
         return obj.last_seen
 
     def get_friends_count(self, obj):
+        if hasattr(obj, "_profile_friends_count"):
+            return obj._profile_friends_count
         return len(get_friend_ids(obj))
 
     def get_friendship_status(self, obj):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated or request.user.pk == obj.pk:
             return "self" if request and request.user.is_authenticated else "none"
+        if hasattr(obj, "_profile_is_friend"):
+            if obj._profile_is_friend:
+                return "friends"
+            if obj._profile_outgoing_friend_request_id:
+                return "outgoing_pending"
+            if obj._profile_incoming_friend_request_id:
+                return "incoming_pending"
+            return "none"
         if obj.pk in get_friend_ids(request.user):
             return "friends"
         if FriendRequest.objects.filter(
@@ -132,6 +142,11 @@ class UserSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated or request.user.pk == obj.pk:
             return None
+        if hasattr(obj, "_profile_outgoing_friend_request_id"):
+            return (
+                obj._profile_outgoing_friend_request_id
+                or obj._profile_incoming_friend_request_id
+            )
         pending = FriendRequest.objects.filter(
             sender=request.user,
             receiver=obj,
@@ -146,6 +161,8 @@ class UserSerializer(serializers.ModelSerializer):
         return pending.pk if pending else None
 
     def get_posts_count(self, obj):
+        if hasattr(obj, "_profile_posts_count"):
+            return obj._profile_posts_count
         return obj.posts.count()
 
     def get_is_staff(self, obj):

@@ -294,7 +294,24 @@ class ConversationSerializer(
         return obj.conversation_type == Conversation.ConversationType.GROUP
 
     def get_last_message(self, obj):
-
+        if hasattr(obj, "last_message_id"):
+            if obj.last_message_id is None:
+                return None
+            content = obj.last_message_content or ""
+            if len(content) > 160:
+                content = f"{content[:157]}..."
+            return {
+                "id": obj.last_message_id,
+                "content": content,
+                "sender": {"id": obj.last_message_sender_id},
+                "attachment": (
+                    "available" if obj.last_message_has_attachment else None
+                ),
+                "attachment_type": obj.last_message_attachment_type,
+                "is_deleted": bool(obj.last_message_is_deleted),
+                "created_at": obj.last_message_created_at,
+                "message_type": obj.last_message_type,
+            }
         message = (
             obj.messages
             .select_related("sender")
@@ -311,6 +328,8 @@ class ConversationSerializer(
         ).data
 
     def get_unread_count(self, obj):
+        if hasattr(obj, "unread_count_value"):
+            return obj.unread_count_value or 0
 
         request = self.context.get("request")
 
@@ -366,4 +385,6 @@ class ConversationSerializer(
         ).data
 
     def get_member_count(self, obj):
+        if hasattr(obj, "member_count_value"):
+            return obj.member_count_value
         return obj.participants.count()

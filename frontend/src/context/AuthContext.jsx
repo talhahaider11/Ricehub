@@ -24,10 +24,39 @@ import { ACCESS_TOKEN_KEY } from "../utils/constants";
 
 export const AuthContext = createContext(null);
 
+function getCachedAuthState() {
+  try {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem("access_token");
+    if (!token) return { user: null, loading: false };
+    const user = JSON.parse(localStorage.getItem("ricehub:auth-user") || "null");
+    return { user: user?.id ? user : null, loading: !user?.id };
+  } catch (error) {
+    console.warn("Cached login profile could not be read:", error);
+    return { user: null, loading: true };
+  }
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [initialAuthState] = useState(getCachedAuthState);
+  const [user, setUserState] = useState(initialAuthState.user);
+  const [loading, setLoading] = useState(initialAuthState.loading);
   const loadingUser = useRef(false);
+  const userRef = useRef(user);
+  userRef.current = user;
+
+  const setUser = setUserState;
+
+  useEffect(() => {
+    try {
+      if (user) {
+        localStorage.setItem("ricehub:auth-user", JSON.stringify(user));
+      } else {
+        localStorage.removeItem("ricehub:auth-user");
+      }
+    } catch (error) {
+      console.warn("Login profile could not be cached:", error);
+    }
+  }, [user]);
 
   // Helper function: Jab user authenticated ho tab Push Notifications setup honge
   const setupNotifications = async () => {
@@ -63,6 +92,7 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem("access_token");
 
     if (!token) {
+      setUser(null);
       setLoading(false);
       return;
     }
@@ -74,12 +104,14 @@ export function AuthProvider({ children }) {
       void setupNotifications();
     } catch (error) {
       console.error("Could not restore the saved login session:", error);
-      setUser(null);
+      if ([401, 403].includes(error.response?.status) || !userRef.current) {
+        setUser(null);
+      }
     } finally {
       setLoading(false);
       loadingUser.current = false;
     }
-  }, []);
+  }, [setUser]);
 
   useEffect(() => {
     void loadUser();

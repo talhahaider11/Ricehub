@@ -53,6 +53,8 @@ export default function Avatar({
         <img
           src={formattedImageSrc}
           alt={displayName}
+          loading="eager"
+          decoding="async"
           onError={() => setImageError(true)}
           style={{
             width: "100%",

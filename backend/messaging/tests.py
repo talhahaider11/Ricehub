@@ -427,6 +427,46 @@ class MessagingFeatureTests(APITestCase):
         self.assertIsNone(participant["is_online"])
         self.assertIsNone(participant["last_seen"])
 
+    def test_conversation_list_returns_lightweight_last_message_and_unread_count(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender=self.friend,
+            content="",
+            attachment="messages/photo.jpg",
+            attachment_type=Message.AttachmentType.IMAGE,
+        )
+
+        response = self.client.get("/api/messages/conversations/")
+
+        self.assertEqual(response.status_code, 200)
+        conversation = response.data["results"][0]
+        self.assertEqual(conversation["last_message"]["id"], message.pk)
+        self.assertEqual(conversation["last_message"]["sender"]["id"], self.friend.pk)
+        self.assertEqual(conversation["last_message"]["attachment"], "available")
+        self.assertEqual(conversation["unread_count"], 1)
+
+    def test_message_history_starts_with_latest_30_and_paginates_older_messages(self):
+        for index in range(35):
+            Message.objects.create(
+                conversation=self.conversation,
+                sender=self.user,
+                content=f"Message {index}",
+            )
+
+        response = self.client.get(
+            f"/api/messages/conversations/{self.conversation.pk}/messages/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 30)
+        self.assertIsNotNone(response.data["next"])
+        self.assertEqual(response.data["results"][0]["content"], "Message 34")
+
+        older_response = self.client.get(
+            f"/api/messages/conversations/{self.conversation.pk}/messages/?page=2"
+        )
+        self.assertEqual(len(older_response.data["results"]), 5)
+
     def test_voice_note_upload_creates_audio_message(self):
         self.make_friends()
         voice_note = SimpleUploadedFile(

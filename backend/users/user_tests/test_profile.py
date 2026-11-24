@@ -1,5 +1,9 @@
+from io import BytesIO
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
+from PIL import Image
 
 
 User = get_user_model()
@@ -43,3 +47,42 @@ class UserProfileTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.viewer.refresh_from_db()
         self.assertEqual(self.viewer.profile_visibility, "private")
+
+    def test_profile_picture_is_compressed_and_replaced_file_is_deleted(self):
+        def image_upload(name, color):
+            output = BytesIO()
+            Image.new("RGB", (800, 600), color=color).save(output, format="JPEG")
+            return SimpleUploadedFile(
+                name,
+                output.getvalue(),
+                content_type="image/jpeg",
+            )
+
+        first_response = self.client.patch(
+            "/api/users/me/update/",
+            {"profile_picture": image_upload("first.jpg", "red")},
+            format="multipart",
+        )
+        self.assertEqual(first_response.status_code, 200)
+        self.viewer.refresh_from_db()
+        first_name = self.viewer.profile_picture.name
+        storage = self.viewer.profile_picture.storage
+        self.assertTrue(first_name.startswith("profile_pics/"))
+        self.assertTrue(first_name.endswith(".webp"))
+
+        with storage.open(first_name, "rb") as saved_image:
+            with Image.open(saved_image) as image:
+                self.assertEqual(image.format, "WEBP")
+                self.assertLessEqual(max(image.size), 400)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            second_response = self.client.patch(
+                "/api/users/me/update/",
+                {"profile_picture": image_upload("second.jpg", "blue")},
+                format="multipart",
+            )
+        self.assertEqual(second_response.status_code, 200)
+        self.viewer.refresh_from_db()
+        self.assertNotEqual(self.viewer.profile_picture.name, first_name)
+        self.assertFalse(storage.exists(first_name))
+        storage.delete(self.viewer.profile_picture.name)

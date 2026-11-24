@@ -168,6 +168,7 @@ class CommunityPostCommentSerializer(serializers.ModelSerializer):
 
 class EventSerializer(serializers.ModelSerializer):
     host = serializers.SerializerMethodField()
+    banner = serializers.ImageField(required=False, allow_null=True)
     going_count = serializers.IntegerField(read_only=True)
     interested_count = serializers.IntegerField(read_only=True)
     my_response = serializers.SerializerMethodField()
@@ -176,8 +177,8 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             "id", "host", "community", "title", "description", "location",
-            "starts_at", "going_count", "interested_count", "my_response",
-            "created_at",
+            "starts_at", "ends_at", "banner", "going_count",
+            "interested_count", "my_response", "created_at",
         ]
         read_only_fields = ["id", "host", "going_count", "interested_count", "my_response", "created_at"]
 
@@ -198,6 +199,21 @@ class EventSerializer(serializers.ModelSerializer):
         if value <= timezone.now():
             raise serializers.ValidationError("Event start time must be in the future.")
         return value
+
+    def validate(self, attrs):
+        starts_at = attrs.get(
+            "starts_at",
+            self.instance.starts_at if self.instance else None,
+        )
+        ends_at = attrs.get(
+            "ends_at",
+            self.instance.ends_at if self.instance else None,
+        )
+        if starts_at and ends_at and ends_at <= starts_at:
+            raise serializers.ValidationError(
+                {"ends_at": "Event end time must be after its start time."}
+            )
+        return attrs
 
 
 class EventAttendanceSerializer(serializers.ModelSerializer):

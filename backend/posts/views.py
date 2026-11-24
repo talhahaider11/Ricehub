@@ -155,6 +155,9 @@ class PostDetailView(
             raise PermissionDenied("You do not have permission to view this post.")
         return post
 
+    def perform_destroy(self, instance):
+        instance.delete()
+
 class HashtagSearchView(ListAPIView):
     serializer_class = HashtagSerializer
 

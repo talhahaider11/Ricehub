@@ -365,21 +365,46 @@ export default function StoryViewer() {
     return () => window.clearInterval(timer);
   }, [isPaused, isVideo, move, story?.id]);
 
-  const nextStory = group?.stories[currentIndex + 1];
-  const nextStoryMedia = nextStory?.thumbnail_url
-    || nextStory?.image
-    || nextStory?.media_url
-    || nextStory?.media;
-
   useEffect(() => {
-    if (
-      !nextStoryMedia
-      || (nextStory?.media_type === "video" && !nextStory.thumbnail_url)
-    ) return;
-    const preload = new Image();
-    preload.decoding = "async";
-    preload.src = getMediaUrl(nextStoryMedia);
-  }, [nextStory?.media_type, nextStoryMedia]);
+    const upcomingStories = group?.stories.slice(currentIndex + 1, currentIndex + 3) || [];
+    const preloadedVideos = [];
+
+    upcomingStories.forEach((nextStory) => {
+      const media = nextStory.video
+        || nextStory.image
+        || nextStory.media_url
+        || nextStory.media;
+      if (!media) return;
+
+      const isUpcomingVideo = nextStory.media_type === "video"
+        || /\.(mp4|webm|mov)(?:$|\?)/i.test(media);
+      if (isUpcomingVideo) {
+        const preload = document.createElement("video");
+        preload.muted = true;
+        preload.playsInline = true;
+        preload.preload = "auto";
+        preload.setAttribute("aria-hidden", "true");
+        preload.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;";
+        preload.src = getMediaUrl(media);
+        document.body.appendChild(preload);
+        preload.load();
+        preloadedVideos.push(preload);
+      } else {
+        const preload = new Image();
+        preload.decoding = "async";
+        preload.src = getMediaUrl(media);
+      }
+    });
+
+    return () => {
+      preloadedVideos.forEach((video) => {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+        video.remove();
+      });
+    };
+  }, [currentIndex, group]);
 
   return (
     <main className="story-fullscreen" aria-label={t("storyViewer")}>

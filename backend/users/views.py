@@ -5,6 +5,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Exists, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -63,9 +64,62 @@ from .verification import (
     OTP_RESEND_COOLDOWN_SECONDS,
     send_verification_code,
 )
+from friendships.models import FriendRequest
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def profile_queryset(request, profile_id=None):
+    profile_id = profile_id or request.user.pk
+    viewer_id = request.user.pk
+    outgoing_requests = FriendRequest.objects.filter(
+        sender_id=viewer_id,
+        receiver_id=OuterRef("pk"),
+        status=FriendRequest.Status.PENDING,
+    )
+    incoming_requests = FriendRequest.objects.filter(
+        sender_id=OuterRef("pk"),
+        receiver_id=viewer_id,
+        status=FriendRequest.Status.PENDING,
+    )
+    accepted_friendship = FriendRequest.objects.filter(
+        status=FriendRequest.Status.ACCEPTED,
+    ).filter(
+        Q(sender_id=OuterRef("pk"), receiver_id=viewer_id)
+        | Q(receiver_id=OuterRef("pk"), sender_id=viewer_id)
+    )
+    return (
+        User.objects
+        .filter(pk=profile_id)
+        .annotate(
+            _profile_posts_count=Count("posts", distinct=True),
+            _profile_friends_count=(
+                Count(
+                    "sent_friend_requests",
+                    filter=Q(
+                        sent_friend_requests__status=FriendRequest.Status.ACCEPTED
+                    ),
+                    distinct=True,
+                )
+                + Count(
+                    "received_friend_requests",
+                    filter=Q(
+                        received_friend_requests__status=FriendRequest.Status.ACCEPTED
+                    ),
+                    distinct=True,
+                )
+            ),
+            _profile_is_friend=Exists(accepted_friendship),
+            _profile_outgoing_friend_request_id=Subquery(
+                outgoing_requests.values("pk")[:1]
+            ),
+            _profile_incoming_friend_request_id=Subquery(
+                incoming_requests.values("pk")[:1]
+            ),
+        )
+        .prefetch_related("privacy_settings")
+    )
 
 
 def profile_access_error(request, user):
@@ -458,17 +512,9 @@ class MeView(APIView):
     permission_classes = [IsActiveAndNotSuspended]
 
     def get(self, request):
-        user = request.user
+        user = get_object_or_404(profile_queryset(request), pk=request.user.pk)
         return Response(
-            {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "is_email_verified": user.is_email_verified,
-                "is_verified": user.is_verified,
-                "subscription_expires_at": user.subscription_expires_at,
-                "preferred_language": user.preferred_language,
-            },
+            UserSerializer(user, context={"request": request}).data,
             status=status.HTTP_200_OK,
         )
 
@@ -917,7 +963,7 @@ class UserDetailView(APIView):
     permission_classes = [IsActiveAndNotSuspended]
 
     def get(self, request, id):
-        user = get_object_or_404(User, pk=id)
+        user = get_object_or_404(profile_queryset(request, id), pk=id)
         access_error = profile_access_error(request, user)
         if access_error:
             return access_error

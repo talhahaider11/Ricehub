@@ -1,8 +1,14 @@
+from io import BytesIO
+from uuid import uuid4
+
 from django.contrib.auth.models import AbstractUser
+from django.core.files.base import ContentFile
 from django.db import models
+from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from PIL import Image, ImageOps
 
 from .validators import validate_profile_image
 
@@ -49,7 +55,7 @@ class User(AbstractUser):
     bio = models.TextField(blank=True)
 
     profile_picture = models.ImageField(
-        upload_to="profiles/",
+        upload_to="profile_pics/",
         blank=True,
         null=True,
         validators=[validate_profile_image],
@@ -78,6 +84,49 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        saves_profile_picture = (
+            update_fields is None or "profile_picture" in update_fields
+        )
+        previous_picture = None
+        if self.pk and saves_profile_picture:
+            previous_picture = (
+                type(self).objects
+                .filter(pk=self.pk)
+                .values_list("profile_picture", flat=True)
+                .first()
+            )
+
+        if (
+            saves_profile_picture
+            and self.profile_picture
+            and not self.profile_picture._committed
+        ):
+            with Image.open(self.profile_picture) as original:
+                image = ImageOps.exif_transpose(original)
+                image.thumbnail((400, 400), Image.Resampling.LANCZOS)
+                image = image.convert(
+                    "RGBA" if "A" in image.getbands() else "RGB"
+                )
+                output = BytesIO()
+                image.save(output, format="WEBP", quality=80, method=6)
+            self.profile_picture = ContentFile(
+                output.getvalue(),
+                name=f"{uuid4().hex}.webp",
+            )
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "profile_picture"}
+
+        super().save(*args, **kwargs)
+
+        current_picture = self.profile_picture.name if self.profile_picture else ""
+        if previous_picture and previous_picture != current_picture:
+            storage = self.profile_picture.storage
+            transaction.on_commit(
+                lambda: storage.delete(previous_picture)
+            )
 
 
 class UserPrivacySettings(models.Model):

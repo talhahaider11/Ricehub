@@ -7,13 +7,15 @@ from channels.exceptions import ChannelFull
 from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Count, OuterRef, Prefetch, Subquery
+from django.db.models.functions import Substr
 from django.utils import timezone
 
 from rest_framework import generics, status
 from config.permissions import IsActiveAndNotSuspended as IsAuthenticated
 from config.throttling import MessageRateThrottle
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.utils.encoders import JSONEncoder
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -48,6 +50,82 @@ from search.services import search_users
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def conversation_queryset(user, archived):
+    latest_message = Message.objects.filter(
+        conversation_id=OuterRef("pk"),
+    ).order_by("-created_at", "-pk")
+    unread_count = (
+        Message.objects
+        .filter(
+            conversation_id=OuterRef("pk"),
+            is_read=False,
+        )
+        .exclude(sender_id=user.pk)
+        .order_by()
+        .values("conversation_id")
+        .annotate(total=Count("pk"))
+        .values("total")[:1]
+    )
+    user_conversations = Conversation.objects.filter(participants=user)
+    ensure_conversation_memberships(user_conversations, user)
+    conversations = user_conversations.filter(
+        memberships__user=user,
+        memberships__is_archived=archived,
+        memberships__deleted_at__isnull=True,
+    )
+    return (
+        conversations
+        .exclude(
+            participants__id__in=get_blocked_user_ids(user)
+        )
+        .distinct()
+        .annotate(
+            unread_count_value=Subquery(unread_count),
+            member_count_value=Count("participants", distinct=True),
+            last_message_id=Subquery(latest_message.values("pk")[:1]),
+            last_message_content=Subquery(
+                latest_message
+                .annotate(content_preview=Substr("content", 1, 161))
+                .values("content_preview")[:1]
+            ),
+            last_message_sender_id=Subquery(latest_message.values("sender_id")[:1]),
+            last_message_attachment_type=Subquery(
+                latest_message.values("attachment_type")[:1]
+            ),
+            last_message_has_attachment=Subquery(
+                latest_message.values("attachment")[:1]
+            ),
+            last_message_is_deleted=Subquery(
+                latest_message.values("is_deleted")[:1]
+            ),
+            last_message_created_at=Subquery(
+                latest_message.values("created_at")[:1]
+            ),
+            last_message_type=Subquery(
+                latest_message.values("message_type")[:1]
+            ),
+        )
+        .prefetch_related(
+            Prefetch(
+                "participants",
+                queryset=User.objects.prefetch_related("privacy_settings"),
+            ),
+            Prefetch(
+                "memberships",
+                queryset=ConversationMember.objects.select_related("user")
+                .prefetch_related("user__privacy_settings"),
+            ),
+        )
+        .order_by("-updated_at")
+    )
+
+
+class MessageHistoryPagination(PageNumberPagination):
+    page_size = 30
+    page_size_query_param = "page_size"
+    max_page_size = 30
 
 
 class CallSignalFallbackView(APIView):
@@ -221,38 +299,12 @@ class ConversationListCreateView(
     serializer_class = ConversationSerializer
 
     def get_queryset(self):
-        user_conversations = Conversation.objects.filter(
-            participants=self.request.user
-        )
-        ensure_conversation_memberships(
-            user_conversations,
-            self.request.user,
-        )
         archived = self.request.query_params.get("archived", "").lower() in {
             "1",
             "true",
             "yes",
         }
-        return (
-            user_conversations
-            .filter(
-                memberships__user=self.request.user,
-                memberships__is_archived=archived,
-                memberships__deleted_at__isnull=True,
-            )
-            .exclude(
-                participants__id__in=get_blocked_user_ids(self.request.user)
-            )
-            .distinct()
-            .prefetch_related(
-                "participants",
-                Prefetch(
-                    "memberships",
-                    queryset=ConversationMember.objects.select_related("user"),
-                ),
-            )
-            .order_by("-updated_at")
-        )
+        return conversation_queryset(self.request.user, archived)
 
     def create(self, request, *args, **kwargs):
 
@@ -740,31 +792,7 @@ class ConversationDetailView(
     serializer_class = ConversationSerializer
 
     def get_queryset(self):
-        user_conversations = Conversation.objects.filter(
-            participants=self.request.user
-        )
-        ensure_conversation_memberships(
-            user_conversations,
-            self.request.user,
-        )
-        return (
-            user_conversations
-            .filter(
-                memberships__user=self.request.user,
-                memberships__deleted_at__isnull=True,
-            )
-            .exclude(
-                participants__id__in=get_blocked_user_ids(self.request.user)
-            )
-            .distinct()
-            .prefetch_related(
-                "participants",
-                Prefetch(
-                    "memberships",
-                    queryset=ConversationMember.objects.select_related("user"),
-                ),
-            )
-        )
+        return conversation_queryset(self.request.user, False)
 
 
 class MessageListCreateView(
@@ -776,6 +804,7 @@ class MessageListCreateView(
     ]
 
     serializer_class = MessageSerializer
+    pagination_class = MessageHistoryPagination
 
     def get_throttles(self):
         throttles = super().get_throttles()
@@ -813,8 +842,10 @@ class MessageListCreateView(
             )
             .select_related(
                 "sender",
+                "sender__privacy_settings",
                 "conversation",
                 "reply_to",
+                "reply_to__sender",
             )
             .prefetch_related("conversation__participants")
             .order_by("-created_at", "-pk")

@@ -4,6 +4,7 @@ import os
 
 from .base import *
 
+base_default_storage = STORAGES["default"]
 
 # --------------------------------------------------
 # General production settings
@@ -48,7 +49,9 @@ OCI_MEDIA_ENV_VARS = (
 missing_oci_media_vars = [
     name for name in OCI_MEDIA_ENV_VARS if not os.environ.get(name, "").strip()
 ]
-if not missing_oci_media_vars:
+if R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY:
+    STORAGES["default"] = base_default_storage
+elif not missing_oci_media_vars:
     INSTALLED_APPS.append("storages")
     object_storage_namespace = os.environ["OCI_OBJECT_STORAGE_NAMESPACE"].strip()
     object_storage_region = os.environ["OCI_OBJECT_STORAGE_REGION"].strip()

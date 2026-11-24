@@ -14,7 +14,8 @@ export default function StoryStrip({
   const navigate = useNavigate();
   const { stories, loading, error } = useStories(
     onlyUserId,
-    location.state?.stories
+    location.state?.stories,
+    currentUser?.id
   );
 
   const visibleStories = stories.filter((story) => {
