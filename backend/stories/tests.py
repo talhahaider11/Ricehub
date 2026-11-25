@@ -380,6 +380,11 @@ class StoryAPITests(APITestCase):
                 story.image.name,
             )
         )
+        self.assertTrue(
+            urlparse(response.data["source_media_url"]).path.endswith(
+                image.file.name,
+            )
+        )
         self.assertIn("thumbnail_url", response.data)
 
     def test_create_story_rejects_another_users_media_asset(self):

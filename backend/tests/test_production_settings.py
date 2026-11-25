@@ -11,11 +11,11 @@ BASE_ENV = {
     "DJANGO_DEBUG": "False",
     "DATABASE_URL": "postgres://test:test@localhost:5432/test",
     "REDIS_URL": "rediss://test.example:6379/0",
-    "OCI_OBJECT_STORAGE_NAMESPACE": "test-namespace",
-    "OCI_OBJECT_STORAGE_BUCKET": "test-bucket",
-    "OCI_OBJECT_STORAGE_REGION": "test-region",
-    "OCI_OBJECT_STORAGE_ACCESS_KEY": "test-access-key",
-    "OCI_OBJECT_STORAGE_SECRET_KEY": "test-secret-key",
+    "R2_ACCESS_KEY_ID": "test-access-key",
+    "R2_SECRET_ACCESS_KEY": "test-secret-key",
+    "R2_BUCKET_NAME": "test-bucket",
+    "R2_ENDPOINT_URL": "https://test-account.r2.cloudflarestorage.com",
+    "R2_PUBLIC_DOMAIN": "cdn.example.com",
 }
 
 
@@ -34,17 +34,24 @@ def run_production_settings(script, **overrides):
 
 
 class ProductionSettingsTests(unittest.TestCase):
-    def test_oci_media_storage_keeps_whitenoise_for_static_files(self):
+    def test_r2_media_storage_keeps_whitenoise_for_static_files(self):
         result = run_production_settings(
             """
 from config.settings import production as settings
 assert settings.STORAGES["default"]["BACKEND"] == "storages.backends.s3.S3Storage"
 assert settings.STORAGES["default"]["OPTIONS"]["bucket_name"] == "test-bucket"
 assert settings.STORAGES["default"]["OPTIONS"]["endpoint_url"] == (
-    "https://test-namespace.compat.objectstorage.test-region.oraclecloud.com"
+    "https://test-account.r2.cloudflarestorage.com"
 )
-assert settings.STORAGES["default"]["OPTIONS"]["querystring_auth"] is True
-assert settings.STORAGES["default"]["OPTIONS"]["querystring_expire"] == 3600
+assert settings.STORAGES["default"]["OPTIONS"]["region_name"] == "auto"
+assert settings.STORAGES["default"]["OPTIONS"]["signature_version"] == "s3v4"
+assert settings.STORAGES["default"]["OPTIONS"]["custom_domain"] == "cdn.example.com"
+assert settings.STORAGES["default"]["OPTIONS"]["querystring_auth"] is False
+assert settings.STORAGES["default"]["OPTIONS"]["file_overwrite"] is False
+assert settings.STORAGES["default"]["OPTIONS"]["object_parameters"] == {
+    "CacheControl": "max-age=86400"
+}
+assert settings.MEDIA_URL == "https://cdn.example.com/"
 assert settings.STORAGES["staticfiles"]["BACKEND"] == (
     "whitenoise.storage.CompressedStaticFilesStorage"
 )
@@ -85,18 +92,20 @@ assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["post_create"] == "10/h
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_missing_oci_configuration_uses_local_media_storage_with_warning(self):
+    def test_missing_r2_configuration_fails_instead_of_using_ephemeral_storage(self):
         result = run_production_settings(
-            """
-from config.settings import production as settings
-assert settings.STORAGES["default"]["BACKEND"] == (
-    "django.core.files.storage.FileSystemStorage"
-)
-""",
-            OCI_OBJECT_STORAGE_SECRET_KEY="",
+            "from config.settings import production",
+            R2_ACCESS_KEY_ID="",
+            R2_SECRET_ACCESS_KEY="",
+            R2_BUCKET_NAME="",
+            R2_ENDPOINT_URL="",
+            R2_PUBLIC_DOMAIN="",
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("OCI Object Storage is not fully configured", result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "Cloudflare R2 must be fully configured",
+            result.stderr,
+        )
 
     def test_missing_redis_url_fails_clearly(self):
         result = run_production_settings(

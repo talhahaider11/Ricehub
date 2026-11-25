@@ -401,6 +401,7 @@ describe("StoryViewer", () => {
         },
       ],
     });
+
     try {
       render(
         <MemoryRouter initialEntries={["/stories/4"]}>
@@ -443,5 +444,51 @@ describe("StoryViewer", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("falls back to the story thumbnail when the original image cannot load", async () => {
+    storyService.list.mockResolvedValue({
+      results: [
+        {
+          id: 4,
+          author: { id: 2, username: "author" },
+          image: "https://cdn.example.test/stories/missing.webp",
+          media_url: "https://cdn.example.test/stories/missing.webp",
+          source_media_url: "https://cdn.example.test/media/original.jpg",
+          thumbnail_url: "https://cdn.example.test/media/thumbnails/story.jpg",
+          media_type: "image",
+          created_at: new Date().toISOString(),
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/stories/4"]}>
+        <Routes>
+          <Route path="/stories/:id" element={<StoryViewer />} />
+          <Route path="/" element={<p>Story viewer closed</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const image = await screen.findByAltText("Story");
+    expect(image).toHaveAttribute(
+      "src",
+      "https://cdn.example.test/stories/missing.webp"
+    );
+
+    fireEvent.error(image);
+
+    expect(screen.getByAltText("Story")).toHaveAttribute(
+      "src",
+      "https://cdn.example.test/media/original.jpg"
+    );
+
+    fireEvent.error(screen.getByAltText("Story"));
+
+    expect(screen.getByAltText("Story")).toHaveAttribute(
+      "src",
+      "https://cdn.example.test/media/thumbnails/story.jpg"
+    );
   });
 });

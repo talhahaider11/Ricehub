@@ -56,6 +56,7 @@ export default function StoryViewer() {
   const [viewers, setViewers] = useState([]);
   const [viewersLoading, setViewersLoading] = useState(false);
   const [viewersError, setViewersError] = useState("");
+  const [imageFallbackIndex, setImageFallbackIndex] = useState(0);
   const progressRef = useRef(0);
   const videoRef = useRef(null);
 
@@ -118,6 +119,20 @@ export default function StoryViewer() {
     story?.video || story?.image || story?.media_url || story?.media;
   const isVideo = story?.media_type === "video"
     || /\.(mp4|webm|mov)(?:$|\?)/i.test(mediaUrl || "");
+  const imageCandidates = useMemo(() => (
+    [...new Set([
+      story?.image,
+      story?.media_url,
+      story?.media,
+      story?.source_media_url,
+      story?.thumbnail_url,
+    ].filter(Boolean).map(getMediaUrl))]
+  ), [story]);
+  const imageUrl = imageCandidates[imageFallbackIndex];
+
+  useEffect(() => {
+    setImageFallbackIndex(0);
+  }, [story?.id, imageCandidates]);
 
   const close = useCallback((storiesToReturn = stories) => {
     navigate("/", {
@@ -513,15 +528,24 @@ export default function StoryViewer() {
                   }
                 }}
               >
-                <img
-                  className="select-none pointer-events-none"
-                  src={getMediaUrl(mediaUrl)}
-                  alt="Story"
-                  decoding="async"
-                  fetchpriority="high"
-                  draggable={false}
-                  onContextMenu={(event) => event.preventDefault()}
-                />
+                {imageUrl ? (
+                  <img
+                    className="select-none pointer-events-none"
+                    src={imageUrl}
+                    alt="Story"
+                    decoding="async"
+                    fetchpriority="high"
+                    draggable={false}
+                    onError={() => setImageFallbackIndex((index) => (
+                      Math.min(index + 1, imageCandidates.length)
+                    ))}
+                    onContextMenu={(event) => event.preventDefault()}
+                  />
+                ) : (
+                  <p className="story-media-unavailable" role="status">
+                    Story image could not be loaded.
+                  </p>
+                )}
               </div>
             ))}
           {(story.caption || story.text) && (

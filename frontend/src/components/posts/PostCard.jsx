@@ -309,7 +309,10 @@ export default function PostCard({
         </div>
 
         <button
+          type="button"
           className="post-action"
+          aria-expanded={showComments}
+          aria-controls={`post-comments-${post.id}`}
           onClick={() => setShowComments((value) => !value)}
         >
           <MessageCircle size={18} />
@@ -337,7 +340,15 @@ export default function PostCard({
       {actionMessage && <p className="settings-status" role="status">{actionMessage}</p>}
 
       {showComments && (
-        <>
+        <section
+          className="comment-panel"
+          id={`post-comments-${post.id}`}
+          aria-label="Post comments"
+        >
+          <div className="comment-panel-heading">
+            <h3>Comments</h3>
+            <span>{commentsCount}</span>
+          </div>
           <CommentBox
             postId={post.id}
             onCreated={() => {
@@ -350,7 +361,7 @@ export default function PostCard({
             currentUser={currentUser}
             refreshKey={commentRefreshKey}
           />
-        </>
+        </section>
       )}
     </motion.article>
   );

@@ -1,5 +1,6 @@
 import api from "./api";
 import { cachedRequest, clearCachedRequests } from "./requestCache";
+import { collectPaginatedResults } from "../utils/paginatedResults";
 
 const postService = {
   async list(page = 1, sort = "recent", authorId) {
@@ -73,11 +74,12 @@ const postService = {
   },
 
   async comments(postId) {
-    const response = await api.get(
-      `/posts/${postId}/comments/`
+    const response = await api.get(`/posts/${postId}/comments/`);
+    return collectPaginatedResults(
+      response,
+      (next) => api.get(next),
+      "Comments"
     );
-
-    return response.data;
   },
 
   async createComment(postId, content) {

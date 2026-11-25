@@ -1,10 +1,7 @@
 
-import logging
 import os
 
 from .base import *
-
-base_default_storage = STORAGES["default"]
 
 # --------------------------------------------------
 # General production settings
@@ -30,55 +27,43 @@ if "whitenoise.middleware.WhiteNoiseMiddleware" not in MIDDLEWARE:
 # Static and uploaded files
 # --------------------------------------------------
 
+required_r2_settings = (
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET_NAME",
+    "R2_ENDPOINT_URL",
+    "R2_PUBLIC_DOMAIN",
+)
+missing_r2_settings = [
+    name for name in required_r2_settings if not globals().get(name)
+]
+if missing_r2_settings:
+    raise RuntimeError(
+        "Cloudflare R2 must be fully configured for production media storage. "
+        "Missing: " + ", ".join(missing_r2_settings)
+    )
+
 STORAGES = {
     "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": R2_BUCKET_NAME,
+            "endpoint_url": R2_ENDPOINT_URL,
+            "region_name": "auto",
+            "signature_version": "s3v4",
+            "access_key": R2_ACCESS_KEY_ID,
+            "secret_key": R2_SECRET_ACCESS_KEY,
+            "custom_domain": R2_PUBLIC_DOMAIN,
+            "querystring_auth": False,
+            "file_overwrite": False,
+            "object_parameters": {"CacheControl": "max-age=86400"},
+        },
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
-
-OCI_MEDIA_ENV_VARS = (
-    "OCI_OBJECT_STORAGE_NAMESPACE",
-    "OCI_OBJECT_STORAGE_BUCKET",
-    "OCI_OBJECT_STORAGE_REGION",
-    "OCI_OBJECT_STORAGE_ACCESS_KEY",
-    "OCI_OBJECT_STORAGE_SECRET_KEY",
-)
-missing_oci_media_vars = [
-    name for name in OCI_MEDIA_ENV_VARS if not os.environ.get(name, "").strip()
-]
-if R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY:
-    STORAGES["default"] = base_default_storage
-elif not missing_oci_media_vars:
-    INSTALLED_APPS.append("storages")
-    object_storage_namespace = os.environ["OCI_OBJECT_STORAGE_NAMESPACE"].strip()
-    object_storage_region = os.environ["OCI_OBJECT_STORAGE_REGION"].strip()
-    STORAGES["default"] = {
-        "BACKEND": "storages.backends.s3.S3Storage",
-        "OPTIONS": {
-            "bucket_name": os.environ["OCI_OBJECT_STORAGE_BUCKET"].strip(),
-            "endpoint_url": (
-                "https://"
-                f"{object_storage_namespace}.compat.objectstorage."
-                f"{object_storage_region}.oraclecloud.com"
-            ),
-            "region_name": object_storage_region,
-            "access_key": os.environ["OCI_OBJECT_STORAGE_ACCESS_KEY"].strip(),
-            "secret_key": os.environ["OCI_OBJECT_STORAGE_SECRET_KEY"].strip(),
-            "addressing_style": "path",
-            "querystring_auth": True,
-            "querystring_expire": 3600,
-            "file_overwrite": False,
-        },
-    }
-else:
-    logging.getLogger(__name__).warning(
-        "OCI Object Storage is not fully configured; uploaded media will use "
-        "local disk, which is not persistent on Render. Missing: %s",
-        ", ".join(missing_oci_media_vars),
-    )
+MEDIA_URL = f"https://{R2_PUBLIC_DOMAIN}/"
 
 
 # --------------------------------------------------

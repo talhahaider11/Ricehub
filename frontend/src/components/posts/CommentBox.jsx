@@ -31,6 +31,7 @@ export default function CommentBox({ postId, onCreated }) {
     <form className="comment-box" onSubmit={submit}>
       <div className="comment-input-wrap">
         <textarea
+          className="comment-textarea"
           value={content}
           onChange={(event) => setContent(event.target.value)}
           placeholder="Write a comment..."
@@ -44,7 +45,7 @@ export default function CommentBox({ postId, onCreated }) {
       </div>
 
       <button type="submit" disabled={!content.trim() || loading}>
-        {loading ? "..." : "Send"}
+        {loading ? "Sending..." : "Send"}
       </button>
       {error && <span className="error" role="alert">{error}</span>}
     </form>

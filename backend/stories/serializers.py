@@ -54,6 +54,7 @@ class StorySerializer(serializers.ModelSerializer):
     image = StoryMediaField(read_only=True)
     video = StoryMediaField(read_only=True)
     media_url = serializers.SerializerMethodField()
+    source_media_url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     media_type = serializers.SerializerMethodField()
     duration_seconds = serializers.SerializerMethodField()
@@ -73,6 +74,7 @@ class StorySerializer(serializers.ModelSerializer):
             "video",
             "media_id",
             "media_url",
+            "source_media_url",
             "thumbnail_url",
             "media_type",
             "duration_seconds",
@@ -88,6 +90,7 @@ class StorySerializer(serializers.ModelSerializer):
             "id",
             "author",
             "media_url",
+            "source_media_url",
             "thumbnail_url",
             "media_type",
             "duration_seconds",
@@ -182,6 +185,20 @@ class StorySerializer(serializers.ModelSerializer):
         if not media and story.media_asset:
             media = story.media_asset.playable_file
         if not media:
+            return None
+        url = media.url
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
+
+    def get_source_media_url(self, story):
+        if not story.media_asset:
+            return None
+        media = (
+            story.media_asset.playable_file
+            if story.media_asset.media_type == MediaAsset.MediaType.VIDEO
+            else story.media_asset.file
+        )
+        if not media or not media.name:
             return None
         url = media.url
         request = self.context.get("request")

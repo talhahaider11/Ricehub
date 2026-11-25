@@ -1,5 +1,6 @@
 import api from "./api";
 import storyService from "./storyService";
+import { collectPaginatedResults } from "../utils/paginatedResults";
 
 const communityService = {
   async stories(authorId) {
@@ -27,7 +28,14 @@ const communityService = {
     return (await api.post(`/community/community-posts/${id}/like/`)).data;
   },
   async communityPostComments(id) {
-    return (await api.get(`/community/community-posts/${id}/comments/`)).data;
+    const response = await api.get(
+      `/community/community-posts/${id}/comments/`
+    );
+    return collectPaginatedResults(
+      response,
+      (next) => api.get(next),
+      "Comments"
+    );
   },
   async createCommunityPostComment(id, content) {
     return (await api.post(`/community/community-posts/${id}/comments/`, {

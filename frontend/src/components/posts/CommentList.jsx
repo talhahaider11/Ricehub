@@ -54,8 +54,10 @@ export default function CommentList({
   }
 
   return (
-    <div className="comment-list">
-      {comments.map((comment) => (
+    <div className="comment-list" aria-live="polite">
+      {comments.length === 0 ? (
+        <p className="comment-empty">No comments yet. Start the conversation.</p>
+      ) : comments.map((comment) => (
         <div
           className="comment"
           key={comment.id}

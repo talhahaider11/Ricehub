@@ -31,4 +31,30 @@ describe("postService personalized feed", () => {
 
     expect(api.post).toHaveBeenCalledWith("/feed/42/view/");
   });
+
+  it("loads every page of comments before returning", async () => {
+    api.get
+      .mockResolvedValueOnce({
+        data: {
+          results: [{ id: 1 }],
+          next: "https://api.example.test/api/posts/17/comments/?page=2",
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          results: [{ id: 2 }],
+          next: null,
+        },
+      });
+
+    await expect(postService.comments(17)).resolves.toEqual([
+      { id: 1 },
+      { id: 2 },
+    ]);
+    expect(api.get).toHaveBeenNthCalledWith(1, "/posts/17/comments/");
+    expect(api.get).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.test/api/posts/17/comments/?page=2"
+    );
+  });
 });

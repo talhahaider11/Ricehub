@@ -104,6 +104,7 @@ export default function CommunityPostCard({
           className="btn btn-secondary"
           onClick={toggleComments}
           aria-expanded={showComments}
+          aria-controls={`community-post-comments-${post.id}`}
         >
           <MessageCircle size={16} aria-hidden="true" />
           {t("comment")} ({commentsCount})
@@ -121,7 +122,15 @@ export default function CommunityPostCard({
       </div>
       {error && <p className="error" role="alert">{error}</p>}
       {showComments && (
-        <>
+        <section
+          className="comment-panel"
+          id={`community-post-comments-${post.id}`}
+          aria-label="Community post comments"
+        >
+          <div className="comment-panel-heading">
+            <h3>Comments</h3>
+            <span>{commentsCount}</span>
+          </div>
           <div className="comment-list">
             {comments.map((comment) => (
               <div className="comment" key={comment.id}>
@@ -136,8 +145,9 @@ export default function CommunityPostCard({
               <p className="social-empty">{t("noCommunityComments")}</p>
             )}
           </div>
-          <form className="comment-box" onSubmit={submitComment}>
+          <form className="comment-box comment-composer" onSubmit={submitComment}>
             <textarea
+              className="comment-textarea"
               value={commentText}
               onChange={(event) => setCommentText(event.target.value)}
               placeholder={t("writeCommunityComment")}
@@ -149,7 +159,7 @@ export default function CommunityPostCard({
               {t("send")}
             </button>
           </form>
-        </>
+        </section>
       )}
     </article>
   );
