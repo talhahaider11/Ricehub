@@ -151,6 +151,7 @@ export default function CreatePost({
 
       <MediaUploader
         maxFiles={MAX_POST_MEDIA_COUNT - mediaAssets.length}
+        purpose="post"
         onFileSelected={(file, mediaType) => {
           if (mediaType === "video") {
             nextVideoPreviewId.current += 1;

@@ -105,6 +105,7 @@ export default function StoryUploader({ onCreated }) {
       <MediaUploader
         maxFiles={1}
         multiple={false}
+        purpose="story"
         accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
         onFileSelected={(file, mediaType) => {
           setVideoPreviewFile(mediaType === "video" ? file : null);

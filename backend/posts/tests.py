@@ -1,4 +1,5 @@
 import tempfile
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -160,6 +161,17 @@ class PostAuthorizationTests(APITestCase):
         self.assertEqual(deleted.status_code, 403)
         self.post.refresh_from_db()
         self.assertEqual(self.post.content, "Original post")
+
+    def test_post_deletion_removes_oci_media_files(self):
+        self.post.image.name = "posts/oci/2026/11/photo.jpg"
+        self.post.save(update_fields=["image"])
+        storage = self.post.image.storage
+
+        with patch.object(storage, "delete") as delete_file:
+            with self.captureOnCommitCallbacks(execute=True):
+                self.post.delete()
+
+        delete_file.assert_called_once_with("posts/oci/2026/11/photo.jpg")
 
     def test_reel_requires_a_video(self):
         self.client.force_authenticate(self.owner)

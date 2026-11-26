@@ -187,15 +187,20 @@ class EventSerializer(serializers.ModelSerializer):
     )
     interested_count = serializers.IntegerField(read_only=True)
     my_response = serializers.SerializerMethodField()
+    is_interested = serializers.SerializerMethodField()
+    interested_users = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
         fields = [
             "id", "host", "community", "title", "description", "location",
             "starts_at", "ends_at", "banner", "interested_count",
-            "my_response", "created_at",
+            "my_response", "is_interested", "interested_users", "created_at",
         ]
-        read_only_fields = ["id", "host", "interested_count", "my_response", "created_at"]
+        read_only_fields = [
+            "id", "host", "interested_count", "my_response", "is_interested",
+            "interested_users", "created_at",
+        ]
 
     def get_host(self, obj):
         return {"id": obj.host_id, "username": obj.host.username}
@@ -213,6 +218,26 @@ class EventSerializer(serializers.ModelSerializer):
             None,
         )
         return attendance.response if attendance else None
+
+    def get_is_interested(self, obj):
+        return self.get_my_response(obj) == Event.Response.INTERESTED
+
+    def get_interested_users(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated or request.user.pk != obj.host_id:
+            return []
+
+        attendances = getattr(obj, "interested_attendance_rows", None)
+        if attendances is None:
+            attendances = obj.attendances.filter(
+                response=Event.Response.INTERESTED,
+            ).select_related("user")
+        users = [attendance.user for attendance in attendances]
+        return EventInterestedUserSerializer(
+            users,
+            many=True,
+            context=self.context,
+        ).data
 
     def validate_starts_at(self, value):
         if value <= timezone.now():

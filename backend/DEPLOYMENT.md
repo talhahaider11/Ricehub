@@ -26,7 +26,7 @@ protected environment values; never commit them to this repository.
 | Both backend services | `DB_USER`, `DB_PASSWORD`, `DB_SERVICE_NAME` | ATP database user (defaults to `admin`), password, and the wallet `tnsnames.ora` service alias such as `ricehub_low` |
 | Both backend services | `WALLET_DIR` | `/etc/secrets` on Render; store the extracted ATP wallet files there as secret files |
 | Both backend services | `WALLET_PASSWORD` | Optional protected variable if the downloaded wallet requires a password |
-| Both backend services | `OCI_OBJECT_STORAGE_NAMESPACE`, `OCI_OBJECT_STORAGE_BUCKET`, `OCI_OBJECT_STORAGE_REGION`, `OCI_OBJECT_STORAGE_ACCESS_KEY`, `OCI_OBJECT_STORAGE_SECRET_KEY` | OCI Object Storage namespace, bucket, region, and S3-compatibility customer secret key pair |
+| Both backend services | `ORACLE_ACCESS_KEY_ID`, `ORACLE_SECRET_ACCESS_KEY`, `ORACLE_BUCKET_NAME`, `ORACLE_S3_ENDPOINT_URL`, `ORACLE_REGION` | OCI S3-compatibility customer secret key pair, bucket, endpoint, and region; required for production post and chat media |
 | Both backend services | `REDIS_URL` | The Render Redis connection string reachable by both services |
 | `ricehub-backend` | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` | Brevo transactional-email API key and a sender address verified in Brevo |
 | `ricehub-celery-worker` | `FIREBASE_CREDENTIALS_JSON` | Firebase service-account JSON, only if push delivery is enabled |
@@ -72,16 +72,13 @@ they become public in the browser bundle.
    wallet requires it. The Python Oracle driver uses thin mode by default, so
    no Oracle Instant Client initialization is required.
 3. Create an OCI Object Storage bucket and an S3 Compatibility customer secret
-   key pair. Fill in the five `OCI_OBJECT_STORAGE_*` variables for both the
-   web service and worker. The endpoint is derived from the namespace and
-   region. If these values are incomplete, startup logs a warning and uses
-   local disk; Render's local disk is ephemeral, so uploads will not persist
-   until OCI Object Storage is configured.
-4. The `MediaAsset` model stores file metadata in ATP and its existing
-   `FileField`/`ImageField` values use the configured Django storage backend.
-   No file-content database migration is needed. Existing uploads are not
-   copied automatically; migrate old media objects to OCI separately while
-   preserving their stored file names.
+   key pair. Set `ORACLE_ACCESS_KEY_ID`, `ORACLE_SECRET_ACCESS_KEY`,
+   `ORACLE_BUCKET_NAME`, `ORACLE_S3_ENDPOINT_URL`, and `ORACLE_REGION` on both
+   the web service and worker. Production startup requires these values.
+4. Post and chat attachments use OCI Object Storage; profile, story, event,
+   and marketplace media continue using Cloudflare R2. Existing media objects
+   are not copied automatically; migrate old post and chat objects to OCI
+   separately while preserving their stored file names.
 5. Configure the ATP network access control list to allow connections from
    the Render service's outbound IP addresses, or use an approved private
    network connection. The app cannot connect if ATP blocks Render's egress.

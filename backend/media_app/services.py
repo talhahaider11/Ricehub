@@ -52,7 +52,10 @@ def _queue_video_processing(asset):
         _mark_video_ready(asset)
 
 
-def upload_media(owner, uploaded_file, media_type):
+def upload_media(owner, uploaded_file, media_type, purpose="story"):
+    if purpose not in {"post", "story"}:
+        raise ValidationError({"purpose": "Choose post or story media."})
+
     metadata = validate_media_file(uploaded_file, media_type)
     original_filename = Path(uploaded_file.name.replace("\\", "/")).name
     safe_filename = get_valid_filename(original_filename)[:200]
@@ -66,6 +69,7 @@ def upload_media(owner, uploaded_file, media_type):
         mime_type=metadata["mime_type"],
         file_size=uploaded_file.size,
     )
+    asset._storage_purpose = purpose
     saved = False
     try:
         with transaction.atomic():

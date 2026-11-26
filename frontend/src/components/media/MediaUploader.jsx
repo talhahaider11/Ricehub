@@ -26,6 +26,7 @@ export default function MediaUploader({
   accept = "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime",
   multiple = true,
   showCamera = true,
+  purpose = "post",
 }) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -60,11 +61,16 @@ export default function MediaUploader({
         onFileSelected?.(file, mediaType);
         setFilename(file.name);
         setProgress(0);
-        const asset = await uploadMedia(file, mediaType, (event) => {
-          if (event.total) {
-            setProgress(Math.round((event.loaded / event.total) * 100));
-          }
-        });
+        const asset = await uploadMedia(
+          file,
+          mediaType,
+          (event) => {
+            if (event.total) {
+              setProgress(Math.round((event.loaded / event.total) * 100));
+            }
+          },
+          purpose
+        );
         uploaded.push(asset);
         uploadedFiles.push(file);
       }

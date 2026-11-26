@@ -11,11 +11,17 @@ export async function prepareImage(file) {
   });
 }
 
-export async function uploadMedia(file, mediaType, onUploadProgress) {
+export async function uploadMedia(
+  file,
+  mediaType,
+  onUploadProgress,
+  purpose = "post"
+) {
   const preparedFile = mediaType === "image" ? await prepareImage(file) : file;
   const formData = new FormData();
   formData.append("file", preparedFile, preparedFile.name || file.name);
   formData.append("media_type", mediaType);
+  formData.append("purpose", purpose);
 
   const response = await api.post("/media/upload/", formData, {
     headers: { "Content-Type": "multipart/form-data" },

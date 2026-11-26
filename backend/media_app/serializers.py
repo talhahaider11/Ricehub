@@ -45,3 +45,7 @@ class MediaAssetSerializer(serializers.ModelSerializer):
 class MediaUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
     media_type = serializers.ChoiceField(choices=MediaAsset.MediaType.choices)
+    purpose = serializers.ChoiceField(
+        choices=(("post", "Post"), ("story", "Story")),
+        default="story",
+    )

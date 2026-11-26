@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from media_app.storage import ChatMediaStorage
+
 
 class Conversation(models.Model):
     class ConversationType(models.TextChoices):
@@ -138,9 +140,10 @@ class Message(models.Model):
         related_name="replies",
     )
     attachment = models.FileField(
-        upload_to="messages/%Y/%m/",
+        upload_to="chat/%Y/%m/",
         blank=True,
         null=True,
+        storage=ChatMediaStorage(),
     )
     attachment_type = models.CharField(
         max_length=10,

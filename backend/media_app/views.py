@@ -26,6 +26,7 @@ class MediaUploadView(generics.GenericAPIView):
                 request.user,
                 upload_serializer.validated_data["file"],
                 upload_serializer.validated_data["media_type"],
+                upload_serializer.validated_data["purpose"],
             )
         except DjangoValidationError as error:
             detail = error.message_dict if hasattr(error, "message_dict") else error.messages

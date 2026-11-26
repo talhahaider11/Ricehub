@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import SocialHub from "./SocialHub";
@@ -54,7 +54,7 @@ function QueryNavigationButton() {
 
 describe("SocialHub route tabs", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it("resets to Stories when Discover opens without a stale tab query", async () => {
@@ -215,6 +215,72 @@ describe("SocialHub route tabs", () => {
     expect(await screen.findByText("No interested users yet."))
       .toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("optimistically toggles interest state, button label, and count", async () => {
+    const event = {
+      id: 24,
+      title: "Interest toggle meetup",
+      starts_at: "2035-10-10T10:00:00.000Z",
+      banner: null,
+      host: { id: 7, username: "current-user" },
+      interested_count: 0,
+      my_response: null,
+      is_interested: false,
+      interested_users: [],
+    };
+    const interestedEvent = {
+      ...event,
+      interested_count: 1,
+      my_response: "interested",
+      is_interested: true,
+    };
+    let resolveInterest;
+    communityService.events
+      .mockResolvedValueOnce([event])
+      .mockResolvedValueOnce([interestedEvent])
+      .mockResolvedValueOnce([event]);
+    communityService.invitations.mockResolvedValue([]);
+    friendService.list.mockResolvedValue([]);
+    communityService.respondToEvent.mockImplementation(
+      () => new Promise((resolve) => {
+        resolveInterest = resolve;
+      })
+    );
+    communityService.cancelEventResponse.mockResolvedValue();
+
+    render(
+      <MemoryRouter initialEntries={["/discover?tab=Events"]}>
+        <Routes>
+          <Route path="/discover" element={<SocialHub />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const eventHeading = await screen.findByRole("heading", {
+      name: "Interest toggle meetup",
+    });
+    const eventCard = eventHeading.closest("article");
+    const interestedButton = within(eventCard).getByRole("button", { name: "Interested" });
+    fireEvent.click(interestedButton);
+
+    expect(communityService.respondToEvent).toHaveBeenCalledWith(24, "interested");
+    expect(await within(eventCard).findByRole("button", { name: "Uninterested" }))
+      .toBeInTheDocument();
+    expect(within(eventCard).getByRole("button", { name: "1 interested" })).toBeInTheDocument();
+
+    resolveInterest({});
+    await waitFor(() => expect(communityService.events).toHaveBeenCalledTimes(2));
+    const uninterestedButton = await within(eventCard).findByRole("button", {
+      name: "Uninterested",
+    });
+    await waitFor(() => expect(uninterestedButton).not.toBeDisabled());
+    fireEvent.click(uninterestedButton);
+
+    expect(await within(eventCard).findByRole("button", { name: "Interested" }))
+      .toBeInTheDocument();
+    expect(within(eventCard).getByRole("button", { name: "0 interested" })).toBeInTheDocument();
+    expect(communityService.cancelEventResponse).toHaveBeenCalledWith(24);
   });
 
   it("lets event viewers open a direct chat with the host", async () => {

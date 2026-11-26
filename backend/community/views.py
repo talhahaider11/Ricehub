@@ -49,6 +49,23 @@ from .serializers import (
 User = get_user_model()
 
 
+def event_attendance_prefetches(user):
+    return (
+        Prefetch(
+            "attendances",
+            queryset=EventAttendance.objects.filter(user=user),
+        ),
+        Prefetch(
+            "attendances",
+            queryset=EventAttendance.objects.filter(
+                response=Event.Response.INTERESTED,
+                event__host=user,
+            ).select_related("user"),
+            to_attr="interested_attendance_rows",
+        ),
+    )
+
+
 class StoryListCreateView(SecureStoryListCreateView):
     pass
 
@@ -407,7 +424,7 @@ class EventListCreateView(generics.ListCreateAPIView):
                 distinct=True,
             ),
         ).select_related("host", "community").prefetch_related(
-            Prefetch("attendances", queryset=EventAttendance.objects.filter(user=self.request.user))
+            *event_attendance_prefetches(self.request.user)
         )
 
     def perform_create(self, serializer):
@@ -438,10 +455,7 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
                 distinct=True,
             ),
         ).prefetch_related(
-            Prefetch(
-                "attendances",
-                queryset=EventAttendance.objects.filter(user=self.request.user),
-            ),
+            *event_attendance_prefetches(self.request.user)
         )
 
     def perform_update(self, serializer):

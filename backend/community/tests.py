@@ -518,6 +518,18 @@ class CommunityFeatureTests(APITestCase):
             }],
         )
 
+        host_events = self.client.get("/api/community/events/")
+        hosted_event = host_events.data["results"][0]
+        self.assertFalse(hosted_event["is_interested"])
+        self.assertEqual(hosted_event["interested_count"], 1)
+        self.assertEqual(hosted_event["interested_users"], response.data)
+
+        self.client.force_authenticate(self.user)
+        attendee_events = self.client.get("/api/community/events/")
+        attendee_event = attendee_events.data["results"][0]
+        self.assertTrue(attendee_event["is_interested"])
+        self.assertEqual(attendee_event["interested_users"], [])
+
     def test_authenticated_user_can_create_event_with_optional_fields_and_banner(self):
         image_buffer = BytesIO()
         Image.new("RGB", (2, 2), color="white").save(image_buffer, format="PNG")

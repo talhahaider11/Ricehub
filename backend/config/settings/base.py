@@ -401,6 +401,56 @@ if any(R2_CONFIGURATION.values()):
         },
     }
 
+ORACLE_ACCESS_KEY_ID = os.getenv("ORACLE_ACCESS_KEY_ID", "").strip()
+ORACLE_SECRET_ACCESS_KEY = os.getenv("ORACLE_SECRET_ACCESS_KEY", "").strip()
+ORACLE_BUCKET_NAME = os.getenv("ORACLE_BUCKET_NAME", "").strip()
+ORACLE_S3_ENDPOINT_URL = (
+    os.getenv("ORACLE_S3_ENDPOINT_URL", "").strip().rstrip("/")
+)
+ORACLE_REGION = os.getenv("ORACLE_REGION", "").strip()
+ORACLE_STORAGE_CONFIGURATION = {
+    "ORACLE_ACCESS_KEY_ID": ORACLE_ACCESS_KEY_ID,
+    "ORACLE_SECRET_ACCESS_KEY": ORACLE_SECRET_ACCESS_KEY,
+    "ORACLE_BUCKET_NAME": ORACLE_BUCKET_NAME,
+    "ORACLE_S3_ENDPOINT_URL": ORACLE_S3_ENDPOINT_URL,
+    "ORACLE_REGION": ORACLE_REGION,
+}
+ORACLE_STORAGE_CONFIGURED = all(ORACLE_STORAGE_CONFIGURATION.values())
+if any(ORACLE_STORAGE_CONFIGURATION.values()) and not ORACLE_STORAGE_CONFIGURED:
+    missing_oracle_settings = [
+        name
+        for name, value in ORACLE_STORAGE_CONFIGURATION.items()
+        if not value
+    ]
+    raise ValueError(
+        "OCI Object Storage credentials require: "
+        + ", ".join(missing_oracle_settings)
+    )
+if ORACLE_STORAGE_CONFIGURED and "storages" not in INSTALLED_APPS:
+    INSTALLED_APPS.append("storages")
+
+STORAGES["oracle_media"] = (
+    {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": ORACLE_BUCKET_NAME,
+            "endpoint_url": ORACLE_S3_ENDPOINT_URL,
+            "region_name": ORACLE_REGION,
+            "signature_version": "s3v4",
+            "addressing_style": "path",
+            "custom_domain": None,
+            "location": "",
+            "access_key": ORACLE_ACCESS_KEY_ID,
+            "secret_key": ORACLE_SECRET_ACCESS_KEY,
+            "querystring_auth": True,
+            "file_overwrite": False,
+            "object_parameters": {"CacheControl": "max-age=86400"},
+        },
+    }
+    if ORACLE_STORAGE_CONFIGURED
+    else {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+)
+
 # CORS and CSRF Settings for Mobile App & Render Frontend
 CORS_ALLOWED_ORIGINS = [
     "https://ricehub-frontend.onrender.com",

@@ -56,6 +56,7 @@ export default function SocialHub() {
   const [communityMembersLoading, setCommunityMembersLoading] = useState(false);
   const [communityMembersError, setCommunityMembersError] = useState("");
   const communityPostsRef = useRef(null);
+  const eventInterestVersionRef = useRef(0);
   const [communityPostText, setCommunityPostText] = useState("");
   const [storyViewers, setStoryViewers] = useState({});
   const [viewedStories, setViewedStories] = useState({});
@@ -117,13 +118,20 @@ export default function SocialHub() {
         socialHubCache.set(cacheKey, data);
         setCommunities(data);
       } else if (activeTab === "Events") {
+        const eventInterestVersion = eventInterestVersionRef.current;
         const [eventData, friendData, invitationData] = await Promise.all([
           communityService.events(),
           friendService.list(),
           communityService.invitations(),
         ]);
+        const fetchedEvents = getArrayResults(eventData, "Events");
+        const hasNewerInterestState =
+          eventInterestVersion !== eventInterestVersionRef.current;
+        const latestCachedEvents = socialHubCache.get(cacheKey)?.events;
         const data = {
-          events: getArrayResults(eventData, "Events"),
+          events: hasNewerInterestState && latestCachedEvents
+            ? latestCachedEvents
+            : fetchedEvents,
           friends: getArrayResults(friendData, "Friends"),
           invitations: getArrayResults(invitationData, "Event invitations"),
         };
@@ -260,6 +268,71 @@ export default function SocialHub() {
       setError(
         typeof detail === "string"
           ? detail
+          : t("socialActionFailed")
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleEventInterest = async (item) => {
+    const wasInterested = typeof item.is_interested === "boolean"
+      ? item.is_interested
+      : item.my_response === "interested";
+    const isInterested = !wasInterested;
+    const previousEvents = events;
+    const cachedData = socialHubCache.get("Events");
+    const previousCache = cachedData || {
+      events: previousEvents,
+      friends,
+      invitations,
+    };
+    const updateEventList = (eventList) => eventList.map((event) => {
+      if (event.id !== item.id) return event;
+      const currentCount = Number(event.interested_count);
+      return {
+        ...event,
+        is_interested: isInterested,
+        my_response: isInterested ? "interested" : null,
+        interested_count: Math.max(
+          0,
+          (Number.isFinite(currentCount) ? currentCount : 0)
+            + (isInterested ? 1 : -1)
+        ),
+      };
+    });
+
+    const updatedEvents = updateEventList(events);
+    eventInterestVersionRef.current += 1;
+    setEvents(updatedEvents);
+    socialHubCache.set("Events", {
+      ...previousCache,
+      events: updateEventList(previousCache.events || events),
+    });
+
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      if (isInterested) {
+        await communityService.respondToEvent(item.id, "interested");
+      } else {
+        await communityService.cancelEventResponse(item.id);
+      }
+      setNotice(t(isInterested ? "markedInterested" : "responseRemoved"));
+      eventInterestVersionRef.current += 1;
+      await load();
+    } catch (actionError) {
+      eventInterestVersionRef.current += 1;
+      setEvents(previousEvents);
+      if (cachedData) {
+        socialHubCache.set("Events", previousCache);
+      } else {
+        socialHubCache.delete("Events");
+      }
+      setError(
+        typeof actionError.response?.data?.detail === "string"
+          ? actionError.response.data.detail
           : t("socialActionFailed")
       );
     } finally {
@@ -413,6 +486,11 @@ export default function SocialHub() {
     setInterestedUsersEvent(item);
     setInterestedUsers([]);
     setInterestedUsersError("");
+    if (Array.isArray(item.interested_users)) {
+      setInterestedUsers(item.interested_users);
+      setInterestedUsersLoading(false);
+      return;
+    }
     setInterestedUsersLoading(true);
     try {
       const users = await communityService.eventInterestedUsers(item.id);
@@ -822,18 +900,17 @@ export default function SocialHub() {
                 )}
                 <div className="social-actions">
                   <button
-                    className={`btn ${item.my_response === "interested" ? "btn-primary" : "btn-secondary"}`}
+                    className={`btn ${(typeof item.is_interested === "boolean"
+                      ? item.is_interested
+                      : item.my_response === "interested") ? "btn-primary" : "btn-secondary"}`}
                     disabled={saving}
-                    onClick={() => perform(
-                      () => item.my_response === "interested"
-                        ? communityService.cancelEventResponse(item.id)
-                        : communityService.respondToEvent(item.id, "interested"),
-                      item.my_response === "interested"
-                        ? t("responseRemoved")
-                        : t("markedInterested")
-                    )}
+                    onClick={() => void toggleEventInterest(item)}
                   >
-                    {t("interested")}
+                    {t((typeof item.is_interested === "boolean"
+                      ? item.is_interested
+                      : item.my_response === "interested")
+                      ? "uninterested"
+                      : "interested")}
                   </button>
                 </div>
                 {String(item.host.id) !== String(user?.id) && (

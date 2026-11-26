@@ -43,6 +43,7 @@ describe("mediaService", () => {
       expect.any(FormData),
       expect.objectContaining({ onUploadProgress: undefined })
     );
+    expect(api.post.mock.calls[0][1].get("purpose")).toBe("post");
   });
 
   it("does not compress videos", async () => {
@@ -57,6 +58,17 @@ describe("mediaService", () => {
       expect.any(FormData),
       expect.any(Object)
     );
+    expect(api.post.mock.calls[0][1].get("purpose")).toBe("post");
+  });
+
+  it("can route story uploads separately from post uploads", async () => {
+    const source = new File(["original"], "story.png", { type: "image/png" });
+    imageCompression.mockResolvedValue(source);
+    api.post.mockResolvedValue({ data: { id: 10 } });
+
+    await uploadMedia(source, "image", undefined, "story");
+
+    expect(api.post.mock.calls[0][1].get("purpose")).toBe("story");
   });
 
   it("returns non-image inputs unchanged from prepareImage", async () => {

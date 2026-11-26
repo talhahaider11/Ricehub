@@ -22,7 +22,7 @@ describe("MediaUploader", () => {
     }));
   });
 
-  it("opens one native photo-or-video camera input and uploads either file type", async () => {
+  it("offers separate camera inputs and uploads both file types", async () => {
     const onUploaded = vi.fn();
     const onFileSelected = vi.fn();
     render(
@@ -34,39 +34,50 @@ describe("MediaUploader", () => {
       />
     );
 
-    const cameraInput = screen.getByLabelText("Capture a photo or video");
-    expect(cameraInput).toHaveAttribute("accept", "image/*,video/*");
-    expect(cameraInput).toHaveAttribute("capture", "environment");
+    const photoInput = screen.getByLabelText("Capture a photo");
+    const videoInput = screen.getByLabelText("Record a video");
+    expect(photoInput).toHaveAttribute("accept", "image/*");
+    expect(photoInput).toHaveAttribute("capture", "environment");
+    expect(videoInput).toHaveAttribute("accept", "video/*");
+    expect(videoInput).toHaveAttribute("capture", "environment");
     const galleryInput = document.querySelector(".media-uploader-file input");
     expect(galleryInput).toHaveAttribute(
       "accept",
       "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
     );
     expect(galleryInput).not.toHaveAttribute("capture");
-    const clickInput = vi.spyOn(cameraInput, "click");
+    const clickPhotoInput = vi.spyOn(photoInput, "click");
+    const clickVideoInput = vi.spyOn(videoInput, "click");
 
     fireEvent.click(screen.getByRole("button", { name: "Camera" }));
-    expect(clickInput).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Take photo" }));
+    expect(clickPhotoInput).toHaveBeenCalledOnce();
     const photo = new File(["photo"], "camera.jpg", { type: "image/jpeg" });
-    fireEvent.change(cameraInput, { target: { files: [photo] } });
+    fireEvent.change(photoInput, { target: { files: [photo] } });
 
     await waitFor(() => {
       expect(uploadMedia).toHaveBeenCalledOnce();
       expect(screen.getByRole("button", { name: "Camera" })).toBeEnabled();
     });
+
+    fireEvent.click(screen.getByRole("button", { name: "Camera" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Record a video" }));
+    expect(clickVideoInput).toHaveBeenCalledOnce();
     const video = new File(["video"], "camera.mp4", { type: "video/mp4" });
-    fireEvent.change(cameraInput, { target: { files: [video] } });
+    fireEvent.change(videoInput, { target: { files: [video] } });
 
     await waitFor(() => {
       expect(uploadMedia).toHaveBeenCalledWith(
         photo,
         "image",
-        expect.any(Function)
+        expect.any(Function),
+        "post"
       );
       expect(uploadMedia).toHaveBeenCalledWith(
         video,
         "video",
-        expect.any(Function)
+        expect.any(Function),
+        "post"
       );
       expect(onUploaded).toHaveBeenNthCalledWith(1, [
         expect.objectContaining({ id: 21, media_type: "image" }),
@@ -77,6 +88,7 @@ describe("MediaUploader", () => {
     });
     expect(onFileSelected).toHaveBeenCalledWith(photo, "image");
     expect(onFileSelected).toHaveBeenCalledWith(video, "video");
-    expect(cameraInput).toHaveValue("");
+    expect(photoInput).toHaveValue("");
+    expect(videoInput).toHaveValue("");
   });
 });

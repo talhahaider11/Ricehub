@@ -638,6 +638,22 @@ class MessagingFeatureTests(APITestCase):
         self.assertTrue(message.is_deleted)
         self.assertEqual(message.content, "")
 
+    def test_hard_deleting_a_message_removes_its_oci_attachment(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender=self.user,
+            content="Attachment",
+        )
+        message.attachment.name = "chat/2026/11/attachment.jpg"
+        message.save(update_fields=["attachment"])
+        attachment_storage = message.attachment.storage
+
+        with patch.object(attachment_storage, "delete") as delete_file:
+            with self.captureOnCommitCallbacks(execute=True):
+                message.delete()
+
+        delete_file.assert_called_once_with("chat/2026/11/attachment.jpg")
+
     def test_sender_cannot_edit_another_users_message(self):
         message = Message.objects.create(
             conversation=self.conversation,

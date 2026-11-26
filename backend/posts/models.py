@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from .validators import validate_post_image, validate_post_video
+from media_app.storage import PostMediaStorage
 
 
 class Hashtag(models.Model):
@@ -53,17 +54,19 @@ class Post(models.Model):
     )
 
     image = models.ImageField(
-        upload_to="posts/%Y/%m/",
+        upload_to="posts/oci/%Y/%m/",
         blank=True,
         null=True,
         validators=[validate_post_image],
+        storage=PostMediaStorage(),
     )
 
     video = models.FileField(
-        upload_to="posts/videos/%Y/%m/",
+        upload_to="posts/videos/oci/%Y/%m/",
         blank=True,
         null=True,
         validators=[validate_post_video],
+        storage=PostMediaStorage(),
     )
 
     media_assets = models.ManyToManyField(

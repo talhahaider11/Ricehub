@@ -1,5 +1,40 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
+
+from .storage import MediaAssetStorage
+
+
+def _media_asset_upload_path(instance, filename, category):
+    purpose = getattr(instance, "_storage_purpose", None)
+    if purpose not in {"post", "story"}:
+        existing_name = (instance.file.name or "").replace("\\", "/")
+        purpose = (
+            "post"
+            if existing_name.startswith("posts/")
+            else "story"
+            if existing_name.startswith("stories/")
+            else "media"
+        )
+    month = timezone.now().strftime("%Y/%m")
+    directory = {
+        "post": "posts",
+        "story": "stories",
+        "media": "media",
+    }[purpose]
+    return f"{directory}/{category}/{month}/{filename}"
+
+
+def media_asset_file_upload_path(instance, filename):
+    return _media_asset_upload_path(instance, filename, "originals")
+
+
+def media_asset_thumbnail_upload_path(instance, filename):
+    return _media_asset_upload_path(instance, filename, "thumbnails")
+
+
+def media_asset_processed_upload_path(instance, filename):
+    return _media_asset_upload_path(instance, filename, "processed")
 
 
 class MediaAsset(models.Model):
@@ -20,18 +55,21 @@ class MediaAsset(models.Model):
     )
     media_type = models.CharField(max_length=20, choices=MediaType.choices)
     file = models.FileField(
-        upload_to="media/originals/%Y/%m/",
+        upload_to=media_asset_file_upload_path,
         max_length=512,
+        storage=MediaAssetStorage(),
     )
     thumbnail = models.ImageField(
-        upload_to="media/thumbnails/%Y/%m/",
+        upload_to=media_asset_thumbnail_upload_path,
         blank=True,
         max_length=512,
+        storage=MediaAssetStorage(),
     )
     compressed_file = models.FileField(
-        upload_to="media/processed/%Y/%m/",
+        upload_to=media_asset_processed_upload_path,
         blank=True,
         max_length=512,
+        storage=MediaAssetStorage(),
     )
     original_filename = models.CharField(max_length=255, blank=True)
     mime_type = models.CharField(max_length=100, blank=True)

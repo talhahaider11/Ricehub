@@ -43,6 +43,22 @@ if missing_r2_settings:
         "Missing: " + ", ".join(missing_r2_settings)
     )
 
+required_oracle_settings = (
+    "ORACLE_ACCESS_KEY_ID",
+    "ORACLE_SECRET_ACCESS_KEY",
+    "ORACLE_BUCKET_NAME",
+    "ORACLE_S3_ENDPOINT_URL",
+    "ORACLE_REGION",
+)
+missing_oracle_settings = [
+    name for name in required_oracle_settings if not globals().get(name)
+]
+if missing_oracle_settings:
+    raise RuntimeError(
+        "OCI Object Storage must be fully configured for post and chat media. "
+        "Missing: " + ", ".join(missing_oracle_settings)
+    )
+
 STORAGES = {
     "default": {
         "BACKEND": "storages.backends.s3.S3Storage",
@@ -56,6 +72,23 @@ STORAGES = {
             "custom_domain": AWS_S3_CUSTOM_DOMAIN,
             "querystring_auth": AWS_QUERYSTRING_AUTH,
             "default_acl": AWS_DEFAULT_ACL,
+            "file_overwrite": False,
+            "object_parameters": {"CacheControl": "max-age=86400"},
+        },
+    },
+    "oracle_media": {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": ORACLE_BUCKET_NAME,
+            "endpoint_url": ORACLE_S3_ENDPOINT_URL,
+            "region_name": ORACLE_REGION,
+            "signature_version": "s3v4",
+            "addressing_style": "path",
+            "custom_domain": None,
+            "location": "",
+            "access_key": ORACLE_ACCESS_KEY_ID,
+            "secret_key": ORACLE_SECRET_ACCESS_KEY,
+            "querystring_auth": True,
             "file_overwrite": False,
             "object_parameters": {"CacheControl": "max-age=86400"},
         },

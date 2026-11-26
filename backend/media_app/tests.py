@@ -9,6 +9,7 @@ from PIL import Image
 from rest_framework.test import APITestCase
 
 from .models import MediaAsset
+from .storage import ChatMediaStorage, MediaAssetStorage, PostMediaStorage
 
 
 User = get_user_model()
@@ -64,8 +65,68 @@ class MediaUploadTests(APITestCase):
         self.assertTrue(asset.thumbnail)
         self.assertEqual((asset.width, asset.height), (16, 12))
         self.assertEqual(asset.mime_type, "image/png")
+        self.assertTrue(asset.file.name.startswith("stories/originals/"))
         self.assertTrue(response.data["url"].startswith("http://testserver/"))
         self.assertTrue(response.data["thumbnail_url"])
+
+    def test_post_uploads_use_post_paths_and_oracle_storage(self):
+        response = self.client.post(
+            "/api/media/upload/",
+            {
+                "file": image_upload("post.png"),
+                "media_type": MediaAsset.MediaType.IMAGE,
+                "purpose": "post",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        asset = MediaAsset.objects.get(pk=response.data["id"])
+        self.assertTrue(asset.file.name.startswith("posts/originals/"))
+        self.assertTrue(asset.thumbnail.name.startswith("posts/thumbnails/"))
+
+    def test_storage_routes_new_uploads_to_oci_and_legacy_files_to_r2(self):
+        from unittest.mock import Mock, patch
+
+        default_storage = Mock()
+        oracle_storage = Mock()
+        post_storage = PostMediaStorage()
+        chat_storage = ChatMediaStorage()
+        asset_storage = MediaAssetStorage()
+        with patch(
+            "media_app.storage.storages",
+            {"default": default_storage, "oracle_media": oracle_storage},
+        ):
+            self.assertIs(
+                post_storage._storage_for_name("posts/oci/2026/11/photo.jpg"),
+                oracle_storage,
+            )
+            self.assertIs(
+                post_storage._storage_for_name(
+                    "posts/videos/oci/2026/11/video.mp4"
+                ),
+                oracle_storage,
+            )
+            self.assertIs(
+                post_storage._storage_for_name("posts/2025/10/legacy.jpg"),
+                default_storage,
+            )
+            self.assertIs(
+                chat_storage._storage_for_name("chat/2026/11/voice.m4a"),
+                oracle_storage,
+            )
+            self.assertIs(
+                chat_storage._storage_for_name("messages/2025/10/legacy.jpg"),
+                default_storage,
+            )
+            self.assertIs(
+                asset_storage._storage_for_name("posts/originals/photo.jpg"),
+                oracle_storage,
+            )
+            self.assertIs(
+                asset_storage._storage_for_name("stories/originals/story.jpg"),
+                default_storage,
+            )
 
     def test_upload_requires_authentication(self):
         self.client.force_authenticate(user=None)
