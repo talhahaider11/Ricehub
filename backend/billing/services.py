@@ -22,6 +22,9 @@ def review_payment_request(payment_request_id, reviewer, approved):
     if payment.status != PaymentRequest.Status.PENDING:
         return payment
 
+    if approved and payment.method != PaymentRequest.Method.QR_PAYMENT:
+        approved = False
+
     now = timezone.now()
     payment.status = (
         PaymentRequest.Status.APPROVED

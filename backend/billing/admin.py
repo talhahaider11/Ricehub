@@ -53,15 +53,27 @@ class PaymentRequestAdmin(NumberedAdminMixin, admin.ModelAdmin):
 
     @admin.action(description="Approve selected payment requests")
     def approve_requests(self, request, queryset):
-        reviewed = 0
+        approved = 0
+        rejected_legacy = 0
         for payment in queryset.filter(status=PaymentRequest.Status.PENDING):
-            review_payment_request(payment.pk, request.user, approved=True)
-            reviewed += 1
-        self.message_user(
-            request,
-            f"Approved {reviewed} payment request(s).",
-            messages.SUCCESS,
-        )
+            reviewed_payment = review_payment_request(
+                payment.pk,
+                request.user,
+                approved=True,
+            )
+            if reviewed_payment.status == PaymentRequest.Status.APPROVED:
+                approved += 1
+            else:
+                rejected_legacy += 1
+        message = f"Approved {approved} payment request(s)."
+        message_level = messages.SUCCESS
+        if rejected_legacy:
+            message += (
+                f" Rejected {rejected_legacy} legacy payment request(s) not "
+                "using QR Payment (Talha Shop)."
+            )
+            message_level = messages.WARNING
+        self.message_user(request, message, message_level)
 
     @admin.action(description="Reject selected payment requests")
     def reject_requests(self, request, queryset):

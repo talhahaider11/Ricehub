@@ -151,7 +151,6 @@ export default function CreatePost({
 
       <MediaUploader
         maxFiles={MAX_POST_MEDIA_COUNT - mediaAssets.length}
-        useInAppVideoRecorder
         onFileSelected={(file, mediaType) => {
           if (mediaType === "video") {
             nextVideoPreviewId.current += 1;

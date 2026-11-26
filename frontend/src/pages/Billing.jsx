@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
+import { Download } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import useAuth from "../hooks/useAuth";
 import billingService from "../services/billingService";
+import {
+  downloadPaymentQr,
+  PAYMENT_QR_IMAGE,
+} from "../services/paymentQrService";
 
 export default function Billing() {
   const { user } = useAuth();
@@ -12,7 +17,6 @@ export default function Billing() {
   const [options, setOptions] = useState(null);
   const [requests, setRequests] = useState([]);
   const [kind, setKind] = useState(postId ? "boost_week" : "subscription");
-  const [method, setMethod] = useState("sadapay");
   const [senderName, setSenderName] = useState("");
   const [transferApp, setTransferApp] = useState("");
   const [receipt, setReceipt] = useState(null);
@@ -20,6 +24,9 @@ export default function Billing() {
   const [paymentNotice, setPaymentNotice] = useState("");
   const [paymentError, setPaymentError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [qrDownloadBusy, setQrDownloadBusy] = useState(false);
+  const [qrDownloadNotice, setQrDownloadNotice] = useState("");
+  const [qrDownloadError, setQrDownloadError] = useState("");
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -58,6 +65,23 @@ export default function Billing() {
   const showVerifiedStatus = !isBoost
     && user?.is_verified
     && (expiryTime === null || now < graceEndsAt);
+  const handleQrDownload = async () => {
+    setQrDownloadBusy(true);
+    setQrDownloadNotice("");
+    setQrDownloadError("");
+    try {
+      const result = await downloadPaymentQr();
+      setQrDownloadNotice(
+        result === "shared" ? t("qrShareReady") : t("qrDownloadStarted")
+      );
+    } catch (error) {
+      console.error("Payment QR could not be downloaded:", error);
+      setQrDownloadError(t("qrDownloadFailed"));
+    } finally {
+      setQrDownloadBusy(false);
+    }
+  };
+
   const submitPayment = async (event) => {
     event.preventDefault();
     setPaymentError("");
@@ -67,14 +91,14 @@ export default function Billing() {
       const payload = isBoost
         ? {
           kind,
-          method,
+          method: "qr_payment",
           reference,
           post: Number(postId),
         }
         : new FormData();
       if (!isBoost) {
         payload.append("kind", kind);
-        payload.append("method", "sadapay");
+        payload.append("method", "qr_payment");
         payload.append("reference", reference);
         payload.append("sender_name", senderName);
         payload.append("transfer_app", transferApp);
@@ -170,44 +194,40 @@ export default function Billing() {
           ) : (
             <p><strong>PKR 249 / month</strong> · 5-day grace period after expiry</p>
           )}
-          {!isBoost && (
-            <section className="billing-sadapay-details" aria-label="SadaPay payment details">
-              <h3>{t("sadapayPaymentTitle")}</h3>
-              <p>{t("sadapayOnly")}</p>
-              {options?.sadapay?.account_name && (
-                <p><strong>{t("accountName")}:</strong> {options.sadapay.account_name}</p>
-              )}
-              {options?.sadapay?.account_number && (
-                <p><strong>{t("accountNumber")}:</strong> {options.sadapay.account_number}</p>
-              )}
-              {options?.sadapay?.qr_image_url && (
+          <section className="billing-payment-details" aria-label={t("qrPaymentTitle")}>
+            <div className="billing-payment-warning" role="alert">
+              <strong>{t("paymentWarning")}</strong>
+            </div>
+            <div className="billing-qr-payment">
+              <h3>{t("qrPaymentTitle")}</h3>
+              <div className="billing-qr-code-frame">
                 <img
-                  className="billing-sadapay-qr"
-                  src={options.sadapay.qr_image_url}
-                  alt="SadaPay payment QR code"
+                  src={PAYMENT_QR_IMAGE}
+                  alt="Talha Shop official payment QR code"
                 />
+              </div>
+              <p className="billing-qr-merchant">
+                {t("merchantTitle")}: <strong>Talha Shop</strong>
+              </p>
+              <p className="billing-qr-instructions">{t("qrInstructions")}</p>
+              <button
+                className="btn btn-secondary billing-qr-download"
+                type="button"
+                onClick={() => void handleQrDownload()}
+                disabled={qrDownloadBusy}
+              >
+                <Download size={17} aria-hidden="true" />
+                {qrDownloadBusy ? t("loading") : t("downloadQrCode")}
+              </button>
+              {qrDownloadNotice && (
+                <p className="settings-status" role="status">{qrDownloadNotice}</p>
               )}
-              {!options?.sadapay?.account_number && (
-                <p className="muted billing-details-unavailable">
-                  {t("sadapayUnavailable")}
-                </p>
+              {qrDownloadError && (
+                <p className="settings-error" role="alert">{qrDownloadError}</p>
               )}
-              <p className="muted">{t("reviewWindow")}</p>
-            </section>
-          )}
-          {isBoost && options?.instructions && (
-            <p className="billing-instructions">{options.instructions}</p>
-          )}
-          {isBoost && (
-            <label>
-              Transfer method
-              <select value={method} onChange={(event) => setMethod(event.target.value)}>
-                {(options?.methods || []).map((item) => (
-                  <option key={item.value} value={item.value}>{item.label}</option>
-                ))}
-              </select>
-            </label>
-          )}
+            </div>
+            <p className="muted">{t("reviewWindow")}</p>
+          </section>
           {!isBoost && (
             <>
               <label>
@@ -273,10 +293,7 @@ export default function Billing() {
           <button
             className="btn btn-primary"
             type="submit"
-            disabled={busy || (!isBoost && (
-              !user?.is_email_verified
-              || !options?.sadapay?.account_number
-            ))}
+            disabled={busy || (!isBoost && !user?.is_email_verified)}
           >
             {busy ? "Submitting..." : t("submitReview")}
           </button>

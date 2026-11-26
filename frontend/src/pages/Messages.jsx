@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, UsersRound } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import CreateGroupModal from "../components/messages/CreateGroupModal";
 import friendService from "../services/friendService";
 import messageService from "../services/messageService";
@@ -499,40 +499,55 @@ export default function Messages() {
               >
                 <ArrowLeft size={20} aria-hidden="true" />
               </button>
-              <span className="chat-header-avatar">
-                {activeConversation?.is_group
-                  || activeConversation?.conversation_type === "group" ? (
+              {isGroupConversation ? (
+                <>
+                  <span className="chat-header-avatar">
                     <span className="chat-group-avatar">
                       <UsersRound size={20} aria-hidden="true" />
                     </span>
-                  ) : (
-                    <>
-                      <Avatar user={otherUser} size="medium" />
-                      {otherUser?.is_online === true && (
-                        <span className="chat-header-online-dot" aria-hidden="true" />
-                      )}
-                    </>
-                  )}
-              </span>
-              <div className="chat-header-identity">
-                <strong>
-                  {activeConversation?.is_group
-                    || activeConversation?.conversation_type === "group"
-                    ? activeConversation.name || t("groupConversation")
-                    : [otherUser?.first_name, otherUser?.last_name]
-                      .filter(Boolean)
-                      .join(" ") || otherUser?.username || t("conversation")}
-                </strong>
-                {otherUser && (
-                  <small className="chat-presence" aria-live="polite">
-                    {otherUser.is_online === true ? (
-                      t("activeNow")
-                    ) : (
-                      formatLastSeen(otherUser.last_seen, lastSeenNow, t, language)
+                  </span>
+                  <div className="chat-header-identity">
+                    <strong>
+                      {activeConversation.name || t("groupConversation")}
+                    </strong>
+                  </div>
+                </>
+              ) : otherUser?.id ? (
+                <Link
+                  to={`/profile/${otherUser.id}`}
+                  className="chat-header-profile-link"
+                  aria-label={t("viewProfileOf", {
+                    username: otherUser.username || t("user"),
+                  })}
+                >
+                  <span className="chat-header-avatar">
+                    <Avatar user={otherUser} size="medium" />
+                    {otherUser.is_online === true && (
+                      <span className="chat-header-online-dot" aria-hidden="true" />
                     )}
-                  </small>
-                )}
-              </div>
+                  </span>
+                  <div className="chat-header-identity">
+                    <strong>
+                      {[otherUser.first_name, otherUser.last_name]
+                        .filter(Boolean)
+                        .join(" ") || otherUser.username || t("conversation")}
+                    </strong>
+                    <small className="chat-presence" aria-live="polite">
+                      {otherUser.is_online === true ? (
+                        t("activeNow")
+                      ) : (
+                        formatLastSeen(otherUser.last_seen, lastSeenNow, t, language)
+                      )}
+                    </small>
+                  </div>
+                </Link>
+              ) : (
+                <div className="chat-header-identity">
+                  <strong>
+                    {activeConversation.name || t("conversation")}
+                  </strong>
+                </div>
+              )}
               {isGroupConversation && (
                 <button
                   type="button"

@@ -19,10 +19,11 @@ class PaymentRequest(models.Model):
         BOOST_MONTH = "boost_month", "Post boost - 1 month"
 
     class Method(models.TextChoices):
-        SADAPAY = "sadapay", "SadaPay transfer"
-        CARD = "card", "Debit/Mastercard transfer"
-        EASYPAISA = "easypaisa", "EasyPaisa transfer"
-        JAZZCASH = "jazzcash", "JazzCash transfer"
+        QR_PAYMENT = "qr_payment", "QR Payment (Talha Shop)"
+        SADAPAY = "sadapay", "Legacy payment (not accepted)"
+        CARD = "card", "Legacy payment (not accepted)"
+        EASYPAISA = "easypaisa", "Legacy payment (not accepted)"
+        JAZZCASH = "jazzcash", "Legacy payment (not accepted)"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending review"
@@ -30,9 +31,11 @@ class PaymentRequest(models.Model):
         REJECTED = "rejected", "Rejected"
 
     class TransferApp(models.TextChoices):
-        SADAPAY = "sadapay", "SadaPay"
+        SADAPAY = "sadapay", "Legacy wallet"
         EASYPAISA = "easypaisa", "EasyPaisa"
         JAZZCASH = "jazzcash", "JazzCash"
+        NAYAPAY = "nayapay", "NayaPay"
+        RAAST = "raast", "Raast"
         BANK = "bank", "Bank transfer"
         OTHER = "other", "Other"
 

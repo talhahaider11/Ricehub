@@ -113,11 +113,6 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 3600.0,
     },
 }
-PAYMENT_INSTRUCTIONS = os.getenv("PAYMENT_INSTRUCTIONS", "")
-SADAPAY_ACCOUNT_NAME = os.getenv("SADAPAY_ACCOUNT_NAME", "").strip()
-SADAPAY_ACCOUNT_NUMBER = os.getenv("SADAPAY_ACCOUNT_NUMBER", "").strip()
-SADAPAY_QR_IMAGE_URL = os.getenv("SADAPAY_QR_IMAGE_URL", "").strip()
-
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -291,6 +286,12 @@ R2_PUBLIC_DOMAIN = (
     .rstrip("/")
 )
 
+AWS_S3_CUSTOM_DOMAIN = R2_PUBLIC_DOMAIN
+AWS_QUERYSTRING_AUTH = False
+AWS_DEFAULT_ACL = None
+AWS_S3_REGION_NAME = "auto"
+AWS_S3_SIGNATURE_VERSION = "s3v4"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
@@ -388,12 +389,13 @@ if any(R2_CONFIGURATION.values()):
         "OPTIONS": {
             "bucket_name": R2_BUCKET_NAME,
             "endpoint_url": R2_ENDPOINT_URL,
-            "region_name": "auto",
-            "signature_version": "s3v4",
+            "region_name": AWS_S3_REGION_NAME,
+            "signature_version": AWS_S3_SIGNATURE_VERSION,
             "access_key": R2_ACCESS_KEY_ID,
             "secret_key": R2_SECRET_ACCESS_KEY,
-            "custom_domain": R2_PUBLIC_DOMAIN,
-            "querystring_auth": False,
+            "custom_domain": AWS_S3_CUSTOM_DOMAIN,
+            "querystring_auth": AWS_QUERYSTRING_AUTH,
+            "default_acl": AWS_DEFAULT_ACL,
             "file_overwrite": False,
             "object_parameters": {"CacheControl": "max-age=86400"},
         },

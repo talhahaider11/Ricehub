@@ -47,6 +47,10 @@ assert settings.STORAGES["default"]["OPTIONS"]["region_name"] == "auto"
 assert settings.STORAGES["default"]["OPTIONS"]["signature_version"] == "s3v4"
 assert settings.STORAGES["default"]["OPTIONS"]["custom_domain"] == "cdn.example.com"
 assert settings.STORAGES["default"]["OPTIONS"]["querystring_auth"] is False
+assert settings.STORAGES["default"]["OPTIONS"]["default_acl"] is None
+assert settings.AWS_S3_CUSTOM_DOMAIN == "cdn.example.com"
+assert settings.AWS_QUERYSTRING_AUTH is False
+assert settings.AWS_DEFAULT_ACL is None
 assert settings.STORAGES["default"]["OPTIONS"]["file_overwrite"] is False
 assert settings.STORAGES["default"]["OPTIONS"]["object_parameters"] == {
     "CacheControl": "max-age=86400"
@@ -106,6 +110,17 @@ assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["post_create"] == "10/h
             "Cloudflare R2 must be fully configured",
             result.stderr,
         )
+
+    def test_r2_public_domain_is_normalized_before_building_media_urls(self):
+        result = run_production_settings(
+            """
+from config.settings import production as settings
+assert settings.AWS_S3_CUSTOM_DOMAIN == "cdn.example.com"
+assert settings.MEDIA_URL == "https://cdn.example.com/"
+""",
+            R2_PUBLIC_DOMAIN="https://cdn.example.com/",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_missing_redis_url_fails_clearly(self):
         result = run_production_settings(

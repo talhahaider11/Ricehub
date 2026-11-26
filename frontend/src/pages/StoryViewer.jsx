@@ -56,7 +56,7 @@ export default function StoryViewer() {
   const [viewers, setViewers] = useState([]);
   const [viewersLoading, setViewersLoading] = useState(false);
   const [viewersError, setViewersError] = useState("");
-  const [imageFallbackIndex, setImageFallbackIndex] = useState(0);
+  const [mediaFallbackIndex, setMediaFallbackIndex] = useState(0);
   const progressRef = useRef(0);
   const videoRef = useRef(null);
 
@@ -115,24 +115,36 @@ export default function StoryViewer() {
     story.is_owner === true
     || String(story.author?.id ?? story.user?.id) === String(user?.id)
   );
-  const mediaUrl =
-    story?.video || story?.image || story?.media_url || story?.media;
-  const isVideo = story?.media_type === "video"
-    || /\.(mp4|webm|mov)(?:$|\?)/i.test(mediaUrl || "");
-  const imageCandidates = useMemo(() => (
+  const mediaCandidates = useMemo(() => (
     [...new Set([
+      story?.video,
       story?.image,
       story?.media_url,
       story?.media,
       story?.source_media_url,
-      story?.thumbnail_url,
     ].filter(Boolean).map(getMediaUrl))]
-  ), [story]);
-  const imageUrl = imageCandidates[imageFallbackIndex];
+  ), [
+    story?.image,
+    story?.media,
+    story?.media_url,
+    story?.source_media_url,
+    story?.video,
+  ]);
+  const primaryMediaUrl = mediaCandidates[0];
+  const isVideo = story?.media_type === "video"
+    || /\.(mp4|webm|mov)(?:$|\?)/i.test(primaryMediaUrl || "");
+  const imageCandidates = useMemo(() => (
+    [...new Set([
+      ...mediaCandidates,
+      story?.thumbnail_url,
+    ].filter(Boolean))]
+  ), [mediaCandidates, story?.thumbnail_url]);
+  const mediaUrl = mediaCandidates[mediaFallbackIndex];
+  const imageUrl = imageCandidates[mediaFallbackIndex];
 
   useEffect(() => {
-    setImageFallbackIndex(0);
-  }, [story?.id, imageCandidates]);
+    setMediaFallbackIndex(0);
+  }, [story?.id, mediaCandidates]);
 
   const close = useCallback((storiesToReturn = stories) => {
     navigate("/", {
@@ -461,58 +473,67 @@ export default function StoryViewer() {
               </time>
             </div>
           </header>
-          {mediaUrl && (isVideo
+          {mediaCandidates.length > 0 && (isVideo
             ? (
-              <div
-                className="story-media-stage"
-                role="button"
-                tabIndex={0}
-                aria-label={t(isPaused ? "resumeStory" : "pauseStory")}
-                onClick={togglePlayback}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    togglePlayback();
-                  }
-                }}
-              >
-                <video
-                  key={story.id}
-                  className="select-none pointer-events-none"
-                  ref={videoRef}
-                  src={getMediaUrl(mediaUrl)}
-                  poster={story.thumbnail_url ? getMediaUrl(story.thumbnail_url) : undefined}
-                  autoPlay
-                  playsInline
-                  webkit-playsinline="true"
-                  preload="auto"
-                  controlsList="nodownload noplaybackrate"
-                  disablePictureInPicture
-                  onContextMenu={(event) => event.preventDefault()}
-                  onLoadedData={() => void startVideo()}
-                  onTimeUpdate={(event) => {
-                    const video = event.currentTarget;
-                    if (Number.isFinite(video.duration) && video.duration > 0) {
-                      setProgress((video.currentTime / video.duration) * 100);
+              mediaUrl ? (
+                <div
+                  className="story-media-stage"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={t(isPaused ? "resumeStory" : "pauseStory")}
+                  onClick={togglePlayback}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      togglePlayback();
                     }
                   }}
-                  onPlay={(event) => {
-                    setIsPaused(false);
-                    setIsMuted(event.currentTarget.muted);
-                  }}
-                  onPause={() => setIsPaused(true)}
-                  onEnded={() => move(1)}
-                />
-                {isMuted && (
-                  <button
-                    type="button"
-                    className="story-unmute-pill"
-                    onClick={unmuteVideo}
-                  >
-                    Tap to unmute
-                  </button>
-                )}
-              </div>
+                >
+                  <video
+                    key={`${story.id}-${mediaUrl}`}
+                    className="select-none pointer-events-none"
+                    ref={videoRef}
+                    src={mediaUrl}
+                    poster={story.thumbnail_url ? getMediaUrl(story.thumbnail_url) : undefined}
+                    autoPlay
+                    playsInline
+                    webkit-playsinline="true"
+                    preload="auto"
+                    controlsList="nodownload noplaybackrate"
+                    disablePictureInPicture
+                    onError={() => setMediaFallbackIndex((index) => (
+                      Math.min(index + 1, mediaCandidates.length)
+                    ))}
+                    onContextMenu={(event) => event.preventDefault()}
+                    onLoadedData={() => void startVideo()}
+                    onTimeUpdate={(event) => {
+                      const video = event.currentTarget;
+                      if (Number.isFinite(video.duration) && video.duration > 0) {
+                        setProgress((video.currentTime / video.duration) * 100);
+                      }
+                    }}
+                    onPlay={(event) => {
+                      setIsPaused(false);
+                      setIsMuted(event.currentTarget.muted);
+                    }}
+                    onPause={() => setIsPaused(true)}
+                    onEnded={() => move(1)}
+                  />
+                  {isMuted && (
+                    <button
+                      type="button"
+                      className="story-unmute-pill"
+                      onClick={unmuteVideo}
+                    >
+                      Tap to unmute
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <p className="story-media-unavailable" role="status">
+                  Story media could not be loaded.
+                </p>
+              )
             )
             : (
               <div
@@ -536,7 +557,7 @@ export default function StoryViewer() {
                     decoding="async"
                     fetchpriority="high"
                     draggable={false}
-                    onError={() => setImageFallbackIndex((index) => (
+                    onError={() => setMediaFallbackIndex((index) => (
                       Math.min(index + 1, imageCandidates.length)
                     ))}
                     onContextMenu={(event) => event.preventDefault()}

@@ -1,7 +1,6 @@
 import mimetypes
 from uuid import uuid4
 
-from django.conf import settings
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
@@ -49,18 +48,15 @@ class PaymentOptionsView(APIView):
                     },
                 ],
                 "methods": [
-                    {"value": value, "label": label}
-                    for value, label in PaymentRequest.Method.choices
+                    {
+                        "value": PaymentRequest.Method.QR_PAYMENT,
+                        "label": PaymentRequest.Method.QR_PAYMENT.label,
+                    }
                 ],
-                "instructions": getattr(settings, "PAYMENT_INSTRUCTIONS", ""),
-                "sadapay": {
-                    "account_name": getattr(settings, "SADAPAY_ACCOUNT_NAME", ""),
-                    "account_number": getattr(settings, "SADAPAY_ACCOUNT_NUMBER", ""),
-                    "qr_image_url": getattr(settings, "SADAPAY_QR_IMAGE_URL", ""),
-                },
                 "transfer_apps": [
                     {"value": value, "label": label}
                     for value, label in PaymentRequest.TransferApp.choices
+                    if value != PaymentRequest.TransferApp.SADAPAY
                 ],
                 "review_window_hours": 24,
             }
@@ -99,16 +95,16 @@ class PaymentRequestListCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         kind = serializer.validated_data["kind"]
         post = serializer.validated_data.get("post")
+        if serializer.validated_data["method"] != PaymentRequest.Method.QR_PAYMENT:
+            raise ValidationError(
+                {"method": "All payments must use the official QR Payment (Talha Shop)."}
+            )
         if kind == PaymentRequest.Kind.SUBSCRIPTION:
             if post:
                 raise ValidationError({"post": "Subscription requests do not use a post."})
             if not request.user.is_email_verified:
                 raise ValidationError(
                     {"detail": "Verify your email before requesting verification."}
-                )
-            if serializer.validated_data["method"] != PaymentRequest.Method.SADAPAY:
-                raise ValidationError(
-                    {"method": "Verification payments must be sent to the SadaPay account."}
                 )
             required_fields = {
                 "sender_name": "Enter the name on the sending account.",

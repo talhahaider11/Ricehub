@@ -153,6 +153,8 @@ describe("Messages", () => {
       .toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Back to conversations" }))
       .toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View talha2's profile" }))
+      .toHaveAttribute("href", "/profile/2");
     expect(screen.queryByRole("heading", { name: "Messages" }))
       .not.toBeInTheDocument();
 
@@ -243,6 +245,7 @@ describe("Messages", () => {
 
     expect(await screen.findByTestId("message-list")).toBeInTheDocument();
     expect(screen.queryByText(/This user is unverified/)).not.toBeInTheDocument();
+    expect(document.querySelector(".chat-header-profile-link")).toBeNull();
   });
 
   it("opens archived chats separately from the inbox", async () => {

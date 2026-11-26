@@ -45,7 +45,15 @@ class BillingTests(APITestCase):
         self.assertFalse(response.data["automatic_billing"])
         self.assertEqual(response.data["subscription"]["amount_pkr"], "249.00")
         self.assertEqual(response.data["subscription"]["grace_days"], 5)
-        self.assertIn("account_number", response.data["sadapay"])
+        self.assertNotIn("sadapay", response.data)
+        self.assertEqual(
+            response.data["methods"],
+            [{"value": "qr_payment", "label": "QR Payment (Talha Shop)"}],
+        )
+        self.assertNotIn(
+            "sadapay",
+            {item["value"] for item in response.data["transfer_apps"]},
+        )
         self.assertEqual(response.data["review_window_hours"], 24)
 
     def create_receipt(self):
@@ -62,7 +70,7 @@ class BillingTests(APITestCase):
             "/api/billing/payment-requests/",
             {
                 "kind": PaymentRequest.Kind.SUBSCRIPTION,
-                "method": PaymentRequest.Method.SADAPAY,
+                "method": PaymentRequest.Method.QR_PAYMENT,
                 "amount_pkr": "1.00",
                 "reference": "transfer-123",
                 "sender_name": "Billing User",
@@ -116,7 +124,7 @@ class BillingTests(APITestCase):
         payment = PaymentRequest.objects.create(
             user=self.user,
             kind=PaymentRequest.Kind.SUBSCRIPTION,
-            method=PaymentRequest.Method.SADAPAY,
+            method=PaymentRequest.Method.QR_PAYMENT,
             amount_pkr=PaymentRequest.PRICES[PaymentRequest.Kind.SUBSCRIPTION],
             reference="admin-confirmation",
         )
@@ -163,7 +171,7 @@ class BillingTests(APITestCase):
             "/api/billing/payment-requests/",
             {
                 "kind": PaymentRequest.Kind.SUBSCRIPTION,
-                "method": PaymentRequest.Method.SADAPAY,
+                "method": PaymentRequest.Method.QR_PAYMENT,
                 "reference": "missing-receipt",
             },
             format="json",
@@ -173,12 +181,12 @@ class BillingTests(APITestCase):
         self.assertIn("receipt", response.data)
         self.assertFalse(PaymentRequest.objects.exists())
 
-    def test_subscription_rejects_non_sadapay_destination(self):
+    def test_payment_request_rejects_legacy_sadapay_method(self):
         response = self.client.post(
             "/api/billing/payment-requests/",
             {
                 "kind": PaymentRequest.Kind.SUBSCRIPTION,
-                "method": PaymentRequest.Method.EASYPAISA,
+                "method": PaymentRequest.Method.SADAPAY,
                 "reference": "wrong-destination",
                 "sender_name": "Billing User",
                 "transfer_app": PaymentRequest.TransferApp.EASYPAISA,
@@ -195,7 +203,7 @@ class BillingTests(APITestCase):
         payment = PaymentRequest.objects.create(
             user=self.user,
             kind=PaymentRequest.Kind.SUBSCRIPTION,
-            method=PaymentRequest.Method.SADAPAY,
+            method=PaymentRequest.Method.QR_PAYMENT,
             amount_pkr=PaymentRequest.PRICES[PaymentRequest.Kind.SUBSCRIPTION],
             reference="private-receipt",
             receipt=self.create_receipt(),
@@ -218,7 +226,7 @@ class BillingTests(APITestCase):
             "/api/billing/payment-requests/",
             {
                 "kind": PaymentRequest.Kind.SUBSCRIPTION,
-                "method": PaymentRequest.Method.SADAPAY,
+                "method": PaymentRequest.Method.QR_PAYMENT,
                 "reference": "transfer-123",
             },
             format="json",
@@ -233,7 +241,7 @@ class BillingTests(APITestCase):
             "/api/billing/payment-requests/",
             {
                 "kind": PaymentRequest.Kind.BOOST_MONTH,
-                "method": PaymentRequest.Method.EASYPAISA,
+                "method": PaymentRequest.Method.QR_PAYMENT,
                 "reference": "boost-transfer",
                 "post": post.pk,
             },
@@ -249,6 +257,21 @@ class BillingTests(APITestCase):
             post.boosted_until,
             timezone.now() + timedelta(days=29),
         )
+
+    def test_legacy_payment_request_cannot_be_approved(self):
+        payment = PaymentRequest.objects.create(
+            user=self.user,
+            kind=PaymentRequest.Kind.SUBSCRIPTION,
+            method=PaymentRequest.Method.SADAPAY,
+            amount_pkr=PaymentRequest.PRICES[PaymentRequest.Kind.SUBSCRIPTION],
+            reference="legacy-sadapay-request",
+        )
+
+        reviewed = review_payment_request(payment.pk, self.staff, approved=True)
+
+        self.assertEqual(reviewed.status, PaymentRequest.Status.REJECTED)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_verified)
 
     def test_expired_accounts_remain_verified_during_five_day_grace(self):
         self.user.is_verified = True

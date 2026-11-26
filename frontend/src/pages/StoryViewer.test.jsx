@@ -491,4 +491,45 @@ describe("StoryViewer", () => {
       "https://cdn.example.test/media/thumbnails/story.jpg"
     );
   });
+
+  it("falls back to the original story asset when a video URL fails", async () => {
+    storyService.list.mockResolvedValue({
+      results: [
+        {
+          id: 4,
+          author: { id: 2, username: "author" },
+          video: "https://cdn.example.test/stories/missing.mp4",
+          media_url: "https://cdn.example.test/stories/missing.mp4",
+          source_media_url: "https://cdn.example.test/media/original.mp4",
+          media_type: "video",
+          created_at: new Date().toISOString(),
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/stories/4"]}>
+        <Routes>
+          <Route path="/stories/:id" element={<StoryViewer />} />
+          <Route path="/" element={<p>Story viewer closed</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector(".story-media-stage video")).toBeInTheDocument();
+    });
+    const videoElement = document.querySelector(".story-media-stage video");
+    expect(videoElement).toHaveAttribute(
+      "src",
+      "https://cdn.example.test/stories/missing.mp4"
+    );
+
+    fireEvent.error(videoElement);
+
+    expect(document.querySelector(".story-media-stage video")).toHaveAttribute(
+      "src",
+      "https://cdn.example.test/media/original.mp4"
+    );
+  });
 });

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { getMediaUrl } from "../../utils/constants";
 
 export default function Avatar({
@@ -31,6 +31,10 @@ export default function Avatar({
     .toUpperCase();
 
   const formattedImageSrc = imageSrc ? getMediaUrl(imageSrc) : null;
+
+  useEffect(() => {
+    setImageError(false);
+  }, [formattedImageSrc]);
 
   return (
     <div

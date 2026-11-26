@@ -22,7 +22,7 @@ describe("MediaUploader", () => {
     }));
   });
 
-  it("captures photos and videos with separate native inputs and uploads both", async () => {
+  it("opens one native photo-or-video camera input and uploads either file type", async () => {
     const onUploaded = vi.fn();
     const onFileSelected = vi.fn();
     render(
@@ -34,26 +34,28 @@ describe("MediaUploader", () => {
       />
     );
 
-    const photoInput = screen.getByLabelText("Take photo");
-    const videoInput = screen.getByLabelText("Record video");
-    expect(photoInput).toHaveAttribute("accept", "image/*");
-    expect(photoInput).toHaveAttribute("capture", "environment");
-    expect(videoInput).toHaveAttribute("accept", "video/*");
-    expect(videoInput).toHaveAttribute("capture", "environment");
+    const cameraInput = screen.getByLabelText("Capture a photo or video");
+    expect(cameraInput).toHaveAttribute("accept", "image/*,video/*");
+    expect(cameraInput).toHaveAttribute("capture", "environment");
+    const galleryInput = document.querySelector(".media-uploader-file input");
+    expect(galleryInput).toHaveAttribute(
+      "accept",
+      "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+    );
+    expect(galleryInput).not.toHaveAttribute("capture");
+    const clickInput = vi.spyOn(cameraInput, "click");
 
     fireEvent.click(screen.getByRole("button", { name: "Camera" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Take photo" }));
+    expect(clickInput).toHaveBeenCalledOnce();
     const photo = new File(["photo"], "camera.jpg", { type: "image/jpeg" });
-    fireEvent.change(photoInput, { target: { files: [photo] } });
+    fireEvent.change(cameraInput, { target: { files: [photo] } });
 
     await waitFor(() => {
       expect(uploadMedia).toHaveBeenCalledOnce();
       expect(screen.getByRole("button", { name: "Camera" })).toBeEnabled();
     });
-    fireEvent.click(screen.getByRole("button", { name: "Camera" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Record video" }));
     const video = new File(["video"], "camera.mp4", { type: "video/mp4" });
-    fireEvent.change(videoInput, { target: { files: [video] } });
+    fireEvent.change(cameraInput, { target: { files: [video] } });
 
     await waitFor(() => {
       expect(uploadMedia).toHaveBeenCalledWith(
@@ -75,7 +77,6 @@ describe("MediaUploader", () => {
     });
     expect(onFileSelected).toHaveBeenCalledWith(photo, "image");
     expect(onFileSelected).toHaveBeenCalledWith(video, "video");
-    expect(photoInput).toHaveValue("");
-    expect(videoInput).toHaveValue("");
+    expect(cameraInput).toHaveValue("");
   });
 });

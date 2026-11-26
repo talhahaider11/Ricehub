@@ -110,17 +110,16 @@ describe("MessageInput", () => {
     });
   });
 
-  it("previews a photo from the native camera input before sending", async () => {
+  it("previews a photo selected from the native camera input before sending", async () => {
     const onSendAttachment = vi.fn().mockResolvedValue(undefined);
     render(<MessageInput onSend={vi.fn()} onSendAttachment={onSendAttachment} />);
-    const photoInput = screen.getByLabelText("Take photo");
-    expect(photoInput).toHaveAttribute("accept", "image/*");
-    expect(photoInput).toHaveAttribute("capture", "environment");
+    const cameraInput = screen.getByLabelText("Capture a photo or video");
+    expect(cameraInput).toHaveAttribute("accept", "image/*,video/*");
+    expect(cameraInput).toHaveAttribute("capture", "environment");
 
     fireEvent.click(screen.getByRole("button", { name: "Camera" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Take photo" }));
     const photo = new File(["photo"], "camera.jpg", { type: "image/jpeg" });
-    fireEvent.change(photoInput, { target: { files: [photo] } });
+    fireEvent.change(cameraInput, { target: { files: [photo] } });
 
     expect(await screen.findByRole("region", { name: "Attachment preview" }))
       .toBeInTheDocument();
@@ -130,24 +129,23 @@ describe("MessageInput", () => {
     await waitFor(() => {
       expect(onSendAttachment).toHaveBeenCalledWith(photo, undefined, "image");
     });
-    expect(photoInput).toHaveValue("");
+    expect(cameraInput).toHaveValue("");
   });
 
-  it("previews a video from the native camera input before sending", async () => {
+  it("previews a video selected from the native camera input before sending", async () => {
     const loadVideo = vi.spyOn(HTMLMediaElement.prototype, "load")
       .mockImplementation(() => {});
     const playVideo = vi.spyOn(HTMLMediaElement.prototype, "play")
       .mockRejectedValue(new Error("Autoplay requires a user gesture."));
     const onSendAttachment = vi.fn().mockResolvedValue(undefined);
     render(<MessageInput onSend={vi.fn()} onSendAttachment={onSendAttachment} />);
-    const videoInput = screen.getByLabelText("Record video");
-    expect(videoInput).toHaveAttribute("accept", "video/*");
-    expect(videoInput).toHaveAttribute("capture", "environment");
+    const cameraInput = screen.getByLabelText("Capture a photo or video");
+    expect(cameraInput).toHaveAttribute("accept", "image/*,video/*");
+    expect(cameraInput).toHaveAttribute("capture", "environment");
 
     fireEvent.click(screen.getByRole("button", { name: "Camera" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Record video" }));
     const video = new File(["video"], "camera.mp4", { type: "video/mp4" });
-    fireEvent.change(videoInput, { target: { files: [video] } });
+    fireEvent.change(cameraInput, { target: { files: [video] } });
 
     expect(await screen.findByRole("region", { name: "Attachment preview" }))
       .toBeInTheDocument();
@@ -155,7 +153,7 @@ describe("MessageInput", () => {
     expect(videoPreview).toHaveAttribute("controls");
     expect(videoPreview).toHaveAttribute("playsinline");
     expect(videoPreview).toHaveAttribute("webkit-playsinline", "true");
-    expect(videoPreview).toHaveAttribute("preload", "auto");
+    expect(videoPreview).toHaveAttribute("preload", "metadata");
     expect(videoPreview).toHaveAttribute("autoplay");
     expect(videoPreview).toHaveAttribute("src", "blob:message-preview");
     expect(videoPreview).not.toHaveAttribute("muted");
@@ -171,13 +169,13 @@ describe("MessageInput", () => {
     await waitFor(() => {
       expect(onSendAttachment).toHaveBeenCalledWith(video, undefined, "video");
     });
-    expect(videoInput).toHaveValue("");
+    expect(cameraInput).toHaveValue("");
   });
 
   it("releases the video preview URL when the attachment is discarded", async () => {
     render(<MessageInput onSend={vi.fn()} onSendAttachment={vi.fn()} />);
-    const videoInput = screen.getByLabelText("Record video");
-    fireEvent.change(videoInput, {
+    const cameraInput = screen.getByLabelText("Capture a photo or video");
+    fireEvent.change(cameraInput, {
       target: {
         files: [new File(["video"], "camera.mp4", { type: "video/mp4" })],
       },

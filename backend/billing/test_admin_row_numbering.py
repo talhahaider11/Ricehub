@@ -29,7 +29,7 @@ class PaymentAdminRowNumberingTests(TestCase):
         return PaymentRequest.objects.create(
             user=self.member,
             kind=PaymentRequest.Kind.SUBSCRIPTION,
-            method=PaymentRequest.Method.SADAPAY,
+            method=PaymentRequest.Method.QR_PAYMENT,
             amount_pkr=Decimal("249.00"),
             reference=reference,
             status=status,
