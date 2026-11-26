@@ -25,10 +25,10 @@ vi.mock("../context/LanguageContext", () => ({
         monthlySubscription: "Monthly subscription",
         oneWeek: "1 Week",
         oneMonth: "1 Month",
-        qrPaymentTitle: "Pay using the official QR code  ",
+        qrPaymentTitle: "Pay using the official QR code or manually Till ID 985048620",
         merchantTitle: "Account / Merchant title",
         qrInstructions: "Scan this QR code using any banking app, JazzCash, Easypaisa, NayaPay, or Raast-enabled app.",
-        paymentWarning: "Important: Payments are ONLY accepted via this official QR Code (Talha Shop) or manually Till ID 985048620. Payments sent to any  other account will NOT be accepted or refunded, and your verification/boost request will be rejected.",
+        paymentWarning: "Important: Payments are ONLY accepted via this official QR Code (Talha Shop) . Payments sent to any  other account will NOT be accepted or refunded, and your verification/boost request will be rejected.",
         downloadQrCode: "Download QR Code",
         qrDownloadStarted: "The QR code image download has started.",
         qrShareReady: "The QR image is ready. Save it to your device from the Android share sheet.",
@@ -60,7 +60,7 @@ vi.mock("../services/paymentQrService", () => ({
   downloadPaymentQr: vi.fn(),
 }));
 
-const paymentWarning = "Important: Payments are ONLY accepted via this official QR Code (Talha Shop). Payments sent to any  other account will NOT be accepted or refunded, and your verification/boost request will be rejected.";
+const paymentWarning = "Important: Payments are ONLY accepted via this official QR Code (Talha Shop) . Payments sent to any  other account will NOT be accepted or refunded, and your verification/boost request will be rejected.";
 
 describe("Billing", () => {
   beforeEach(() => {
@@ -96,12 +96,15 @@ describe("Billing", () => {
 
     expect(await screen.findByAltText("Talha Shop official payment QR code"))
       .toHaveAttribute("src", "/images/talha-shop-qr.png");
+    expect(screen.getByRole("heading", {
+      name: "Pay using the official QR code or manually Till ID 985048620",
+    })).toBeInTheDocument();
     expect(screen.getByText(/Account \/ Merchant title:/).parentElement)
       .toHaveTextContent("Talha Shop");
     expect(screen.getByText(
       "Scan this QR code using any banking app, JazzCash, Easypaisa, NayaPay, or Raast-enabled app."
     )).toBeInTheDocument();
-    expect(screen.getByText(paymentWarning)).toBeInTheDocument();
+    expect(screen.getByRole("alert").textContent).toBe(paymentWarning);
   });
 
   it("keeps the subscription receipt workflow and submits the QR method", async () => {
@@ -146,7 +149,7 @@ describe("Billing", () => {
 
     expect(await screen.findByText("PKR 149.00 · $0.55 USD")).toBeInTheDocument();
     expect(screen.getByText("PKR 350.00 · $1.25 USD")).toBeInTheDocument();
-    expect(screen.getByText(paymentWarning)).toBeInTheDocument();
+    expect(screen.getByRole("alert").textContent).toBe(paymentWarning);
     fireEvent.change(screen.getByLabelText("Transfer reference"), {
       target: { value: "boost-reference" },
     });

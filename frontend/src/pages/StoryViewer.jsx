@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   X,
   ChevronLeft,
@@ -368,9 +368,10 @@ export default function StoryViewer() {
 
   useEffect(() => {
     if (!story || !isVideo) return undefined;
+    const video = videoRef.current;
     void startVideo();
     return () => {
-      videoRef.current?.pause();
+      video?.pause();
     };
   }, [isVideo, startVideo, story?.id]);
 
@@ -465,13 +466,31 @@ export default function StoryViewer() {
             progress={progress}
           />
           <header>
-            <Avatar user={story.author} size={40} />
-            <div className="story-fullscreen-author">
-              <strong>{story.author?.first_name || story.author?.username}</strong>
-              <time dateTime={story.created_at}>
-                {new Date(story.created_at).toLocaleTimeString()}
-              </time>
-            </div>
+            {story.author?.id ? (
+              <Link
+                to={`/profile/${story.author.id}`}
+                className="story-fullscreen-author-link cursor-pointer"
+                aria-label={`View ${story.author.username || "author"}'s profile`}
+              >
+                <Avatar user={story.author} size={40} />
+                <div className="story-fullscreen-author">
+                  <strong>{story.author?.first_name || story.author?.username}</strong>
+                  <time dateTime={story.created_at}>
+                    {new Date(story.created_at).toLocaleTimeString()}
+                  </time>
+                </div>
+              </Link>
+            ) : (
+              <>
+                <Avatar user={story.author} size={40} />
+                <div className="story-fullscreen-author">
+                  <strong>{story.author?.first_name || story.author?.username}</strong>
+                  <time dateTime={story.created_at}>
+                    {new Date(story.created_at).toLocaleTimeString()}
+                  </time>
+                </div>
+              </>
+            )}
           </header>
           {mediaCandidates.length > 0 && (isVideo
             ? (

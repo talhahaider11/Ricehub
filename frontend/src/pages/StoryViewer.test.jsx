@@ -40,10 +40,13 @@ function HomeCacheProbe() {
   return <p>Home story cache: {location.state?.stories?.length || 0}</p>;
 }
 
+let pauseSpy;
+
 describe("StoryViewer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
     useAuth.mockReturnValue({ user: { id: 1 } });
     messageService.createConversation.mockResolvedValue({ id: 17 });
     messageService.sendText.mockResolvedValue({});
@@ -113,6 +116,37 @@ describe("StoryViewer", () => {
 
     await screen.findByText("First story");
     expect(storyService.markViewed).toHaveBeenCalledWith(4);
+  });
+
+  it("navigates to the story author's profile and stops video playback", async () => {
+    storyService.list.mockResolvedValue({
+      results: [
+        {
+          id: 4,
+          author: { id: 2, username: "author" },
+          caption: "Video story",
+          media_type: "video",
+          media_url: "/video.mp4",
+          created_at: "2026-11-02T10:00:00Z",
+        },
+      ],
+    });
+    render(
+      <MemoryRouter initialEntries={["/stories/4"]}>
+        <Routes>
+          <Route path="/stories/:id" element={<StoryViewer />} />
+          <Route path="/profile/:id" element={<p>Author profile</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("link", {
+      name: "View author's profile",
+    }));
+
+    expect(await screen.findByText("Author profile")).toBeInTheDocument();
+    expect(pauseSpy).toHaveBeenCalled();
+    expect(document.querySelector(".story-fullscreen")).toBeNull();
   });
 
   it("lets a viewer like and unlike a story", async () => {
