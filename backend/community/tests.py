@@ -1,7 +1,11 @@
 from datetime import timedelta
+from io import BytesIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from PIL import Image
 from rest_framework.test import APITestCase
 
 from .models import (
@@ -18,6 +22,7 @@ from .models import (
     Story,
     StoryView,
 )
+from .event_cleanup import cleanup_expired_event_media
 from messaging.models import Conversation, ConversationMember
 
 
@@ -454,9 +459,16 @@ class CommunityFeatureTests(APITestCase):
             starts_at=timezone.now() + timedelta(days=2),
         )
 
+        going_response = self.client.post(
+            f"/api/community/events/{event.id}/attendance/",
+            {"response": "going"},
+            format="json",
+        )
+        self.assertEqual(going_response.status_code, 400)
+
         response = self.client.post(
             f"/api/community/events/{event.id}/attendance/",
-            {"response": Event.Response.GOING},
+            {"response": Event.Response.INTERESTED},
             format="json",
         )
         changed = self.client.post(
@@ -471,6 +483,89 @@ class CommunityFeatureTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(changed.data["response"], Event.Response.INTERESTED)
         self.assertEqual(cancelled.status_code, 204)
+
+    def test_event_host_can_view_interested_users_but_other_users_cannot(self):
+        event = Event.objects.create(
+            host=self.other,
+            title="Community meetup",
+            starts_at=timezone.now() + timedelta(days=2),
+        )
+        self.user.first_name = "Interested"
+        self.user.last_name = "Member"
+        self.user.save(update_fields=["first_name", "last_name"])
+        EventAttendance.objects.create(
+            event=event,
+            user=self.user,
+            response=Event.Response.INTERESTED,
+        )
+        endpoint = f"/api/community/events/{event.id}/interested-users/"
+
+        forbidden = self.client.get(endpoint)
+        self.assertEqual(forbidden.status_code, 403)
+
+        self.client.force_authenticate(self.other)
+        response = self.client.get(endpoint)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data,
+            [{
+                "id": self.user.id,
+                "username": self.user.username,
+                "full_name": "Interested Member",
+                "avatar": None,
+                "is_verified": False,
+            }],
+        )
+
+    def test_authenticated_user_can_create_event_with_optional_fields_and_banner(self):
+        image_buffer = BytesIO()
+        Image.new("RGB", (2, 2), color="white").save(image_buffer, format="PNG")
+        image_buffer.seek(0)
+        banner = SimpleUploadedFile(
+            "event.png",
+            image_buffer.read(),
+            content_type="image/png",
+        )
+        starts_at = timezone.now() + timedelta(days=2)
+        ends_at = starts_at + timedelta(hours=2)
+
+        response = self.client.post(
+            "/api/community/events/",
+            {
+                "title": "Community harvest",
+                "description": "Meet local growers",
+                "location": "Town Hall",
+                "starts_at": starts_at.isoformat(),
+                "ends_at": ends_at.isoformat(),
+                "banner": banner,
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["host"]["id"], self.user.id)
+        self.assertEqual(response.data["title"], "Community harvest")
+        self.assertIsNotNone(response.data["ends_at"])
+        self.assertTrue(response.data["banner"].startswith("http"))
+        event = Event.objects.get(pk=response.data["id"])
+        self.assertEqual(event.host, self.user)
+        self.assertTrue(event.banner.name.startswith("events/"))
+
+    def test_authenticated_user_can_create_event_without_banner_or_end_time(self):
+        response = self.client.post(
+            "/api/community/events/",
+            {
+                "title": "Simple meetup",
+                "starts_at": (timezone.now() + timedelta(days=2)).isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["host"]["id"], self.user.id)
+        self.assertIsNone(response.data["ends_at"])
+        self.assertIsNone(response.data["banner"])
 
     def test_only_event_host_can_edit_or_delete_event(self):
         event = Event.objects.create(
@@ -497,6 +592,86 @@ class CommunityFeatureTests(APITestCase):
         deleted = self.client.delete(f"/api/community/events/{event.id}/")
         self.assertEqual(deleted.status_code, 204)
         self.assertFalse(Event.objects.filter(pk=event.id).exists())
+
+    def test_event_deletion_removes_its_banner_from_storage(self):
+        event = Event.objects.create(
+            host=self.user,
+            title="Event with banner",
+            starts_at=timezone.now() + timedelta(days=3),
+            banner="events/event-banner.png",
+        )
+        storage = event.banner.storage
+
+        with patch.object(storage, "delete") as delete_file:
+            with self.captureOnCommitCallbacks(execute=True):
+                event.delete()
+
+        delete_file.assert_called_once_with("events/event-banner.png")
+
+    def test_replacing_event_banner_removes_previous_storage_file(self):
+        event = Event.objects.create(
+            host=self.user,
+            title="Event with banner",
+            starts_at=timezone.now() + timedelta(days=3),
+            banner="events/old-banner.png",
+        )
+        storage = event.banner.storage
+        event.banner = "events/new-banner.png"
+
+        with patch.object(storage, "delete") as delete_file:
+            with self.captureOnCommitCallbacks(execute=True):
+                event.save(update_fields=["banner"])
+
+        delete_file.assert_called_once_with("events/old-banner.png")
+
+    def test_replacing_listing_image_removes_previous_storage_file(self):
+        listing = MarketplaceListing.objects.create(
+            seller=self.user,
+            title="Item with image",
+            price="100.00",
+            image="marketplace_items/old-item.png",
+        )
+        storage = listing.image.storage
+        listing.image = "marketplace_items/new-item.png"
+
+        with patch.object(storage, "delete") as delete_file:
+            with self.captureOnCommitCallbacks(execute=True):
+                listing.save(update_fields=["image"])
+
+        delete_file.assert_called_once_with("marketplace_items/old-item.png")
+
+    def test_deleting_listing_removes_its_image_from_storage(self):
+        listing = MarketplaceListing.objects.create(
+            seller=self.user,
+            title="Item with image",
+            price="100.00",
+            image="marketplace_items/item.png",
+        )
+        storage = listing.image.storage
+
+        with patch.object(storage, "delete") as delete_file:
+            with self.captureOnCommitCallbacks(execute=True):
+                listing.delete()
+
+        delete_file.assert_called_once_with("marketplace_items/item.png")
+
+    def test_expired_event_cleanup_removes_banner_and_clears_field(self):
+        event = Event.objects.create(
+            host=self.user,
+            title="Expired event",
+            starts_at=timezone.now() - timedelta(days=2),
+            ends_at=timezone.now() - timedelta(days=1),
+            banner="events/expired-banner.png",
+        )
+        storage = event.banner.storage
+
+        with patch.object(storage, "delete") as delete_file:
+            cleaned_count = cleanup_expired_event_media()
+
+        event.refresh_from_db()
+        self.assertEqual(cleaned_count, 1)
+        self.assertFalse(event.banner)
+        delete_file.assert_called_once_with("events/expired-banner.png")
 
     def test_event_host_can_invite_friend_and_invitee_can_respond(self):
         from friendships.models import FriendRequest
@@ -527,7 +702,11 @@ class CommunityFeatureTests(APITestCase):
         self.assertEqual(accepted.status_code, 200)
         self.assertEqual(accepted.data["status"], EventInvitation.Status.ACCEPTED)
         self.assertTrue(
-            EventAttendance.objects.filter(event=event, user=self.other).exists()
+            EventAttendance.objects.filter(
+                event=event,
+                user=self.other,
+                response=Event.Response.INTERESTED,
+            ).exists()
         )
         from notifications.models import Notification
 
@@ -596,6 +775,50 @@ class CommunityFeatureTests(APITestCase):
         self.assertEqual(denied.status_code, 403)
         self.assertEqual(results.status_code, 200)
         self.assertEqual(results.data["results"][0]["title"], "Rice cooker")
+
+    def test_marketplace_listing_image_uses_marketplace_storage_path_and_public_url(self):
+        image_buffer = BytesIO()
+        Image.new("RGB", (2, 2), color="blue").save(image_buffer, format="PNG")
+        image_buffer.seek(0)
+        item_image = SimpleUploadedFile(
+            "rice-cooker.png",
+            image_buffer.read(),
+            content_type="image/png",
+        )
+
+        response = self.client.post(
+            "/api/community/marketplace/",
+            {
+                "title": "Rice cooker with photo",
+                "price": "2500.00",
+                "image": item_image,
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data["image"].startswith("http"))
+        listing = MarketplaceListing.objects.get(pk=response.data["id"])
+        self.assertTrue(listing.image.name.startswith("marketplace_items/"))
+
+    def test_marketplace_listing_image_can_be_removed(self):
+        listing = MarketplaceListing.objects.create(
+            seller=self.user,
+            title="Item to update",
+            price="100.00",
+            image="marketplace_items/remove-me.png",
+        )
+
+        response = self.client.patch(
+            f"/api/community/marketplace/{listing.id}/",
+            {"image": None},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(response.data["image"])
+        listing.refresh_from_db()
+        self.assertFalse(listing.image)
 
     def test_marketplace_buyer_request_and_seller_acceptance(self):
         self.user.first_name = "Marketplace"

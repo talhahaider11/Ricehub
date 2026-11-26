@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 from rest_framework import status
+from django.utils import timezone
 
 from users.models import EmailVerification
 
@@ -76,6 +79,28 @@ class RegistrationTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data["is_email_verified"])
+
+    def test_current_user_response_reports_subscription_active_through_grace_period(self):
+        user = User.objects.create_user(
+            username="verified-subscriber",
+            email="subscriber@example.com",
+            password="StrongPassword123",
+            is_verified=True,
+            subscription_expires_at=timezone.now() - timedelta(days=4),
+        )
+        self.client.force_authenticate(user)
+
+        response = self.client.get("/api/users/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["is_subscription_verified"])
+
+        user.subscription_expires_at = timezone.now() - timedelta(days=6)
+        user.save(update_fields=("subscription_expires_at",))
+        response = self.client.get("/api/users/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["is_subscription_verified"])
 
     def test_username_availability_suggests_alternatives_case_insensitively(self):
         User.objects.create_user(

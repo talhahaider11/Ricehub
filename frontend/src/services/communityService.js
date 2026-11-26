@@ -2,6 +2,19 @@ import api from "./api";
 import storyService from "./storyService";
 import { collectPaginatedResults } from "../utils/paginatedResults";
 
+function multipartForFile(data, fieldName) {
+  const file = data?.[fieldName];
+  if (!file || typeof File === "undefined" || !(file instanceof File)) {
+    return data;
+  }
+
+  const payload = new FormData();
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) payload.append(key, value);
+  });
+  return payload;
+}
+
 const communityService = {
   async stories(authorId) {
     return storyService.list(authorId);
@@ -63,10 +76,34 @@ const communityService = {
     return (await api.get("/community/events/")).data;
   },
   async createEvent(data) {
-    return (await api.post("/community/events/", data)).data;
+    const payload = data.banner ? new FormData() : data;
+    if (data.banner) {
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          payload.append(key, value);
+        }
+      });
+    }
+    return (await api.post(
+      "/community/events/",
+      payload,
+      data.banner
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined
+    )).data;
   },
   async updateEvent(id, data) {
-    return (await api.patch(`/community/events/${id}/`, data)).data;
+    const payload = multipartForFile(data, "banner");
+    return (await api.patch(
+      `/community/events/${id}/`,
+      payload,
+      payload === data ? undefined : {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    )).data;
+  },
+  async eventInterestedUsers(id) {
+    return (await api.get(`/community/events/${id}/interested-users/`)).data;
   },
   async deleteEvent(id) {
     return api.delete(`/community/events/${id}/`);
@@ -112,7 +149,14 @@ const communityService = {
     })).data;
   },
   async updateListing(id, data) {
-    return (await api.patch(`/community/marketplace/${id}/`, data)).data;
+    const payload = multipartForFile(data, "image");
+    return (await api.patch(
+      `/community/marketplace/${id}/`,
+      payload,
+      payload === data ? undefined : {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    )).data;
   },
   async viewStory(id) {
     return storyService.markViewed(id);

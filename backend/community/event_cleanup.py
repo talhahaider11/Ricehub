@@ -27,7 +27,7 @@ def cleanup_expired_event_media():
             banner=banner.name
         ).exists():
             try:
-                banner.storage.delete(banner.name)
+                banner.delete(save=False)
             except Exception:
                 logger.exception(
                     "Could not remove expired event banner for event %s",

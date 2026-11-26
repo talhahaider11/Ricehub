@@ -1,4 +1,5 @@
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
+from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
@@ -39,10 +40,13 @@ from .serializers import (
     CommunityUpdateSerializer,
     EventAttendanceSerializer,
     EventInvitationSerializer,
+    EventInterestedUserSerializer,
     EventSerializer,
     MarketplaceListingSerializer,
     MarketplaceOrderSerializer,
 )
+
+User = get_user_model()
 
 
 class StoryListCreateView(SecureStoryListCreateView):
@@ -397,11 +401,6 @@ class EventListCreateView(generics.ListCreateAPIView):
         ).exclude(
             host_id__in=get_blocked_user_ids(self.request.user),
         ).annotate(
-            going_count=Count(
-                "attendances",
-                filter=Q(attendances__response=Event.Response.GOING),
-                distinct=True,
-            ),
             interested_count=Count(
                 "attendances",
                 filter=Q(attendances__response=Event.Response.INTERESTED),
@@ -432,6 +431,17 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
             starts_at__gte=timezone.now(),
         ).exclude(
             host_id__in=get_blocked_user_ids(self.request.user),
+        ).annotate(
+            interested_count=Count(
+                "attendances",
+                filter=Q(attendances__response=Event.Response.INTERESTED),
+                distinct=True,
+            ),
+        ).prefetch_related(
+            Prefetch(
+                "attendances",
+                queryset=EventAttendance.objects.filter(user=self.request.user),
+            ),
         )
 
     def perform_update(self, serializer):
@@ -443,6 +453,34 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
         if instance.host_id != self.request.user.pk:
             raise PermissionDenied("Only the host can delete this event.")
         instance.delete()
+
+
+class EventInterestedUsersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, event_id):
+        event = get_object_or_404(Event, pk=event_id)
+        if event.host_id != request.user.pk:
+            raise PermissionDenied("Only the event host can view interested users.")
+
+        interested_users = User.objects.filter(
+            event_attendances__event=event,
+            event_attendances__response=Event.Response.INTERESTED,
+        ).only(
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "profile_picture",
+            "is_verified",
+        ).order_by("username")
+        return Response(
+            EventInterestedUserSerializer(
+                interested_users,
+                many=True,
+                context={"request": request},
+            ).data
+        )
 
 
 class EventAttendanceView(APIView):
@@ -534,7 +572,7 @@ class EventInvitationRespondView(APIView):
             EventAttendance.objects.update_or_create(
                 event=invitation.event,
                 user=request.user,
-                defaults={"response": Event.Response.GOING},
+                defaults={"response": Event.Response.INTERESTED},
             )
         return Response(EventInvitationSerializer(invitation).data)
 

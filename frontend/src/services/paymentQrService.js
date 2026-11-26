@@ -1,9 +1,9 @@
 import { Capacitor } from "@capacitor/core";
-import { Directory, Filesystem } from "@capacitor/filesystem";
-import { Share } from "@capacitor/share";
+import { registerPlugin } from "@capacitor/core";
 
 export const PAYMENT_QR_IMAGE = "/images/talha-shop-qr.png";
-export const PAYMENT_QR_FILENAME = "Talha-Shop-Payment-QR.png";
+export const PAYMENT_QR_FILENAME = "Talha-Shop-QR.png";
+const GallerySaver = registerPlugin("GallerySaver");
 
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -36,28 +36,14 @@ export async function downloadPaymentQr() {
 
   if (Capacitor.isNativePlatform()) {
     const data = await blobToBase64(blob);
-    const { uri } = await Filesystem.writeFile({
-      path: PAYMENT_QR_FILENAME,
+    const { uri } = await GallerySaver.saveImage({
+      fileName: PAYMENT_QR_FILENAME,
       data,
-      directory: Directory.Documents,
-      recursive: true,
     });
     if (!uri) {
-      throw new Error("The QR image was saved without a shareable file URI.");
+      throw new Error("The QR image was saved without a gallery URI.");
     }
-
-    const { value: canShare } = await Share.canShare();
-    if (!canShare) {
-      throw new Error("Sharing files is not available on this device.");
-    }
-
-    await Share.share({
-      title: "Talha Shop Payment QR",
-      text: "Save this QR image to your device to scan it in your payment app.",
-      files: [uri],
-      dialogTitle: "Save payment QR code",
-    });
-    return "shared";
+    return "saved";
   }
 
   const objectUrl = URL.createObjectURL(blob);

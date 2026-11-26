@@ -36,6 +36,9 @@ def review_payment_request(payment_request_id, reviewer, approved):
     payment.save(update_fields=("status", "reviewed_by", "reviewed_at"))
 
     if not approved:
+        if payment.kind == PaymentRequest.Kind.SUBSCRIPTION:
+            payment.user.is_verified = False
+            payment.user.save(update_fields=("is_verified",))
         return payment
 
     if payment.kind == PaymentRequest.Kind.SUBSCRIPTION:

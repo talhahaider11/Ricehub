@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Capacitor } from "@capacitor/core";
-import { Directory, Filesystem } from "@capacitor/filesystem";
-import { Share } from "@capacitor/share";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import {
   downloadPaymentQr,
   PAYMENT_QR_FILENAME,
@@ -11,19 +9,10 @@ import {
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: { isNativePlatform: vi.fn() },
+  registerPlugin: vi.fn(() => ({ saveImage: vi.fn() })),
 }));
 
-vi.mock("@capacitor/filesystem", () => ({
-  Directory: { Documents: "DOCUMENTS" },
-  Filesystem: { writeFile: vi.fn() },
-}));
-
-vi.mock("@capacitor/share", () => ({
-  Share: {
-    canShare: vi.fn(),
-    share: vi.fn(),
-  },
-}));
+const gallerySaver = registerPlugin.mock.results[0].value;
 
 describe("downloadPaymentQr", () => {
   beforeEach(() => {
@@ -58,26 +47,18 @@ describe("downloadPaymentQr", () => {
     expect(clickLink).toHaveBeenCalledOnce();
   });
 
-  it("writes and shares a persistent file from Capacitor Android", async () => {
+  it("saves the QR image directly into the Android gallery", async () => {
     Capacitor.isNativePlatform.mockReturnValue(true);
-    Filesystem.writeFile.mockResolvedValue({
-      uri: "file:///documents/Talha-Shop-Payment-QR.png",
+    gallerySaver.saveImage.mockResolvedValue({
+      uri: "content://media/external/images/1",
     });
-    Share.canShare.mockResolvedValue({ value: true });
-    Share.share.mockResolvedValue({});
 
-    await expect(downloadPaymentQr()).resolves.toBe("shared");
+    await expect(downloadPaymentQr()).resolves.toBe("saved");
 
-    expect(Filesystem.writeFile).toHaveBeenCalledWith({
-      path: PAYMENT_QR_FILENAME,
+    expect(gallerySaver.saveImage).toHaveBeenCalledWith({
+      fileName: PAYMENT_QR_FILENAME,
       data: "cXItaW1hZ2U=",
-      directory: Directory.Documents,
-      recursive: true,
     });
-    expect(Share.share).toHaveBeenCalledWith(expect.objectContaining({
-      files: ["file:///documents/Talha-Shop-Payment-QR.png"],
-      dialogTitle: "Save payment QR code",
-    }));
   });
 
   it("surfaces a failed QR image request", async () => {

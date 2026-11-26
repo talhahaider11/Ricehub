@@ -5,14 +5,18 @@ import Billing from "./Billing";
 import billingService from "../services/billingService";
 import { downloadPaymentQr } from "../services/paymentQrService";
 
+const authMock = vi.hoisted(() => ({
+  user: {
+    id: 2,
+    email: "verified@example.com",
+    is_email_verified: true,
+    is_verified: false,
+    is_subscription_verified: false,
+  },
+}));
+
 vi.mock("../hooks/useAuth", () => ({
-  default: () => ({
-    user: {
-      email: "verified@example.com",
-      is_email_verified: true,
-      is_verified: false,
-    },
-  }),
+  default: () => authMock,
 }));
 
 vi.mock("../context/LanguageContext", () => ({
@@ -20,6 +24,11 @@ vi.mock("../context/LanguageContext", () => ({
     t: (key) =>
       ({
         verifyEmailOnly: "Verify your email",
+        verified: "Verified",
+        notVerified: "Not verified",
+        verifiedIndefinitely: "Your subscription is active indefinitely.",
+        verifiedThrough: "Verified through",
+        verifiedDuringGrace: "Active during grace until",
         getVerified: "Get verified",
         boostPost: "Boost post",
         monthlySubscription: "Monthly subscription",
@@ -32,6 +41,7 @@ vi.mock("../context/LanguageContext", () => ({
         downloadQrCode: "Download QR Code",
         qrDownloadStarted: "The QR code image download has started.",
         qrShareReady: "The QR image is ready. Save it to your device from the Android share sheet.",
+        qrSavedToGallery: "QR Code saved to Gallery",
         qrDownloadFailed: "The QR code could not be downloaded. Please try again.",
         loading: "Loading...",
         reviewWindow: "Requests remain pending during review.",
@@ -42,7 +52,6 @@ vi.mock("../context/LanguageContext", () => ({
         receiptRequirements: "JPG, PNG, or WebP; maximum 5 MB.",
         transferReference: "Transfer reference",
         submitReview: "Submit for manual review",
-        verified: "Verified account",
       })[key] || key,
   }),
 }));
@@ -65,6 +74,13 @@ const paymentWarning = "Important: Payments are ONLY accepted via this official 
 describe("Billing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authMock.user = {
+      id: 2,
+      email: "verified@example.com",
+      is_email_verified: true,
+      is_verified: false,
+      is_subscription_verified: false,
+    };
     billingService.getOptions.mockResolvedValue({
       subscription: { amount_pkr: "249.00", period_days: 30 },
       methods: [{ value: "qr_payment", label: "QR Payment (Talha Shop)" }],
@@ -168,7 +184,7 @@ describe("Billing", () => {
   });
 
   it("reports download failures instead of failing silently", async () => {
-    downloadPaymentQr.mockRejectedValue(new Error("Native share unavailable."));
+    downloadPaymentQr.mockRejectedValue(new Error("Gallery save unavailable."));
     render(
       <MemoryRouter>
         <Billing />
@@ -180,5 +196,102 @@ describe("Billing", () => {
     expect(await screen.findByText(
       "The QR code could not be downloaded. Please try again."
     )).toBeInTheDocument();
+  });
+
+  it("confirms when the QR code has been saved to the Android gallery", async () => {
+    downloadPaymentQr.mockResolvedValue("saved");
+    render(
+      <MemoryRouter>
+        <Billing />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Download QR Code" }));
+
+    expect(await screen.findByRole("status"))
+      .toHaveTextContent("QR Code saved to Gallery");
+  });
+
+  it("shows a verified confirmation and hides the subscription payment form", async () => {
+    authMock.user = {
+      ...authMock.user,
+      is_verified: true,
+      is_subscription_verified: true,
+      subscription_expires_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    render(
+      <MemoryRouter>
+        <Billing />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", {
+      name: "Monthly subscription",
+    })).toBeInTheDocument();
+    expect(screen.getAllByText("Verified")).toHaveLength(2);
+    expect(screen.queryByAltText("Talha Shop official payment QR code")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {
+      name: "Submit for manual review",
+    })).not.toBeInTheDocument();
+  });
+
+  it("keeps the subscription active during the five-day grace period", async () => {
+    authMock.user = {
+      ...authMock.user,
+      is_verified: true,
+      is_subscription_verified: true,
+      subscription_expires_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    render(
+      <MemoryRouter>
+        <Billing />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Active during grace until");
+    expect(screen.queryByRole("button", {
+      name: "Submit for manual review",
+    })).not.toBeInTheDocument();
+  });
+
+  it("shows payment submission again after the grace period expires", async () => {
+    authMock.user = {
+      ...authMock.user,
+      is_verified: true,
+      is_subscription_verified: false,
+      subscription_expires_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    render(
+      <MemoryRouter>
+        <Billing />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("button", {
+      name: "Submit for manual review",
+    })).toBeInTheDocument();
+    expect(screen.getByAltText("Talha Shop official payment QR code")).toBeInTheDocument();
+  });
+
+  it("places the email verification action beside the heading", async () => {
+    authMock.user = { ...authMock.user, is_email_verified: false };
+
+    render(
+      <MemoryRouter>
+        <Billing />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", {
+      name: "Verify your email",
+    })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Verify" })).toHaveAttribute(
+      "href",
+      "/verify-email"
+    );
+    expect(screen.queryByText(/Email: Not verified/)).not.toBeInTheDocument();
   });
 });

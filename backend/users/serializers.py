@@ -1,4 +1,6 @@
 
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
@@ -16,6 +18,7 @@ from rest_framework_simplejwt.token_blacklist.models import (
     OutstandingToken,
 )
 
+from billing.services import SUBSCRIPTION_GRACE_DAYS
 from friendships.services import get_friend_ids
 from friendships.models import FriendRequest
 from .models import (
@@ -37,6 +40,7 @@ class UserSerializer(serializers.ModelSerializer):
     cover_picture = serializers.SerializerMethodField()
     is_online = serializers.SerializerMethodField()
     is_email_verified = serializers.SerializerMethodField()
+    is_subscription_verified = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
     last_seen = serializers.SerializerMethodField()
     friends_count = serializers.SerializerMethodField()
@@ -54,7 +58,8 @@ class UserSerializer(serializers.ModelSerializer):
             "website", "date_of_birth", "profile_visibility",
             "is_online", "last_seen", "created_at",
             "is_email_verified",
-            "is_verified", "subscription_expires_at", "preferred_language",
+            "is_verified", "is_subscription_verified", "subscription_expires_at",
+            "preferred_language",
             "friends_count", "posts_count", "is_staff",
             "friendship_status", "friend_request_id",
         ]
@@ -82,6 +87,16 @@ class UserSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated and request.user.pk == obj.pk:
             return obj.is_email_verified
         return None
+
+    def get_is_subscription_verified(self, obj):
+        if not obj.is_verified:
+            return False
+        if obj.subscription_expires_at is None:
+            return True
+        return timezone.now() < (
+            obj.subscription_expires_at
+            + timedelta(days=SUBSCRIPTION_GRACE_DAYS)
+        )
 
     def get_email(self, obj):
         request = self.context.get("request")

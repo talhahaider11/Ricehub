@@ -2,6 +2,8 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
+from posts.validators import validate_post_image
+
 from .models import (
     Community,
     CommunityMembership,
@@ -21,6 +23,15 @@ User = get_user_model()
 
 
 class MediaURLField(serializers.FileField):
+    def to_representation(self, value):
+        if not value:
+            return None
+        url = value.url
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
+
+
+class MediaImageURLField(serializers.ImageField):
     def to_representation(self, value):
         if not value:
             return None
@@ -168,8 +179,12 @@ class CommunityPostCommentSerializer(serializers.ModelSerializer):
 
 class EventSerializer(serializers.ModelSerializer):
     host = serializers.SerializerMethodField()
-    banner = serializers.ImageField(required=False, allow_null=True)
-    going_count = serializers.IntegerField(read_only=True)
+    banner = MediaImageURLField(
+        required=False,
+        allow_null=True,
+        allow_empty_file=False,
+        validators=[validate_post_image],
+    )
     interested_count = serializers.IntegerField(read_only=True)
     my_response = serializers.SerializerMethodField()
 
@@ -177,10 +192,10 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             "id", "host", "community", "title", "description", "location",
-            "starts_at", "ends_at", "banner", "going_count",
-            "interested_count", "my_response", "created_at",
+            "starts_at", "ends_at", "banner", "interested_count",
+            "my_response", "created_at",
         ]
-        read_only_fields = ["id", "host", "going_count", "interested_count", "my_response", "created_at"]
+        read_only_fields = ["id", "host", "interested_count", "my_response", "created_at"]
 
     def get_host(self, obj):
         return {"id": obj.host_id, "username": obj.host.username}
@@ -190,7 +205,11 @@ class EventSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return None
         attendance = next(
-            (entry for entry in obj.attendances.all() if entry.user_id == request.user.pk),
+            (
+                entry for entry in obj.attendances.all()
+                if entry.user_id == request.user.pk
+                and entry.response == Event.Response.INTERESTED
+            ),
             None,
         )
         return attendance.response if attendance else None
@@ -223,6 +242,19 @@ class EventAttendanceSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "event", "created_at"]
 
 
+class EventInterestedUserSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    avatar = MediaImageURLField(source="profile_picture", read_only=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "full_name", "avatar", "is_verified"]
+        read_only_fields = ["id", "username", "full_name", "avatar", "is_verified"]
+
+    def get_full_name(self, obj):
+        return obj.get_full_name().strip() or obj.username
+
+
 class EventInvitationSerializer(serializers.ModelSerializer):
     event_title = serializers.CharField(source="event.title", read_only=True)
     inviter = serializers.SerializerMethodField()
@@ -239,6 +271,11 @@ class EventInvitationSerializer(serializers.ModelSerializer):
 
 class MarketplaceListingSerializer(serializers.ModelSerializer):
     seller = serializers.SerializerMethodField()
+    image = MediaImageURLField(
+        required=False,
+        allow_null=True,
+        allow_empty_file=False,
+    )
 
     class Meta:
         model = MarketplaceListing
@@ -252,6 +289,8 @@ class MarketplaceListingSerializer(serializers.ModelSerializer):
         return {"id": obj.seller_id, "username": obj.seller.username}
 
     def validate_image(self, value):
+        if value is None:
+            return None
         if value and value.size > 10 * 1024 * 1024:
             raise serializers.ValidationError("Listing images must be 10 MB or less.")
         if value and getattr(value, "content_type", "") not in {
@@ -259,6 +298,11 @@ class MarketplaceListingSerializer(serializers.ModelSerializer):
         }:
             raise serializers.ValidationError("Use a JPEG, PNG or WebP image.")
         return value
+
+    def update(self, instance, validated_data):
+        if validated_data.get("image", serializers.empty) is None:
+            validated_data["image"] = ""
+        return super().update(instance, validated_data)
 
 
 class MarketplaceOrderSerializer(serializers.ModelSerializer):

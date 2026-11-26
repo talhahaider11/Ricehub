@@ -7386,6 +7386,34 @@ option,
   object-fit: contain;
 }
 
+.social-card>img.event-banner-image {
+  max-height: 260px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.social-card>img.marketplace-listing-image {
+  max-height: 300px;
+  object-fit: cover;
+}
+
+.event-interested-count {
+  justify-self: start;
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-primary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.event-interested-user {
+  color: var(--text);
+  text-decoration: none;
+}
+
 html[dir="rtl"] .message-actions-menu {
   right: auto;
   left: auto;

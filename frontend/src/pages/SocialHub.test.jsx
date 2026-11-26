@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import SocialHub from "./SocialHub";
 import communityService from "../services/communityService";
+import friendService from "../services/friendService";
 
 vi.mock("../hooks/useAuth", () => ({
   default: () => ({ user: { id: 7, is_verified: true } }),
@@ -24,9 +25,21 @@ vi.mock("../services/communityService", () => ({
     communityMembers: vi.fn(),
     removeCommunityMember: vi.fn(),
     events: vi.fn(),
+    createEvent: vi.fn(),
+    updateEvent: vi.fn(),
+    deleteEvent: vi.fn(),
+    respondToEvent: vi.fn(),
+    cancelEventResponse: vi.fn(),
+    eventInterestedUsers: vi.fn(),
     invitations: vi.fn(),
     listings: vi.fn(),
     orders: vi.fn(),
+  },
+}));
+
+vi.mock("../services/friendService", () => ({
+  default: {
+    list: vi.fn(),
   },
 }));
 
@@ -69,6 +82,164 @@ describe("SocialHub route tabs", () => {
         .toHaveAttribute("aria-selected", "true");
     });
     expect(communityService.stories).toHaveBeenCalled();
+  });
+
+  it("creates an event with optional end time and banner, then adds it to the list", async () => {
+    communityService.events.mockResolvedValue([]);
+    communityService.invitations.mockResolvedValue([]);
+    friendService.list.mockResolvedValue([]);
+    const createdEvent = {
+      id: 99,
+      title: "Community harvest",
+      description: "Meet local growers",
+      location: "Town Hall",
+      starts_at: "2035-10-10T10:00:00.000Z",
+      ends_at: "2035-10-10T12:00:00.000Z",
+      banner: "https://cdn.example.test/event.png",
+      host: { id: 7, username: "current-user" },
+      interested_count: 0,
+    };
+    communityService.createEvent.mockResolvedValue(createdEvent);
+
+    render(
+      <MemoryRouter initialEntries={["/discover?tab=Events"]}>
+        <Routes>
+          <Route path="/discover" element={<SocialHub />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const title = await screen.findByPlaceholderText("Event name");
+    fireEvent.change(title, { target: { value: createdEvent.title } });
+    fireEvent.change(screen.getByPlaceholderText("Event details (optional)"), {
+      target: { value: createdEvent.description },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Location (optional)"), {
+      target: { value: createdEvent.location },
+    });
+    const startField = screen.getByLabelText("Starts at");
+    const endField = screen.getByLabelText("Ends at (optional)");
+    fireEvent.change(startField, { target: { value: "2035-10-10T10:00" } });
+    fireEvent.change(endField, { target: { value: "2035-10-10T12:00" } });
+    const banner = new File(["image"], "banner.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Event banner (optional)"), {
+      target: { files: [banner] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create event" }));
+
+    await waitFor(() => {
+      expect(communityService.createEvent).toHaveBeenCalledWith({
+        title: createdEvent.title,
+        description: createdEvent.description,
+        location: createdEvent.location,
+        starts_at: new Date(startField.value).toISOString(),
+        ends_at: new Date(endField.value).toISOString(),
+        banner,
+      });
+    });
+    expect(await screen.findByRole("heading", {
+      name: createdEvent.title,
+    })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: createdEvent.title }))
+      .toHaveAttribute("src", createdEvent.banner);
+    expect(await screen.findByRole("status"))
+      .toHaveTextContent("Event created.");
+    expect(title).toHaveValue("");
+    expect(endField).toHaveValue("");
+  });
+
+  it("opens interested users for the event host and links each profile", async () => {
+    communityService.events.mockResolvedValue([{
+      id: 21,
+      title: "Community meetup",
+      starts_at: "2035-10-10T10:00:00.000Z",
+      banner: null,
+      host: { id: 7, username: "current-user" },
+      interested_count: 1,
+      my_response: null,
+    }]);
+    communityService.invitations.mockResolvedValue([]);
+    friendService.list.mockResolvedValue([]);
+    communityService.eventInterestedUsers.mockResolvedValue({
+      results: [{
+        id: 12,
+        username: "interested-member",
+        full_name: "Interested Member",
+        avatar: "https://cdn.example.test/member.png",
+        is_verified: true,
+      }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/discover?tab=Events"]}>
+        <Routes>
+          <Route path="/discover" element={<SocialHub />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "1 interested" }));
+
+    expect(await screen.findByRole("dialog", { name: "Interested users" }))
+      .toBeInTheDocument();
+    expect(communityService.eventInterestedUsers).toHaveBeenCalledWith(21);
+    expect(screen.getByRole("link", { name: /Interested Member/ }))
+      .toHaveAttribute("href", "/profile/12");
+    expect(screen.queryByRole("button", { name: "Going" })).not.toBeInTheDocument();
+  });
+
+  it("shows an empty state when an event has no interested users", async () => {
+    communityService.events.mockResolvedValue([{
+      id: 23,
+      title: "New meetup",
+      starts_at: "2035-10-10T10:00:00.000Z",
+      banner: null,
+      host: { id: 7, username: "current-user" },
+      interested_count: 0,
+      my_response: null,
+    }]);
+    communityService.invitations.mockResolvedValue([]);
+    friendService.list.mockResolvedValue([]);
+    communityService.eventInterestedUsers.mockResolvedValue([]);
+
+    render(
+      <MemoryRouter initialEntries={["/discover?tab=Events"]}>
+        <Routes>
+          <Route path="/discover" element={<SocialHub />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "0 interested" }));
+
+    expect(await screen.findByText("No interested users yet."))
+      .toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("lets event viewers open a direct chat with the host", async () => {
+    communityService.events.mockResolvedValue([{
+      id: 22,
+      title: "Public meetup",
+      starts_at: "2035-10-10T10:00:00.000Z",
+      banner: null,
+      host: { id: 12, username: "event-host" },
+      interested_count: 0,
+      my_response: null,
+    }]);
+    communityService.invitations.mockResolvedValue([]);
+    friendService.list.mockResolvedValue([]);
+
+    render(
+      <MemoryRouter initialEntries={["/discover?tab=Events"]}>
+        <Routes>
+          <Route path="/discover" element={<SocialHub />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("link", { name: "Contact Host" }))
+      .toHaveAttribute("href", "/messages?username=event-host");
   });
 
   it("shows a seller the buyer profile link and verification badge", async () => {

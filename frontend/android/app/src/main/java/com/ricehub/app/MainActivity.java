@@ -19,6 +19,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(VoiceCallAudioPlugin.class);
         registerPlugin(AndroidAudioPlugin.class);
+        registerPlugin(GallerySaverPlugin.class);
         super.onCreate(savedInstanceState);
         bridge.getWebView().getSettings().setJavaScriptEnabled(true);
         bridge.getWebView().addJavascriptInterface(new Object() {

@@ -254,7 +254,6 @@ class CommunityPostComment(models.Model):
 
 class Event(models.Model):
     class Response(models.TextChoices):
-        GOING = "going", "Going"
         INTERESTED = "interested", "Interested"
 
     host = models.ForeignKey(
@@ -364,7 +363,7 @@ class MarketplaceListing(models.Model):
         validators=[MinValueValidator(0)],
     )
     location = models.CharField(max_length=255, blank=True)
-    image = models.ImageField(upload_to="marketplace/%Y/%m/", blank=True)
+    image = models.ImageField(upload_to="marketplace_items/%Y/%m/", blank=True)
     status = models.CharField(
         max_length=12,
         choices=Status.choices,

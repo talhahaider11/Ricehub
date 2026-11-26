@@ -273,6 +273,23 @@ class BillingTests(APITestCase):
         self.user.refresh_from_db()
         self.assertFalse(self.user.is_verified)
 
+    def test_rejected_subscription_renewal_revokes_verification(self):
+        self.user.is_verified = True
+        self.user.subscription_expires_at = timezone.now() + timedelta(days=20)
+        self.user.save(update_fields=("is_verified", "subscription_expires_at"))
+        payment = PaymentRequest.objects.create(
+            user=self.user,
+            kind=PaymentRequest.Kind.SUBSCRIPTION,
+            method=PaymentRequest.Method.QR_PAYMENT,
+            amount_pkr=PaymentRequest.PRICES[PaymentRequest.Kind.SUBSCRIPTION],
+            reference="rejected-renewal",
+        )
+
+        review_payment_request(payment.pk, self.staff, approved=False)
+
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_verified)
+
     def test_expired_accounts_remain_verified_during_five_day_grace(self):
         self.user.is_verified = True
         self.user.subscription_expires_at = timezone.now() - timedelta(days=4)

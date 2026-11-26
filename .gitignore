@@ -60,6 +60,7 @@ dist/
 !/frontend/android/app/src/main/java/com/ricehub/app/
 /frontend/android/app/src/main/java/com/ricehub/app/*
 !/frontend/android/app/src/main/java/com/ricehub/app/MainActivity.java
+!/frontend/android/app/src/main/java/com/ricehub/app/GallerySaverPlugin.java
 !/frontend/android/app/src/main/res/
 !/frontend/android/app/src/main/res/**
 !/frontend/android/capacitor-cordova-android-plugins/

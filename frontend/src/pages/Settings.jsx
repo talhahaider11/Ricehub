@@ -28,6 +28,19 @@ const preferenceLabelKeys = {
   event_invitations: "eventInvitations",
 };
 
+const SUBSCRIPTION_GRACE_MS = 5 * 24 * 60 * 60 * 1000;
+
+function hasActiveSubscription(user, now) {
+  const isVerified = typeof user?.is_subscription_verified === "boolean"
+    ? user.is_subscription_verified
+    : user?.is_verified;
+  if (!isVerified) return false;
+  if (!user?.subscription_expires_at) return true;
+
+  const expiryTime = new Date(user.subscription_expires_at).getTime();
+  return Number.isFinite(expiryTime) && now < expiryTime + SUBSCRIPTION_GRACE_MS;
+}
+
 export default function Settings() {
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
@@ -59,6 +72,32 @@ export default function Settings() {
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [verificationNow, setVerificationNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setVerificationNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!user?.id) return undefined;
+
+    userService.getMe()
+      .then((currentUser) => {
+        if (active) setUser(currentUser);
+      })
+      .catch((error) => {
+        console.error("Account verification status could not be refreshed:", error);
+        if (active) {
+          setActionError("Account verification status could not be refreshed.");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, setUser]);
 
   useEffect(() => {
     notificationService.getPreferences()
@@ -265,6 +304,8 @@ export default function Settings() {
     }
   };
 
+  const subscriptionVerified = hasActiveSubscription(user, verificationNow);
+
   return (
     <div className="page-container">
 
@@ -319,16 +360,16 @@ export default function Settings() {
               <div>
                 <strong>{t("verificationSubscription")}</strong>
                 <p>
-                  {user?.is_verified
+                  {subscriptionVerified
                     ? t("verifiedAccountPrice")
                     : t("unverifiedAccountPosts")}
                 </p>
               </div>
-              <span className={`settings-badge ${user?.is_verified ? "settings-badge-verified" : "settings-badge-unverified"}`}>
-                {user?.is_verified ? t("verified") : t("notVerified")}
+              <span className={`settings-badge ${subscriptionVerified ? "settings-badge-verified" : "settings-badge-unverified"}`}>
+                {subscriptionVerified ? t("verified") : t("notVerified")}
               </span>
               <Link className="btn btn-secondary" to="/billing">
-                {user?.is_verified ? t("manageVerification") : t("getVerified")}
+                {subscriptionVerified ? t("manageVerification") : t("getVerified")}
               </Link>
             </div>
           </section>

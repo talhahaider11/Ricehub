@@ -5,6 +5,7 @@ import useAuth from "../hooks/useAuth";
 import friendService from "../services/friendService";
 import StoryUploader from "../components/stories/StoryUploader";
 import Avatar from "../components/common/Avatar";
+import Modal from "../components/common/Modal";
 import VerifiedBadge from "../components/common/VerifiedBadge";
 import { getMediaUrl } from "../utils/constants";
 import { getArrayResults } from "../utils/arrayResults";
@@ -71,8 +72,15 @@ export default function SocialHub() {
   const [eventTitle, setEventTitle] = useState("");
   const [eventDescription, setEventDescription] = useState("");
   const [eventDate, setEventDate] = useState("");
+  const [eventEndDate, setEventEndDate] = useState("");
   const [eventLocation, setEventLocation] = useState("");
+  const [eventBanner, setEventBanner] = useState(null);
+  const eventBannerInputRef = useRef(null);
   const [editingEventId, setEditingEventId] = useState(null);
+  const [interestedUsersEvent, setInterestedUsersEvent] = useState(null);
+  const [interestedUsers, setInterestedUsers] = useState([]);
+  const [interestedUsersLoading, setInterestedUsersLoading] = useState(false);
+  const [interestedUsersError, setInterestedUsersError] = useState("");
   const [listingTitle, setListingTitle] = useState("");
   const [listingDescription, setListingDescription] = useState("");
   const [listingPrice, setListingPrice] = useState("");
@@ -315,20 +323,72 @@ export default function SocialHub() {
     }, t("communityUpdated"));
   };
 
-  const createEvent = (event) => {
+  const createEvent = async (event) => {
     event.preventDefault();
-    return perform(async () => {
-      await communityService.createEvent({
+    const startsAt = new Date(eventDate);
+    const endsAt = eventEndDate ? new Date(eventEndDate) : null;
+    if (
+      Number.isNaN(startsAt.getTime())
+      || (endsAt && Number.isNaN(endsAt.getTime()))
+      || (endsAt && endsAt <= startsAt)
+    ) {
+      setError(t("invalidEventTime"));
+      setNotice("");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      const createdEvent = await communityService.createEvent({
         title: eventTitle,
         description: eventDescription,
         location: eventLocation,
-        starts_at: new Date(eventDate).toISOString(),
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt ? endsAt.toISOString() : null,
+        ...(eventBanner ? { banner: eventBanner } : {}),
       });
+      const cachedEvents = socialHubCache.get("Events");
+      const currentEvents = cachedEvents?.events || events;
+      const updatedEvents = [
+        ...currentEvents.filter((item) => item.id !== createdEvent.id),
+        createdEvent,
+      ].sort((left, right) => (
+        new Date(left.starts_at) - new Date(right.starts_at)
+      ));
+      setEvents(updatedEvents);
+      if (cachedEvents) {
+        socialHubCache.set("Events", {
+          ...cachedEvents,
+          events: updatedEvents,
+        });
+      }
       setEventTitle("");
       setEventDescription("");
       setEventLocation("");
       setEventDate("");
-    }, t("eventCreated"));
+      setEventEndDate("");
+      setEventBanner(null);
+      if (eventBannerInputRef.current) eventBannerInputRef.current.value = "";
+      setNotice(t("eventCreated"));
+    } catch (createError) {
+      console.error("Event could not be created:", createError);
+      const responseData = createError.response?.data;
+      const validationMessages = responseData && typeof responseData === "object"
+        ? Object.values(responseData)
+          .flatMap((value) => Array.isArray(value) ? value : [value])
+          .filter((value) => typeof value === "string" && value.trim())
+        : [];
+      setError(
+        (typeof responseData?.detail === "string" && responseData.detail)
+        || validationMessages.join(" ")
+        || createError.message
+        || t("socialActionFailed")
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const createListing = (event) => {
@@ -347,6 +407,27 @@ export default function SocialHub() {
       setListingLocation("");
       setListingImage(null);
     }, t("listingPublished"));
+  };
+
+  const showInterestedUsers = async (item) => {
+    setInterestedUsersEvent(item);
+    setInterestedUsers([]);
+    setInterestedUsersError("");
+    setInterestedUsersLoading(true);
+    try {
+      const users = await communityService.eventInterestedUsers(item.id);
+      setInterestedUsers(getArrayResults(users, "Interested users"));
+    } catch (loadError) {
+      console.error("Event interested users could not be loaded:", loadError);
+      setInterestedUsersError(t("interestedUsersLoadFailed"));
+    } finally {
+      setInterestedUsersLoading(false);
+    }
+  };
+
+  const closeInterestedUsers = () => {
+    setInterestedUsersEvent(null);
+    setInterestedUsersError("");
   };
 
   const managedCommunity = communities.find(
@@ -706,20 +787,63 @@ export default function SocialHub() {
             <textarea value={eventDescription} onChange={(e) => setEventDescription(e.target.value)} maxLength={4000} placeholder={t("optionalEventDetails")} />
             <input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} maxLength={255} placeholder={t("locationOptional")} />
             <label>{t("startsAt")}<input type="datetime-local" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required /></label>
+            <label>{t("endsAtOptional")}<input type="datetime-local" value={eventEndDate} onChange={(e) => setEventEndDate(e.target.value)} /></label>
+            <label>{t("eventBannerOptional")}<input ref={eventBannerInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setEventBanner(e.target.files?.[0] || null)} /></label>
             <button className="btn btn-primary" disabled={saving}>{t("createEventButton")}</button>
           </form>
           <div className="social-grid">
             {events.map((item) => (
               <article className="card social-card" key={item.id}>
+                {item.banner && (
+                  <img
+                    className="event-banner-image"
+                    src={getMediaUrl(item.banner)}
+                    alt={item.title}
+                    onError={(event) => {
+                      event.currentTarget.hidden = true;
+                    }}
+                  />
+                )}
                 <h2>{item.title}</h2><p>{item.location || t("eventLocationMissing")}</p>
                 {item.description && <p>{item.description}</p>}
                 <small>{formatDateTime(item.starts_at, language)} · {t("hostedBy")} @{item.host.username}</small>
-                <small>{new Intl.NumberFormat(language).format(item.going_count)} {t("goingCount")} · {new Intl.NumberFormat(language).format(item.interested_count)} {t("interestedCount")}</small>
+                {String(item.host.id) === String(user?.id) ? (
+                  <button
+                    className="event-interested-count"
+                    type="button"
+                    onClick={() => void showInterestedUsers(item)}
+                  >
+                    {new Intl.NumberFormat(language).format(item.interested_count)} {t("interestedCount")}
+                  </button>
+                ) : (
+                  <small>
+                    {new Intl.NumberFormat(language).format(item.interested_count)} {t("interestedCount")}
+                  </small>
+                )}
                 <div className="social-actions">
-                  <button className={`btn ${item.my_response === "going" ? "btn-secondary" : "btn-primary"}`} disabled={saving} onClick={() => perform(() => communityService.respondToEvent(item.id, "going"), t("markedGoing"))}>{t("going")}</button>
-                  <button className={`btn ${item.my_response === "interested" ? "btn-primary" : "btn-secondary"}`} disabled={saving} onClick={() => perform(() => communityService.respondToEvent(item.id, "interested"), t("markedInterested"))}>{t("interested")}</button>
-                  {item.my_response && <button className="btn btn-secondary" disabled={saving} onClick={() => perform(() => communityService.cancelEventResponse(item.id), t("responseRemoved"))}>{t("notGoing")}</button>}
+                  <button
+                    className={`btn ${item.my_response === "interested" ? "btn-primary" : "btn-secondary"}`}
+                    disabled={saving}
+                    onClick={() => perform(
+                      () => item.my_response === "interested"
+                        ? communityService.cancelEventResponse(item.id)
+                        : communityService.respondToEvent(item.id, "interested"),
+                      item.my_response === "interested"
+                        ? t("responseRemoved")
+                        : t("markedInterested")
+                    )}
+                  >
+                    {t("interested")}
+                  </button>
                 </div>
+                {String(item.host.id) !== String(user?.id) && (
+                  <Link
+                    className="btn btn-secondary"
+                    to={`/messages?username=${encodeURIComponent(item.host.username)}`}
+                  >
+                    {t("contactHost")}
+                  </Link>
+                )}
                 {item.host.id === user?.id && (
                   <>
                     <button className="btn btn-secondary" onClick={() => setEditingEventId((current) => current === item.id ? null : item.id)}>
@@ -734,12 +858,20 @@ export default function SocialHub() {
                           description: form.get("description"),
                           location: form.get("location"),
                           starts_at: new Date(form.get("starts_at")).toISOString(),
+                          ends_at: form.get("ends_at")
+                            ? new Date(form.get("ends_at")).toISOString()
+                            : null,
+                          ...(form.get("banner")?.size
+                            ? { banner: form.get("banner") }
+                            : {}),
                         }), t("eventUpdated"));
                       }}>
                         <input name="title" defaultValue={item.title} maxLength={160} required aria-label={t("editEventTitle")} />
                         <textarea name="description" defaultValue={item.description} maxLength={4000} aria-label={t("editEventDescription")} />
                         <input name="location" defaultValue={item.location} maxLength={255} aria-label={t("editEventLocation")} />
                         <input name="starts_at" type="datetime-local" defaultValue={localDateTime(item.starts_at)} required aria-label={t("editEventTime")} />
+                        <input name="ends_at" type="datetime-local" defaultValue={item.ends_at ? localDateTime(item.ends_at) : ""} aria-label={t("editEventEndTime")} />
+                        <label>{t("eventBannerOptional")}<input name="banner" type="file" accept="image/jpeg,image/png,image/webp" /></label>
                         <button className="btn btn-secondary" disabled={saving} type="submit">{t("saveEvent")}</button>
                       </form>
                     )}
@@ -788,13 +920,22 @@ export default function SocialHub() {
           <div className="social-grid">
             {listings.map((listing) => (
               <article className="card social-card" key={listing.id}>
-                {listing.image && <img src={getMediaUrl(listing.image)} alt={listing.title} />}
+                {listing.image && (
+                  <img
+                    className="marketplace-listing-image"
+                    src={getMediaUrl(listing.image)}
+                    alt={listing.title}
+                    onError={(event) => {
+                      event.currentTarget.hidden = true;
+                    }}
+                  />
+                )}
                 <h2>{listing.title}</h2><p>{listing.description}</p>
                 <strong>{new Intl.NumberFormat(language === "ur" ? "ur-PK" : "en-PK").format(Number(listing.price))} PKR</strong>
                 <small>{listing.location || t("locationNotSpecified")} · @{listing.seller.username}</small>
                 {listing.seller.id === user?.id
                   ? <button className="btn btn-secondary" disabled={saving || listing.status === "sold"} onClick={() => perform(() => communityService.updateListing(listing.id, { status: "sold" }), t("listingMarkedSold"))}>{listing.status === "sold" ? t("listingSold") : t("markAsSold")}</button>
-                  : <a className="btn btn-secondary" href={`/messages?username=${encodeURIComponent(listing.seller.username)}`}>{t("contactSeller")}</a>}
+                  : <Link className="btn btn-secondary" to={`/messages?username=${encodeURIComponent(listing.seller.username)}`}>{t("contactSeller")}</Link>}
                 {listing.seller.id !== user?.id && (
                   <button className="btn btn-primary" disabled={saving} onClick={() => perform(() => communityService.createOrder(listing.id), t("purchaseRequestSent"))}>{t("requestToBuy")}</button>
                 )}
@@ -847,6 +988,50 @@ export default function SocialHub() {
           ))}
         </section>
       )}
+      <Modal
+        open={Boolean(interestedUsersEvent)}
+        onClose={closeInterestedUsers}
+        title={t("interestedUsers")}
+      >
+        {interestedUsersEvent && (
+          <div>
+            <p>{interestedUsersEvent.title}</p>
+            {interestedUsersLoading && <p className="muted">{t("loading")}</p>}
+            {interestedUsersError && (
+              <p className="settings-error" role="alert">{interestedUsersError}</p>
+            )}
+            {!interestedUsersLoading && !interestedUsersError && interestedUsers.length === 0 && (
+              <p className="social-empty">{t("noInterestedUsers")}</p>
+            )}
+            {interestedUsers.length > 0 && (
+              <ul className="community-member-list">
+                {interestedUsers.map((interestedUser) => (
+                  <li key={interestedUser.id}>
+                    <Link
+                      className="community-member-row event-interested-user"
+                      to={`/profile/${interestedUser.id}`}
+                      onClick={closeInterestedUsers}
+                    >
+                      <Avatar
+                        src={interestedUser.avatar}
+                        name={interestedUser.full_name}
+                        size={40}
+                      />
+                      <span>
+                        <strong>{interestedUser.full_name}</strong>
+                        <small>
+                          @{interestedUser.username}
+                          <VerifiedBadge verified={interestedUser.is_verified} />
+                        </small>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

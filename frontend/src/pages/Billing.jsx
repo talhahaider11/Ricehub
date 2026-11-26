@@ -54,17 +54,14 @@ export default function Billing() {
   const graceEndsAt = expiryTime === null
     ? null
     : expiryTime + 5 * 24 * 60 * 60 * 1000;
-  const graceHoursRemaining = graceEndsAt !== null
-    && now >= expiryTime
-    && now < graceEndsAt
-    ? Math.ceil((graceEndsAt - now) / (60 * 60 * 1000))
-    : 0;
+  const isVerified = typeof user?.is_subscription_verified === "boolean"
+    ? user.is_subscription_verified
+    : user?.is_verified;
   const subscriptionActive = !isBoost
-    && user?.is_verified
-    && (expiryTime === null || now < expiryTime);
-  const showVerifiedStatus = !isBoost
-    && user?.is_verified
+    && isVerified
     && (expiryTime === null || now < graceEndsAt);
+  const showVerifiedStatus = !isBoost
+    && subscriptionActive;
   const handleQrDownload = async () => {
     setQrDownloadBusy(true);
     setQrDownloadNotice("");
@@ -72,7 +69,7 @@ export default function Billing() {
     try {
       const result = await downloadPaymentQr();
       setQrDownloadNotice(
-        result === "shared" ? t("qrShareReady") : t("qrDownloadStarted")
+        result === "saved" ? t("qrSavedToGallery") : t("qrDownloadStarted")
       );
     } catch (error) {
       console.error("Payment QR could not be downloaded:", error);
@@ -137,19 +134,29 @@ export default function Billing() {
 
         {!isBoost && (
           <section className="settings-section">
-            <h2>{t("verifyEmailOnly")}</h2>
-            <p>
-              Email: {user?.is_email_verified ? "Verified" : "Not verified"}
-              {!user?.is_email_verified && (
-                <> · <Link to="/verify-email" state={{ email: user?.email }}>Verify by email OTP</Link></>
+            <div className="settings-row">
+              <h2>{t("verifyEmailOnly")}</h2>
+              {user?.is_email_verified ? (
+                <span className="settings-badge settings-badge-verified">{t("verified")}</span>
+              ) : (
+                <Link
+                  className="btn btn-secondary"
+                  to="/verify-email"
+                  state={{ email: user?.email }}
+                >
+                  Verify
+                </Link>
               )}
-            </p>
+            </div>
           </section>
         )}
 
         {showVerifiedStatus && (
           <section className="settings-section" role="status">
-            <h2>{t("verified")}</h2>
+            <div className="settings-row">
+              <h2>{t("monthlySubscription")}</h2>
+              <span className="settings-badge settings-badge-verified">{t("verified")}</span>
+            </div>
             <p>
               {expiryTime === null
                 ? t("verifiedIndefinitely")
@@ -157,15 +164,6 @@ export default function Billing() {
                   ? `${t("verifiedThrough")} ${new Date(expiryTime).toLocaleDateString()}.`
                   : `${t("verifiedDuringGrace")} ${new Date(expiryTime).toLocaleDateString()}.`}
             </p>
-            {graceHoursRemaining > 0 && (
-              <>
-                <p>{t("gracePeriodBadge")}</p>
-                <p className="settings-status" role="timer">
-                  {t("graceRemaining")}: {Math.floor(graceHoursRemaining / 24)} {t("days")}, {graceHoursRemaining % 24} {t("hours")}.
-                </p>
-                <p>{t("renewAfterExpiry")}</p>
-              </>
-            )}
           </section>
         )}
 
@@ -310,7 +308,9 @@ export default function Billing() {
             ))}
           </section>
         )}
-        <p className="muted">{t("verified")} status is activated only after a staff member confirms the transfer.</p>
+        {!subscriptionActive && (
+          <p className="muted">{t("verified")} status is activated only after a staff member confirms the transfer.</p>
+        )}
       </section>
     </div>
   );

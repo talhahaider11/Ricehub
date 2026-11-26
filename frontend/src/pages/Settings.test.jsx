@@ -6,20 +6,24 @@ import { LanguageProvider } from "../context/LanguageContext";
 import { ThemeProvider } from "../context/ThemeContext";
 import notificationService from "../services/notificationService";
 import settingsService from "../services/settingsService";
+import userService from "../services/userService";
+
+const authMock = vi.hoisted(() => ({
+  user: {
+    id: 1,
+    username: "test-user",
+    email: "test@example.com",
+    is_email_verified: true,
+    is_verified: true,
+    is_subscription_verified: true,
+    profile_visibility: "public",
+  },
+  setUser: vi.fn(),
+  logout: vi.fn(),
+}));
 
 vi.mock("../hooks/useAuth", () => ({
-  default: () => ({
-    user: {
-      id: 1,
-      username: "test-user",
-      email: "test@example.com",
-      is_email_verified: true,
-      is_verified: true,
-      profile_visibility: "public",
-    },
-    setUser: vi.fn(),
-    logout: vi.fn(),
-  }),
+  default: () => authMock,
 }));
 
 vi.mock("../services/notificationService", () => ({
@@ -37,10 +41,29 @@ vi.mock("../services/settingsService", () => ({
   },
 }));
 
+vi.mock("../services/userService", () => ({
+  default: {
+    getMe: vi.fn(),
+    updateMe: vi.fn(),
+  },
+}));
+
 describe("Settings Urdu localization", () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem("ricehub-language", "ur");
+    userService.getMe.mockClear();
+    authMock.user = {
+      id: 1,
+      username: "test-user",
+      email: "test@example.com",
+      is_email_verified: true,
+      is_verified: true,
+      is_subscription_verified: true,
+      profile_visibility: "public",
+    };
+    authMock.setUser.mockClear();
+    userService.getMe.mockResolvedValue(authMock.user);
     notificationService.getPreferences.mockResolvedValue({
       friend_requests: true,
       friend_accepted: true,
@@ -106,5 +129,49 @@ describe("Settings Urdu localization", () => {
       });
     });
     expect(localStorage.getItem("ricehub_notifications_enabled")).toBe("false");
+  });
+
+  it("refreshes the current user's verification status when settings opens", async () => {
+    const refreshedUser = { ...authMock.user, is_subscription_verified: false };
+    userService.getMe.mockResolvedValue(refreshedUser);
+
+    render(
+      <MemoryRouter>
+        <ThemeProvider>
+          <LanguageProvider>
+            <Settings />
+          </LanguageProvider>
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(userService.getMe).toHaveBeenCalledTimes(1);
+      expect(authMock.setUser).toHaveBeenCalledWith(refreshedUser);
+    });
+  });
+
+  it("uses the active subscription field instead of a stale verified flag", async () => {
+    localStorage.setItem("ricehub-language", "en");
+    authMock.user = {
+      ...authMock.user,
+      is_verified: true,
+      is_subscription_verified: false,
+    };
+    userService.getMe.mockResolvedValue(authMock.user);
+
+    render(
+      <MemoryRouter>
+        <ThemeProvider>
+          <LanguageProvider>
+            <Settings />
+          </LanguageProvider>
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Unverified account · up to 3 posts"))
+      .toBeInTheDocument();
+    expect(screen.getByText("Not verified")).toBeInTheDocument();
   });
 });
