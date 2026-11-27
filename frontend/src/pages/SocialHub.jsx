@@ -14,6 +14,9 @@ import CommunityPostCard from "../components/posts/CommunityPostCard";
 
 const tabs = ["Stories", "Groups & Pages", "Events", "Marketplace"];
 const socialHubCache = new Map();
+const MARKETPLACE_VERIFICATION_GRACE_MS = 5 * 24 * 60 * 60 * 1000;
+const MARKETPLACE_VERIFICATION_REQUIRED_DETAIL =
+  "First verify your account to create events or list items on the Marketplace.";
 const orderStatusKeys = {
   requested: "orderRequested",
   accepted: "orderAccepted",
@@ -21,6 +24,29 @@ const orderStatusKeys = {
   cancelled: "orderCancelled",
   completed: "orderCompleted",
 };
+
+function hasActiveMarketplaceVerification(user, now) {
+  if (user?.is_verified !== true || user?.is_subscription_verified === false) {
+    return false;
+  }
+  if (!user?.subscription_expires_at) return true;
+
+  const expiryTime = new Date(user.subscription_expires_at).getTime();
+  return Number.isFinite(expiryTime)
+    && now < expiryTime + MARKETPLACE_VERIFICATION_GRACE_MS;
+}
+
+function MarketplaceVerificationRequiredCard({ t }) {
+  return (
+    <section className="card marketplace-verification-required">
+      <h2>{t("marketplaceVerificationRequiredTitle")}</h2>
+      <p>{t("marketplaceVerificationRequiredMessage")}</p>
+      <Link className="btn btn-primary" to="/billing">
+        {t("marketplaceGetVerified")}
+      </Link>
+    </section>
+  );
+}
 
 function localDateTime(value) {
   const date = new Date(value);
@@ -38,6 +64,8 @@ function formatDateTime(value, language) {
 export default function SocialHub() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
+  const [verificationNow, setVerificationNow] = useState(() => Date.now());
+  const [marketplaceVerificationDenied, setMarketplaceVerificationDenied] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(
     tabs.includes(searchParams.get("tab")) ? searchParams.get("tab") : tabs[0]
@@ -87,6 +115,22 @@ export default function SocialHub() {
   const [listingPrice, setListingPrice] = useState("");
   const [listingLocation, setListingLocation] = useState("");
   const [listingImage, setListingImage] = useState(null);
+  const marketplaceVerificationActive = !marketplaceVerificationDenied
+    && hasActiveMarketplaceVerification(user, verificationNow);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setVerificationNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    setMarketplaceVerificationDenied(false);
+  }, [
+    user?.id,
+    user?.is_verified,
+    user?.is_subscription_verified,
+    user?.subscription_expires_at,
+  ]);
 
   const load = useCallback(async () => {
     const cacheKey = activeTab === "Marketplace"
@@ -265,6 +309,12 @@ export default function SocialHub() {
       await load();
     } catch (actionError) {
       const detail = actionError.response?.data?.detail;
+      if (
+        actionError.response?.status === 403
+        && detail === MARKETPLACE_VERIFICATION_REQUIRED_DETAIL
+      ) {
+        setMarketplaceVerificationDenied(true);
+      }
       setError(
         typeof detail === "string"
           ? detail
@@ -398,6 +448,7 @@ export default function SocialHub() {
 
   const createEvent = async (event) => {
     event.preventDefault();
+    if (!marketplaceVerificationActive) return;
     const startsAt = new Date(eventDate);
     const endsAt = eventEndDate ? new Date(eventEndDate) : null;
     if (
@@ -448,6 +499,12 @@ export default function SocialHub() {
     } catch (createError) {
       console.error("Event could not be created:", createError);
       const responseData = createError.response?.data;
+      if (
+        createError.response?.status === 403
+        && responseData?.detail === MARKETPLACE_VERIFICATION_REQUIRED_DETAIL
+      ) {
+        setMarketplaceVerificationDenied(true);
+      }
       const validationMessages = responseData && typeof responseData === "object"
         ? Object.values(responseData)
           .flatMap((value) => Array.isArray(value) ? value : [value])
@@ -466,6 +523,7 @@ export default function SocialHub() {
 
   const createListing = (event) => {
     event.preventDefault();
+    if (!marketplaceVerificationActive) return;
     const data = new FormData();
     data.append("title", listingTitle);
     data.append("description", listingDescription);
@@ -859,16 +917,20 @@ export default function SocialHub() {
 
       {activeTab === "Events" && (
         <section className="social-section">
-          <form className="card social-form" onSubmit={createEvent}>
-            <h2>{t("createEvent")}</h2>
-            <input value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} maxLength={160} placeholder={t("eventName")} required />
-            <textarea value={eventDescription} onChange={(e) => setEventDescription(e.target.value)} maxLength={4000} placeholder={t("optionalEventDetails")} />
-            <input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} maxLength={255} placeholder={t("locationOptional")} />
-            <label>{t("startsAt")}<input type="datetime-local" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required /></label>
-            <label>{t("endsAtOptional")}<input type="datetime-local" value={eventEndDate} onChange={(e) => setEventEndDate(e.target.value)} /></label>
-            <label>{t("eventBannerOptional")}<input ref={eventBannerInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setEventBanner(e.target.files?.[0] || null)} /></label>
-            <button className="btn btn-primary" disabled={saving}>{t("createEventButton")}</button>
-          </form>
+          {marketplaceVerificationActive ? (
+            <form className="card social-form" onSubmit={createEvent}>
+              <h2>{t("createEvent")}</h2>
+              <input value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} maxLength={160} placeholder={t("eventName")} required />
+              <textarea value={eventDescription} onChange={(e) => setEventDescription(e.target.value)} maxLength={4000} placeholder={t("optionalEventDetails")} />
+              <input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} maxLength={255} placeholder={t("locationOptional")} />
+              <label>{t("startsAt")}<input type="datetime-local" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required /></label>
+              <label>{t("endsAtOptional")}<input type="datetime-local" value={eventEndDate} onChange={(e) => setEventEndDate(e.target.value)} /></label>
+              <label>{t("eventBannerOptional")}<input ref={eventBannerInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setEventBanner(e.target.files?.[0] || null)} /></label>
+              <button className="btn btn-primary" disabled={saving}>{t("createEventButton")}</button>
+            </form>
+          ) : (
+            <MarketplaceVerificationRequiredCard t={t} />
+          )}
           <div className="social-grid">
             {events.map((item) => (
               <article className="card social-card" key={item.id}>
@@ -923,34 +985,38 @@ export default function SocialHub() {
                 )}
                 {item.host.id === user?.id && (
                   <>
-                    <button className="btn btn-secondary" onClick={() => setEditingEventId((current) => current === item.id ? null : item.id)}>
-                      {editingEventId === item.id ? t("closeEditor") : t("editEvent")}
-                    </button>
-                    {editingEventId === item.id && (
-                      <form className="social-form" onSubmit={(event) => {
-                        event.preventDefault();
-                        const form = new FormData(event.currentTarget);
-                        return perform(() => communityService.updateEvent(item.id, {
-                          title: form.get("title"),
-                          description: form.get("description"),
-                          location: form.get("location"),
-                          starts_at: new Date(form.get("starts_at")).toISOString(),
-                          ends_at: form.get("ends_at")
-                            ? new Date(form.get("ends_at")).toISOString()
-                            : null,
-                          ...(form.get("banner")?.size
-                            ? { banner: form.get("banner") }
-                            : {}),
-                        }), t("eventUpdated"));
-                      }}>
-                        <input name="title" defaultValue={item.title} maxLength={160} required aria-label={t("editEventTitle")} />
-                        <textarea name="description" defaultValue={item.description} maxLength={4000} aria-label={t("editEventDescription")} />
-                        <input name="location" defaultValue={item.location} maxLength={255} aria-label={t("editEventLocation")} />
-                        <input name="starts_at" type="datetime-local" defaultValue={localDateTime(item.starts_at)} required aria-label={t("editEventTime")} />
-                        <input name="ends_at" type="datetime-local" defaultValue={item.ends_at ? localDateTime(item.ends_at) : ""} aria-label={t("editEventEndTime")} />
-                        <label>{t("eventBannerOptional")}<input name="banner" type="file" accept="image/jpeg,image/png,image/webp" /></label>
-                        <button className="btn btn-secondary" disabled={saving} type="submit">{t("saveEvent")}</button>
-                      </form>
+                    {marketplaceVerificationActive && (
+                      <>
+                        <button className="btn btn-secondary" onClick={() => setEditingEventId((current) => current === item.id ? null : item.id)}>
+                          {editingEventId === item.id ? t("closeEditor") : t("editEvent")}
+                        </button>
+                        {editingEventId === item.id && (
+                          <form className="social-form" onSubmit={(event) => {
+                            event.preventDefault();
+                            const form = new FormData(event.currentTarget);
+                            return perform(() => communityService.updateEvent(item.id, {
+                              title: form.get("title"),
+                              description: form.get("description"),
+                              location: form.get("location"),
+                              starts_at: new Date(form.get("starts_at")).toISOString(),
+                              ends_at: form.get("ends_at")
+                                ? new Date(form.get("ends_at")).toISOString()
+                                : null,
+                              ...(form.get("banner")?.size
+                                ? { banner: form.get("banner") }
+                                : {}),
+                            }), t("eventUpdated"));
+                          }}>
+                            <input name="title" defaultValue={item.title} maxLength={160} required aria-label={t("editEventTitle")} />
+                            <textarea name="description" defaultValue={item.description} maxLength={4000} aria-label={t("editEventDescription")} />
+                            <input name="location" defaultValue={item.location} maxLength={255} aria-label={t("editEventLocation")} />
+                            <input name="starts_at" type="datetime-local" defaultValue={localDateTime(item.starts_at)} required aria-label={t("editEventTime")} />
+                            <input name="ends_at" type="datetime-local" defaultValue={item.ends_at ? localDateTime(item.ends_at) : ""} aria-label={t("editEventEndTime")} />
+                            <label>{t("eventBannerOptional")}<input name="banner" type="file" accept="image/jpeg,image/png,image/webp" /></label>
+                            <button className="btn btn-secondary" disabled={saving} type="submit">{t("saveEvent")}</button>
+                          </form>
+                        )}
+                      </>
                     )}
                     <div className="social-actions">
                       <select value={inviteSelection[item.id] || ""} onChange={(event) => setInviteSelection((current) => ({ ...current, [item.id]: event.target.value }))} aria-label={t("chooseFriendToInvite")}>
@@ -984,16 +1050,20 @@ export default function SocialHub() {
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("searchListings")} aria-label={t("searchListings")} />
             <button className="btn btn-secondary" type="submit">{t("search")}</button>
           </form>
-          <form className="card social-form" onSubmit={createListing}>
-            <h2>{t("listAnItem")}</h2>
-            <p>{t("marketplacePaymentNotice")}</p>
-            <input value={listingTitle} onChange={(e) => setListingTitle(e.target.value)} maxLength={160} placeholder={t("itemName")} required />
-            <textarea value={listingDescription} onChange={(e) => setListingDescription(e.target.value)} maxLength={3000} placeholder={t("description")} />
-            <input type="number" min="0" step="0.01" value={listingPrice} onChange={(e) => setListingPrice(e.target.value)} placeholder={t("price")} required />
-            <input value={listingLocation} onChange={(e) => setListingLocation(e.target.value)} maxLength={255} placeholder={t("location")} />
-            <label>{t("optionalPhoto")}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setListingImage(e.target.files?.[0] || null)} /></label>
-            <button className="btn btn-primary" disabled={saving}>{t("publishListing")}</button>
-          </form>
+          {marketplaceVerificationActive ? (
+            <form className="card social-form" onSubmit={createListing}>
+              <h2>{t("listAnItem")}</h2>
+              <p>{t("marketplacePaymentNotice")}</p>
+              <input value={listingTitle} onChange={(e) => setListingTitle(e.target.value)} maxLength={160} placeholder={t("itemName")} required />
+              <textarea value={listingDescription} onChange={(e) => setListingDescription(e.target.value)} maxLength={3000} placeholder={t("description")} />
+              <input type="number" min="0" step="0.01" value={listingPrice} onChange={(e) => setListingPrice(e.target.value)} placeholder={t("price")} required />
+              <input value={listingLocation} onChange={(e) => setListingLocation(e.target.value)} maxLength={255} placeholder={t("location")} />
+              <label>{t("optionalPhoto")}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setListingImage(e.target.files?.[0] || null)} /></label>
+              <button className="btn btn-primary" disabled={saving}>{t("publishListing")}</button>
+            </form>
+          ) : (
+            <MarketplaceVerificationRequiredCard t={t} />
+          )}
           <div className="social-grid">
             {listings.map((listing) => (
               <article className="card social-card" key={listing.id}>
@@ -1011,7 +1081,9 @@ export default function SocialHub() {
                 <strong>{new Intl.NumberFormat(language === "ur" ? "ur-PK" : "en-PK").format(Number(listing.price))} PKR</strong>
                 <small>{listing.location || t("locationNotSpecified")} · @{listing.seller.username}</small>
                 {listing.seller.id === user?.id
-                  ? <button className="btn btn-secondary" disabled={saving || listing.status === "sold"} onClick={() => perform(() => communityService.updateListing(listing.id, { status: "sold" }), t("listingMarkedSold"))}>{listing.status === "sold" ? t("listingSold") : t("markAsSold")}</button>
+                  ? listing.status === "sold"
+                    ? <button className="btn btn-secondary" disabled>{t("listingSold")}</button>
+                    : marketplaceVerificationActive && <button className="btn btn-secondary" disabled={saving} onClick={() => perform(() => communityService.updateListing(listing.id, { status: "sold" }), t("listingMarkedSold"))}>{t("markAsSold")}</button>
                   : <Link className="btn btn-secondary" to={`/messages?username=${encodeURIComponent(listing.seller.username)}`}>{t("contactSeller")}</Link>}
                 {listing.seller.id !== user?.id && (
                   <button className="btn btn-primary" disabled={saving} onClick={() => perform(() => communityService.createOrder(listing.id), t("purchaseRequestSent"))}>{t("requestToBuy")}</button>

@@ -531,6 +531,8 @@ class CommunityFeatureTests(APITestCase):
         self.assertEqual(attendee_event["interested_users"], [])
 
     def test_authenticated_user_can_create_event_with_optional_fields_and_banner(self):
+        self.user.is_verified = True
+        self.user.save(update_fields=["is_verified"])
         image_buffer = BytesIO()
         Image.new("RGB", (2, 2), color="white").save(image_buffer, format="PNG")
         image_buffer.seek(0)
@@ -565,6 +567,8 @@ class CommunityFeatureTests(APITestCase):
         self.assertTrue(event.banner.name.startswith("events/"))
 
     def test_authenticated_user_can_create_event_without_banner_or_end_time(self):
+        self.user.is_verified = True
+        self.user.save(update_fields=["is_verified"])
         response = self.client.post(
             "/api/community/events/",
             {
@@ -580,6 +584,10 @@ class CommunityFeatureTests(APITestCase):
         self.assertIsNone(response.data["banner"])
 
     def test_only_event_host_can_edit_or_delete_event(self):
+        self.user.is_verified = True
+        self.user.save(update_fields=["is_verified"])
+        self.other.is_verified = True
+        self.other.save(update_fields=["is_verified"])
         event = Event.objects.create(
             host=self.other,
             title="Original event",
@@ -604,6 +612,71 @@ class CommunityFeatureTests(APITestCase):
         deleted = self.client.delete(f"/api/community/events/{event.id}/")
         self.assertEqual(deleted.status_code, 204)
         self.assertFalse(Event.objects.filter(pk=event.id).exists())
+
+    def test_event_and_listing_writes_require_active_verification(self):
+        event = Event.objects.create(
+            host=self.user,
+            title="Event to update",
+            starts_at=timezone.now() + timedelta(days=3),
+        )
+        listing = MarketplaceListing.objects.create(
+            seller=self.user,
+            title="Listing to update",
+            price="100.00",
+        )
+        write_requests = (
+            ("post", "/api/community/events/", {
+                "title": "New event",
+                "starts_at": (timezone.now() + timedelta(days=4)).isoformat(),
+            }),
+            ("post", "/api/community/marketplace/", {
+                "title": "New listing",
+                "price": "120.00",
+            }),
+            ("patch", f"/api/community/events/{event.id}/", {"title": "Updated event"}),
+            ("patch", f"/api/community/marketplace/{listing.id}/", {"title": "Updated listing"}),
+        )
+
+        for method, url, data in write_requests:
+            response = getattr(self.client, method)(url, data, format="json")
+            self.assertEqual(response.status_code, 403)
+            self.assertEqual(
+                response.data["detail"],
+                "First verify your account to create events or list items on the Marketplace.",
+            )
+
+        self.user.is_verified = True
+        self.user.subscription_expires_at = timezone.now() - timedelta(days=6)
+        self.user.save(update_fields=["is_verified", "subscription_expires_at"])
+        for url, data in (
+            ("/api/community/events/", {
+                "title": "Expired verification event",
+                "starts_at": (timezone.now() + timedelta(days=4)).isoformat(),
+            }),
+            ("/api/community/marketplace/", {
+                "title": "Expired verification listing",
+                "price": "120.00",
+            }),
+        ):
+            response = self.client.post(url, data, format="json")
+            self.assertEqual(response.status_code, 403)
+            self.assertEqual(
+                response.data["detail"],
+                "First verify your account to create events or list items on the Marketplace.",
+            )
+
+    def test_verification_grace_period_allows_marketplace_creation(self):
+        self.user.is_verified = True
+        self.user.subscription_expires_at = timezone.now() - timedelta(days=4)
+        self.user.save(update_fields=["is_verified", "subscription_expires_at"])
+
+        response = self.client.post(
+            "/api/community/marketplace/",
+            {"title": "Listing during grace period", "price": "120.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
 
     def test_event_deletion_removes_its_banner_from_storage(self):
         event = Event.objects.create(
@@ -763,6 +836,10 @@ class CommunityFeatureTests(APITestCase):
         )
 
     def test_marketplace_listing_is_owned_by_creator_and_searchable(self):
+        self.user.is_verified = True
+        self.user.save(update_fields=["is_verified"])
+        self.other.is_verified = True
+        self.other.save(update_fields=["is_verified"])
         created = self.client.post(
             "/api/community/marketplace/",
             {
@@ -789,6 +866,8 @@ class CommunityFeatureTests(APITestCase):
         self.assertEqual(results.data["results"][0]["title"], "Rice cooker")
 
     def test_marketplace_listing_image_uses_marketplace_storage_path_and_public_url(self):
+        self.user.is_verified = True
+        self.user.save(update_fields=["is_verified"])
         image_buffer = BytesIO()
         Image.new("RGB", (2, 2), color="blue").save(image_buffer, format="PNG")
         image_buffer.seek(0)
@@ -814,6 +893,8 @@ class CommunityFeatureTests(APITestCase):
         self.assertTrue(listing.image.name.startswith("marketplace_items/"))
 
     def test_marketplace_listing_image_can_be_removed(self):
+        self.user.is_verified = True
+        self.user.save(update_fields=["is_verified"])
         listing = MarketplaceListing.objects.create(
             seller=self.user,
             title="Item to update",

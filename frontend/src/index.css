@@ -5584,6 +5584,28 @@ select {
   color: var(--text);
 }
 
+.marketplace-verification-required {
+  display: grid;
+  gap: 12px;
+  padding: clamp(18px, 3vw, 26px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.marketplace-verification-required h2,
+.marketplace-verification-required p {
+  margin: 0;
+}
+
+.marketplace-verification-required p {
+  color: var(--muted);
+}
+
+.marketplace-verification-required .btn {
+  justify-self: start;
+}
+
 .social-form label {
   display: grid;
   gap: 6px;

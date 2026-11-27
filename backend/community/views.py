@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
@@ -6,6 +8,7 @@ from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from config.permissions import IsActiveAndNotSuspended as IsAuthenticated
+from billing.services import SUBSCRIPTION_GRACE_DAYS
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -47,6 +50,30 @@ from .serializers import (
 )
 
 User = get_user_model()
+MARKETPLACE_VERIFICATION_REQUIRED_DETAIL = (
+    "First verify your account to create events or list items on the Marketplace."
+)
+
+
+def has_active_marketplace_verification(user):
+    if not user.is_verified:
+        return False
+    if user.subscription_expires_at is None:
+        return True
+    return timezone.now() < (
+        user.subscription_expires_at
+        + timedelta(days=SUBSCRIPTION_GRACE_DAYS)
+    )
+
+
+class MarketplaceVerificationRequiredMixin:
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if (
+            request.method in {"POST", "PUT", "PATCH"}
+            and not has_active_marketplace_verification(request.user)
+        ):
+            raise PermissionDenied(MARKETPLACE_VERIFICATION_REQUIRED_DETAIL)
 
 
 def event_attendance_prefetches(user):
@@ -407,7 +434,10 @@ class StoryDetailView(SecureStoryDetailView):
     pass
 
 
-class EventListCreateView(generics.ListCreateAPIView):
+class EventListCreateView(
+    MarketplaceVerificationRequiredMixin,
+    generics.ListCreateAPIView,
+):
     permission_classes = [IsAuthenticated]
     serializer_class = EventSerializer
 
@@ -437,7 +467,10 @@ class EventListCreateView(generics.ListCreateAPIView):
         serializer.save(host=self.request.user)
 
 
-class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
+class EventDetailView(
+    MarketplaceVerificationRequiredMixin,
+    generics.RetrieveUpdateDestroyAPIView,
+):
     permission_classes = [IsAuthenticated]
     serializer_class = EventSerializer
     queryset = Event.objects.select_related("host", "community")
@@ -605,7 +638,10 @@ class EventInvitationInboxView(generics.ListAPIView):
         ).select_related("event", "inviter")
 
 
-class MarketplaceListingListCreateView(generics.ListCreateAPIView):
+class MarketplaceListingListCreateView(
+    MarketplaceVerificationRequiredMixin,
+    generics.ListCreateAPIView,
+):
     permission_classes = [IsAuthenticated]
     serializer_class = MarketplaceListingSerializer
 
@@ -626,7 +662,10 @@ class MarketplaceListingListCreateView(generics.ListCreateAPIView):
         serializer.save(seller=self.request.user)
 
 
-class MarketplaceListingDetailView(generics.RetrieveUpdateDestroyAPIView):
+class MarketplaceListingDetailView(
+    MarketplaceVerificationRequiredMixin,
+    generics.RetrieveUpdateDestroyAPIView,
+):
     permission_classes = [IsAuthenticated]
     serializer_class = MarketplaceListingSerializer
     queryset = MarketplaceListing.objects.select_related("seller")

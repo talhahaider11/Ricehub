@@ -6,7 +6,9 @@ import communityService from "../services/communityService";
 import friendService from "../services/friendService";
 
 vi.mock("../hooks/useAuth", () => ({
-  default: () => ({ user: { id: 7, is_verified: true } }),
+  default: () => ({
+    user: globalThis.__socialHubUser || { id: 7, is_verified: true },
+  }),
 }));
 
 vi.mock("../services/communityService", () => ({
@@ -55,6 +57,11 @@ function QueryNavigationButton() {
 describe("SocialHub route tabs", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    globalThis.__socialHubUser = {
+      id: 7,
+      is_verified: true,
+      is_subscription_verified: true,
+    };
   });
 
   it("resets to Stories when Discover opens without a stale tab query", async () => {
@@ -146,6 +153,80 @@ describe("SocialHub route tabs", () => {
       .toHaveTextContent("Event created.");
     expect(title).toHaveValue("");
     expect(endField).toHaveValue("");
+  });
+
+  it("keeps event browsing available but gates creation for expired verification", async () => {
+    globalThis.__socialHubUser = {
+      id: 7,
+      is_verified: true,
+      is_subscription_verified: false,
+      subscription_expires_at: "2026-11-20T00:00:00.000Z",
+    };
+    communityService.events.mockResolvedValue([{
+      id: 208,
+      title: "Open community meetup",
+      starts_at: "2035-10-10T10:00:00.000Z",
+      banner: null,
+      host: { id: 12, username: "event-host" },
+      interested_count: 0,
+      my_response: null,
+    }]);
+    communityService.invitations.mockResolvedValue([]);
+    friendService.list.mockResolvedValue([]);
+
+    render(
+      <MemoryRouter initialEntries={["/discover?tab=Events"]}>
+        <Routes>
+          <Route path="/discover" element={<SocialHub />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", {
+      name: "Verified Account Required",
+    })).toBeInTheDocument();
+    expect(screen.getByText(
+      "First verify your account to create events or list items on the Marketplace."
+    )).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Get Verified" }))
+      .toHaveAttribute("href", "/billing");
+    expect(screen.getByRole("heading", { name: "Open community meetup" }))
+      .toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create event" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("keeps marketplace listings browsable but gates listing creation for unverified users", async () => {
+    globalThis.__socialHubUser = { id: 7, is_verified: false };
+    communityService.listings.mockResolvedValue([{
+      id: 309,
+      title: "Available to browse",
+      description: "Existing marketplace listing",
+      price: "100.00",
+      location: "Town",
+      seller: { id: 12, username: "seller" },
+      status: "available",
+      image: null,
+    }]);
+    communityService.orders.mockResolvedValue([]);
+
+    render(
+      <MemoryRouter initialEntries={["/discover?tab=Marketplace"]}>
+        <Routes>
+          <Route path="/discover" element={<SocialHub />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", {
+      name: "Verified Account Required",
+    })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Get Verified" }))
+      .toHaveAttribute("href", "/billing");
+    expect(screen.getByRole("heading", { name: "Available to browse" }))
+      .toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Publish listing" }))
+      .not.toBeInTheDocument();
   });
 
   it("opens interested users for the event host and links each profile", async () => {
