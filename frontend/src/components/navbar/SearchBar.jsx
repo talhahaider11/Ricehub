@@ -47,8 +47,15 @@ export default function SearchBar() {
       >
         <Search size={18} />
         <input
+          id="navbar-search-input"
           ref={inputRef}
           type="search"
+          style={{
+            border: "none",
+            outline: "none",
+            boxShadow: "none",
+            background: "transparent",
+          }}
           aria-label={t("searchUsersPosts")}
           value={query}
           onFocus={() => {

@@ -9549,3 +9549,12 @@ select {
   outline: 0 !important;
   box-shadow: none !important;
 }
+
+#navbar-search-input,
+#navbar-search-input:focus,
+#navbar-search-input:focus-visible {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
