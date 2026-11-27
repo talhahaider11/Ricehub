@@ -138,6 +138,13 @@ describe("Messages", () => {
       </MemoryRouter>
     );
 
+    expect(await screen.findByRole("heading", { name: "Chats" }))
+      .toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New message" }))
+      .not.toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Search conversations" }))
+      .toBeInTheDocument();
+
     fireEvent.click(await screen.findByRole("button", {
       name: "Open conversation with talha2",
     }));

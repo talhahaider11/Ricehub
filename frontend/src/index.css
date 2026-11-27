@@ -1727,7 +1727,7 @@ textarea:focus-visible {
 
 .settings-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 720px);
+  grid-template-columns: minmax(0, 720px);
   justify-content: center;
   align-items: start;
   gap: 20px;
@@ -1771,6 +1771,53 @@ textarea:focus-visible {
 .settings-header h1 {
   margin: 0;
   font-size: 26px;
+}
+
+.settings-category-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.settings-category-option {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.settings-category-option:hover {
+  background: var(--surface-secondary);
+}
+
+.settings-category-option > span:last-child {
+  color: var(--muted);
+  font-size: 22px;
+}
+
+.settings-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 4px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
 }
 
 .settings-header>div>p:last-child,

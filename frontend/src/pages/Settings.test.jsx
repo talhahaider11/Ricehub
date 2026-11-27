@@ -85,7 +85,7 @@ describe("Settings Urdu localization", () => {
     settingsService.getSecurity.mockResolvedValue({ two_factor_enabled: false });
   });
 
-  it("translates settings headings and privacy options when Urdu is selected", async () => {
+  it("opens isolated settings categories with Urdu labels", async () => {
     render(
       <MemoryRouter>
         <ThemeProvider>
@@ -96,10 +96,16 @@ describe("Settings Urdu localization", () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByRole("heading", { name: "ترتیبات اور رازداری" }))
+    expect(await screen.findByRole("heading", { name: "ترتیبات" }))
       .toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "اکاؤنٹ" }));
     expect(screen.getByRole("heading", { name: "زبان" })).toBeInTheDocument();
+    expect(screen.queryByText("آپ کی پروفائل کون دیکھ سکتا ہے؟"))
+      .not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "ترتیبات پر واپس جائیں" }));
+    fireEvent.click(screen.getByRole("button", { name: "رازداری اور سامعین" }));
     expect(screen.getByText("آپ کی پروفائل کون دیکھ سکتا ہے؟")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "زبان" })).not.toBeInTheDocument();
     await waitFor(() => expect(settingsService.getPrivacy).toHaveBeenCalled());
   });
 
@@ -118,6 +124,7 @@ describe("Settings Urdu localization", () => {
       </MemoryRouter>
     );
 
+    fireEvent.click(await screen.findByRole("button", { name: "اطلاعات" }));
     const toggle = await screen.findByRole("checkbox", {
       name: "سسٹم اور کال کی اطلاعات",
     });
@@ -170,8 +177,52 @@ describe("Settings Urdu localization", () => {
       </MemoryRouter>
     );
 
+    fireEvent.click(await screen.findByRole("button", { name: "Account" }));
     expect(await screen.findByText("Unverified account · up to 3 posts"))
       .toBeInTheDocument();
     expect(screen.getByText("Not verified")).toBeInTheDocument();
+  });
+
+  it("shows only the selected Settings category and supports returning to the menu", async () => {
+    localStorage.setItem("ricehub-language", "en");
+    render(
+      <MemoryRouter>
+        <ThemeProvider>
+          <LanguageProvider>
+            <Settings />
+          </LanguageProvider>
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Security and login" }));
+    expect(screen.getByText("Reset your password if you think it may be compromised."))
+      .toBeInTheDocument();
+    expect(screen.queryByText("Who can see your profile?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dark mode")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
+    expect(screen.getByText("Dark mode")).toBeInTheDocument();
+    expect(screen.queryByText("Reset your password if you think it may be compromised."))
+      .not.toBeInTheDocument();
+  });
+
+  it("opens a category linked from the navigation drawer", async () => {
+    localStorage.setItem("ricehub-language", "en");
+    render(
+      <MemoryRouter initialEntries={["/settings#privacy"]}>
+        <ThemeProvider>
+          <LanguageProvider>
+            <Settings />
+          </LanguageProvider>
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Who can see your profile?"))
+      .toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Settings" }))
+      .not.toBeInTheDocument();
   });
 });

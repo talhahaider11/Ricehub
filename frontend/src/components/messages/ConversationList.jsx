@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Check,
   MoreHorizontal,
-  Pencil,
   Search,
   Settings,
   UsersRound,
@@ -69,7 +68,6 @@ export default function ConversationList({
   currentUser,
   onCreateGroup,
   onlineFriends = [],
-  friends = [],
   onSelectFriend,
   openingFriend,
   friendError,
@@ -84,8 +82,6 @@ export default function ConversationList({
   const { t, language } = useLanguage();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("inbox");
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [composeQuery, setComposeQuery] = useState("");
   const [actionId, setActionId] = useState(null);
   const longPressTimer = useRef(null);
   const longPressFired = useRef(false);
@@ -106,11 +102,6 @@ export default function ConversationList({
       .join(" ")
       .toLowerCase();
     return `${name} ${usernames}`.includes(query.trim().toLowerCase());
-  });
-
-  const filteredFriends = friends.filter((friend) => {
-    const name = `${getName(friend)} ${friend.username || ""}`.toLowerCase();
-    return name.includes(composeQuery.trim().toLowerCase());
   });
 
   const stopLongPress = () => {
@@ -179,24 +170,14 @@ export default function ConversationList({
         <h1>{archived ? t("archivedChats") : t("chats")}</h1>
         <div className="inbox-header-actions">
           {!archived && (
-            <>
-              <button
-                type="button"
-                aria-label={t("newMessage")}
-                title={t("newMessage")}
-                onClick={() => setComposeOpen(true)}
-              >
-                <Pencil size={19} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                aria-label={t("newGroup")}
-                title={t("newGroup")}
-                onClick={onCreateGroup}
-              >
-                <UsersRound size={19} aria-hidden="true" />
-              </button>
-            </>
+            <button
+              type="button"
+              aria-label={t("newGroup")}
+              title={t("newGroup")}
+              onClick={onCreateGroup}
+            >
+              <UsersRound size={19} aria-hidden="true" />
+            </button>
           )}
           <Link
             to="/settings"
@@ -288,52 +269,6 @@ export default function ConversationList({
           <span>{t("archivedChats")}</span>
           <span className="archived-chats-count">{archiveCount}</span>
         </button>
-      )}
-
-      {composeOpen && (
-        <section className="new-message-panel" role="dialog" aria-modal="true" aria-labelledby="new-message-heading">
-          <div className="new-message-heading">
-            <h2 id="new-message-heading">{t("newMessage")}</h2>
-            <button
-              type="button"
-              aria-label={t("cancel")}
-              onClick={() => setComposeOpen(false)}
-            >
-              ×
-            </button>
-          </div>
-          <label className="conversation-search">
-            <Search size={18} aria-hidden="true" />
-            <input
-              type="search"
-              aria-label={t("searchFriends")}
-              placeholder={t("searchFriends")}
-              value={composeQuery}
-              onChange={(event) => setComposeQuery(event.target.value)}
-              autoFocus
-            />
-          </label>
-          <div className="new-message-friends">
-            {filteredFriends.map((friend) => (
-              <button
-                type="button"
-                key={friend.id}
-                disabled={Boolean(openingFriend)}
-                onClick={() => {
-                  setComposeOpen(false);
-                  onSelectFriend(friend);
-                }}
-              >
-                <Avatar user={friend} size="small" />
-                <span>{getName(friend)}</span>
-                {friend.is_online && <span className="compose-online-dot" />}
-              </button>
-            ))}
-            {filteredFriends.length === 0 && (
-              <p>{friends.length ? t("noSearchResults") : t("noFriends")}</p>
-            )}
-          </div>
-        </section>
       )}
 
       {archived && (

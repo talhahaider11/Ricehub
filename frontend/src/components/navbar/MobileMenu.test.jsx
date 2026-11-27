@@ -58,7 +58,9 @@ describe("MobileMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: /see more/i }));
     expect(screen.getByRole("link", { name: /friend requests/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /settings and privacy/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^settings$/i }));
+    expect(screen.queryByRole("button", { name: /settings and privacy/i }))
+      .not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /privacy and audience/i })).toHaveAttribute(
       "href",
       "/settings#privacy"

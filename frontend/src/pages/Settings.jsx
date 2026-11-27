@@ -1,6 +1,7 @@
 import useAuth from "../hooks/useAuth";
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 import userService from "../services/userService";
 import notificationService from "../services/notificationService";
@@ -29,6 +30,20 @@ const preferenceLabelKeys = {
 };
 
 const SUBSCRIPTION_GRACE_MS = 5 * 24 * 60 * 60 * 1000;
+const SETTINGS_HASH_CATEGORIES = {
+  account: ["account", "language"],
+  privacy: ["privacy", "blocking"],
+  notifications: ["notifications"],
+  security: ["security"],
+  appearance: ["appearance"],
+  information: ["account-data"],
+};
+
+function getSettingsCategory(hash) {
+  const sectionId = hash.replace(/^#/, "");
+  return Object.entries(SETTINGS_HASH_CATEGORIES)
+    .find(([, sectionIds]) => sectionIds.includes(sectionId))?.[0] || null;
+}
 
 function hasActiveSubscription(user, now) {
   const isVerified = typeof user?.is_subscription_verified === "boolean"
@@ -44,6 +59,7 @@ function hasActiveSubscription(user, now) {
 export default function Settings() {
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { language, setLanguage, t } = useLanguage();
   const {
     theme,
@@ -73,6 +89,37 @@ export default function Settings() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [verificationNow, setVerificationNow] = useState(() => Date.now());
+  const [selectedCategory, setSelectedCategory] = useState(() =>
+    getSettingsCategory(location.hash)
+  );
+
+  useEffect(() => {
+    setSelectedCategory(getSettingsCategory(location.hash));
+  }, [location.hash]);
+
+  const openCategory = (category, sectionId) => {
+    setSelectedCategory(category);
+    navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+        hash: `#${sectionId}`,
+      },
+      { replace: true }
+    );
+  };
+
+  const returnToSettingsMenu = () => {
+    setSelectedCategory(null);
+    navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+        hash: "",
+      },
+      { replace: true }
+    );
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => setVerificationNow(Date.now()), 60_000);
@@ -310,18 +357,6 @@ export default function Settings() {
     <div className="page-container">
 
       <div className="settings-layout">
-        <aside className="settings-sidebar card">
-          <p className="settings-eyebrow">{t("settingsEyebrow")}</p>
-          <a href="#account">{t("accountTitle")}</a>
-          <a href="#privacy">{t("privacyAudience")}</a>
-          <a href="#blocking">{t("blockedAccounts")}</a>
-          <a href="#notifications">{t("notifications")}</a>
-          <a href="#security">{t("securityLogin")}</a>
-          <Link to="/help-support">{t("helpSupport")}</Link>
-          <a href="#appearance">{t("appearanceTitle")}</a>
-          <a href="#account-data">{t("yourInformation")}</a>
-        </aside>
-
         <div className="card settings-card">
           <header className="settings-header">
             <div>
@@ -333,6 +368,44 @@ export default function Settings() {
           {actionError && <p className="settings-error" role="alert">{actionError}</p>}
           {actionMessage && <p className="settings-status" role="status">{actionMessage}</p>}
 
+          {selectedCategory ? (
+            <button
+              type="button"
+              className="settings-back-button"
+              onClick={returnToSettingsMenu}
+            >
+              <ArrowLeft size={18} aria-hidden="true" />
+              {t("backToSettings")}
+            </button>
+          ) : (
+            <nav className="settings-category-list" aria-label={t("settingsTitle")}>
+              {[
+                ["account", "accountTitle", "account"],
+                ["privacy", "privacyAudience", "privacy"],
+                ["notifications", "notifications", "notifications"],
+                ["security", "securityLogin", "security"],
+                ["appearance", "appearanceTitle", "appearance"],
+                ["information", "yourInformation", "account-data"],
+              ].map(([category, labelKey, sectionId]) => (
+                <button
+                  type="button"
+                  className="settings-category-option"
+                  key={category}
+                  onClick={() => openCategory(category, sectionId)}
+                >
+                  <span>{t(labelKey)}</span>
+                  <span aria-hidden="true">›</span>
+                </button>
+              ))}
+              <Link className="settings-category-option" to="/help-support">
+                <span>{t("helpSupport")}</span>
+                <span aria-hidden="true">›</span>
+              </Link>
+            </nav>
+          )}
+
+          {selectedCategory === "account" && (
+            <>
           <section className="settings-section" id="account">
             <h2>{t("accountTitle")}</h2>
             <div className="settings-row">
@@ -390,7 +463,11 @@ export default function Settings() {
               </select>
             </label>
           </section>
+            </>
+          )}
 
+          {selectedCategory === "privacy" && (
+            <>
           <section className="settings-section" id="privacy">
             <h2>{t("privacyAudience")}</h2>
             <div className="settings-row">
@@ -498,7 +575,10 @@ export default function Settings() {
               </div>
             )}
           </section>
+            </>
+          )}
 
+          {selectedCategory === "notifications" && (
           <section className="settings-section" id="notifications">
             <h2>{t("notifications")}</h2>
             <p className="settings-description">
@@ -538,7 +618,9 @@ export default function Settings() {
               <p className="settings-status" role="status">{preferencesMessage}</p>
             )}
           </section>
+          )}
 
+          {selectedCategory === "security" && (
           <section className="settings-section" id="security">
             <h2>{t("securityLogin")}</h2>
             <div className="settings-row">
@@ -618,7 +700,9 @@ export default function Settings() {
               {t("signOutOtherSessions")}
             </button>
           </section>
+          )}
 
+          {selectedCategory === "appearance" && (
           <section className="settings-section" id="appearance">
             <h2>{t("appearanceTitle")}</h2>
             <div className="settings-row">
@@ -633,7 +717,9 @@ export default function Settings() {
               </button>
             </div>
           </section>
+          )}
 
+          {selectedCategory === "information" && (
           <section className="settings-section" id="account-data">
             <h2>{t("yourInformation")}</h2>
             <div className="settings-row">
@@ -674,6 +760,7 @@ export default function Settings() {
               </button>
             </form>
           </section>
+          )}
         </div>
       </div>
 

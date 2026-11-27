@@ -626,7 +626,6 @@ export default function Messages() {
           currentUser={user}
           onCreateGroup={() => setGroupModalOpen(true)}
           onlineFriends={onlineFriends}
-          friends={friends}
           onSelectFriend={handleSelectFriend}
           openingFriend={openingFriend}
           friendError={friendError}
