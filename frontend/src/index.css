@@ -2226,10 +2226,56 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
 }
 
 .group-friend-option input {
   width: auto;
+}
+
+.create-group-form>label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.create-group-form>label input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border-radius: 10px;
+}
+
+.create-group-form fieldset {
+  padding: 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+}
+
+.create-group-form legend {
+  padding: 0 5px;
+  font-weight: 600;
+}
+
+.create-group-form>.group-user-lookup {
+  gap: 0;
+}
+
+.create-group-form>button[type="submit"] {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.create-group-form>button[type="submit"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .app-render-error button {
@@ -7267,15 +7313,70 @@ a {
   gap: 8px;
 }
 
+.group-user-lookup {
+  display: grid;
+  gap: 8px;
+}
+
+.group-user-id-field>label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
 .group-user-id-field input,
 .group-user-id-form input {
   min-width: 0;
   flex: 1;
+  min-height: 42px;
+  padding: 9px 12px;
+  border-radius: 10px;
 }
 
 .group-user-id-field button,
 .group-user-id-form button {
   flex: 0 0 auto;
+  min-height: 42px;
+  padding: 8px 13px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  background: var(--surface-secondary);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.group-user-id-field button:hover:not(:disabled),
+.group-user-id-form button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+}
+
+.group-user-matches {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.group-user-matches>button {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+}
+
+.group-user-matches>button>span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.group-user-matches small {
+  color: var(--muted);
 }
 
 .group-member-list {
@@ -9304,4 +9405,102 @@ button.message-call-card {
     min-height: 66px;
     border-radius: 18px;
   }
+}
+
+:root,
+:root[data-theme="light"] {
+  --input-border: #000;
+}
+
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  --input-border: #fff;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+textarea,
+select {
+  border: 1px solid var(--input-border) !important;
+}
+
+.help-search-field {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-weight: 600;
+}
+
+.help-search-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.help-password-form,
+.help-issue-form {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.help-password-form label,
+.help-issue-form label {
+  display: grid;
+  width: 100%;
+  gap: 7px;
+  font-weight: 600;
+}
+
+.help-password-field {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.help-password-field input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 46px 10px 12px;
+}
+
+.help-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.help-password-toggle:hover {
+  background: var(--surface-secondary);
+  color: var(--text);
+}
+
+.help-issue-form input,
+.help-issue-form textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.help-issue-form textarea {
+  min-height: 130px;
+  resize: vertical;
+}
+
+.help-password-form .btn,
+.help-issue-form .btn {
+  justify-self: start;
+  margin-top: 2px;
 }

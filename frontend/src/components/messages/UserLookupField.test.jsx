@@ -11,7 +11,13 @@ vi.mock("../../services/messageService", () => ({
 }));
 
 vi.mock("../../context/LanguageContext", () => ({
-  useLanguage: () => ({ t: (key) => key }),
+  useLanguage: () => ({
+    t: (key) => ({
+      userIdOrName: "Search user by ID or username",
+      userIdOrNamePlaceholder: "Enter user ID or username...",
+      findUser: "Find user",
+    })[key] || key,
+  }),
 }));
 
 describe("UserLookupField", () => {
@@ -34,7 +40,10 @@ describe("UserLookupField", () => {
     const onSelect = vi.fn();
 
     render(<UserLookupField onSelect={onSelect} />);
-    fireEvent.change(screen.getByLabelText("userIdOrName"), {
+    expect(screen.getByPlaceholderText("Enter user ID or username..."))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Find user" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Search user by ID or username"), {
       target: { value: "Jasmine" },
     });
 
@@ -55,7 +64,7 @@ describe("UserLookupField", () => {
     });
 
     render(<UserLookupField onSelect={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText("userIdOrName"), {
+    fireEvent.change(screen.getByLabelText("Search user by ID or username"), {
       target: { value: "not-verified" },
     });
 

@@ -91,7 +91,7 @@ export default function UserLookupField({ onSelect, disabled = false }) {
                 void searchUsers(query);
               }
             }}
-            placeholder={t("userIdOrName")}
+            placeholder={t("userIdOrNamePlaceholder")}
             autoComplete="off"
             disabled={disabled}
           />

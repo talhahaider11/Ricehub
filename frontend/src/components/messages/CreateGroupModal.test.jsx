@@ -12,7 +12,15 @@ vi.mock("../../hooks/useAuth", () => ({
 }));
 
 vi.mock("../../context/LanguageContext", () => ({
-  useLanguage: () => ({ t: (key) => key }),
+  useLanguage: () => ({
+    t: (key) => ({
+      groupName: "Group name",
+      userIdOrName: "Search user by ID or username",
+      userIdOrNamePlaceholder: "Enter user ID or username...",
+      findUser: "Find user",
+      createGroup: "Create group",
+    })[key] || key,
+  }),
 }));
 
 vi.mock("../../services/messageService", () => ({
@@ -39,6 +47,11 @@ describe("CreateGroupModal", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Only verified users can create group conversations."
     );
-    expect(screen.getByRole("button", { name: "createGroup" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create group" })).toBeDisabled();
+    expect(screen.getByLabelText("Group name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search user by ID or username")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Enter user ID or username..."))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Find user" })).toBeInTheDocument();
   });
 });

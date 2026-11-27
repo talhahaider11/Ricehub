@@ -23,6 +23,9 @@ describe("HelpSupport", () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByPlaceholderText("Search account, privacy..."))
+      .toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Privacy" }));
     expect(screen.getByText("Who can see my profile and activity?")).toBeInTheDocument();
     expect(screen.queryByText("I forgot my password. How can I get back into my account?"))
@@ -61,6 +64,29 @@ describe("HelpSupport", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Password changed. Other active sessions have been signed out."
     );
+  });
+
+  it("stacks password inputs and toggles visibility independently", () => {
+    render(
+      <MemoryRouter>
+        <HelpSupport />
+      </MemoryRouter>
+    );
+
+    const currentPassword = screen.getByLabelText("Current password");
+    const newPassword = screen.getByLabelText("New password");
+    const confirmPassword = screen.getByLabelText("Confirm new password");
+    expect(currentPassword).toHaveAttribute("type", "password");
+    expect(newPassword).toHaveAttribute("type", "password");
+    expect(confirmPassword).toHaveAttribute("type", "password");
+
+    fireEvent.click(screen.getByRole("button", { name: "Show current password" }));
+    expect(currentPassword).toHaveAttribute("type", "text");
+    expect(newPassword).toHaveAttribute("type", "password");
+    fireEvent.click(screen.getByRole("button", { name: "Show new password" }));
+    expect(newPassword).toHaveAttribute("type", "text");
+    fireEvent.click(screen.getByRole("button", { name: "Show confirm new password" }));
+    expect(confirmPassword).toHaveAttribute("type", "text");
   });
 
   it("does not submit a password when confirmation does not match", async () => {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import authService from "../services/authService";
 
 const helpTopics = [
@@ -71,6 +72,11 @@ export default function HelpSupport() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordVisibility, setPasswordVisibility] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  });
   const [passwordError, setPasswordError] = useState("");
   const [passwordNotice, setPasswordNotice] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
@@ -79,6 +85,13 @@ export default function HelpSupport() {
   const [issueNotice, setIssueNotice] = useState("");
   const [issueError, setIssueError] = useState("");
   const [sendingIssue, setSendingIssue] = useState(false);
+
+  const togglePasswordVisibility = (field) => {
+    setPasswordVisibility((current) => ({
+      ...current,
+      [field]: !current[field],
+    }));
+  };
 
   const visibleTopics = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -163,13 +176,13 @@ export default function HelpSupport() {
 
         <section className="settings-section" aria-labelledby="faq-title">
           <h2 id="faq-title">Frequently asked questions</h2>
-          <label className="settings-section">
+          <label className="help-search-field">
             Search help articles
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search account, privacy, community…"
+              placeholder="Search account, privacy..."
             />
           </label>
           {visibleTopics.length ? visibleTopics.map((topic) => (
@@ -206,38 +219,74 @@ export default function HelpSupport() {
             Confirm your current password first. A successful change signs out your other
             active sessions.
           </p>
-          <form onSubmit={changePassword}>
+          <form className="help-password-form" onSubmit={changePassword}>
             <label>
               Current password
-              <input
-                type="password"
-                autoComplete="current-password"
-                required
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-              />
+              <span className="help-password-field">
+                <input
+                  type={passwordVisibility.current ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                />
+                <button
+                  className="help-password-toggle"
+                  type="button"
+                  aria-label={`${passwordVisibility.current ? "Hide" : "Show"} current password`}
+                  onClick={() => togglePasswordVisibility("current")}
+                >
+                  {passwordVisibility.current
+                    ? <EyeOff size={18} aria-hidden="true" />
+                    : <Eye size={18} aria-hidden="true" />}
+                </button>
+              </span>
             </label>
             <label>
               New password
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                required
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-              />
+              <span className="help-password-field">
+                <input
+                  type={passwordVisibility.new ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                />
+                <button
+                  className="help-password-toggle"
+                  type="button"
+                  aria-label={`${passwordVisibility.new ? "Hide" : "Show"} new password`}
+                  onClick={() => togglePasswordVisibility("new")}
+                >
+                  {passwordVisibility.new
+                    ? <EyeOff size={18} aria-hidden="true" />
+                    : <Eye size={18} aria-hidden="true" />}
+                </button>
+              </span>
             </label>
             <label>
               Confirm new password
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                required
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-              />
+              <span className="help-password-field">
+                <input
+                  type={passwordVisibility.confirm ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                />
+                <button
+                  className="help-password-toggle"
+                  type="button"
+                  aria-label={`${passwordVisibility.confirm ? "Hide" : "Show"} confirm new password`}
+                  onClick={() => togglePasswordVisibility("confirm")}
+                >
+                  {passwordVisibility.confirm
+                    ? <EyeOff size={18} aria-hidden="true" />
+                    : <Eye size={18} aria-hidden="true" />}
+                </button>
+              </span>
             </label>
             <p className="settings-description">
               At least 8 characters, with an uppercase letter, a lowercase letter and a number.
@@ -259,7 +308,7 @@ export default function HelpSupport() {
             Report a problem to the RiceHub support team. Never include your password or
             sign-in codes.
           </p>
-          <form onSubmit={reportIssue}>
+          <form className="help-issue-form" onSubmit={reportIssue}>
             <label>
               Subject
               <input
