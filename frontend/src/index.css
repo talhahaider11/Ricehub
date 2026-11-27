@@ -9526,3 +9526,26 @@ select {
   justify-self: start;
   margin-top: 2px;
 }
+
+.navbar-search .search-bar {
+  border: 1px solid var(--input-border);
+  box-shadow: none;
+}
+
+.navbar-search .search-bar:focus-within {
+  border-color: var(--input-border);
+  box-shadow: none;
+}
+
+.navbar-search .search-bar input {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.navbar-search .search-bar input:focus {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
