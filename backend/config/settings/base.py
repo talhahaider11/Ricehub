@@ -401,53 +401,66 @@ if any(R2_CONFIGURATION.values()):
         },
     }
 
-ORACLE_ACCESS_KEY_ID = os.getenv("ORACLE_ACCESS_KEY_ID", "").strip()
-ORACLE_SECRET_ACCESS_KEY = os.getenv("ORACLE_SECRET_ACCESS_KEY", "").strip()
-ORACLE_BUCKET_NAME = os.getenv("ORACLE_BUCKET_NAME", "").strip()
-ORACLE_S3_ENDPOINT_URL = (
-    os.getenv("ORACLE_S3_ENDPOINT_URL", "").strip().rstrip("/")
-)
-ORACLE_REGION = os.getenv("ORACLE_REGION", "").strip()
-ORACLE_STORAGE_CONFIGURATION = {
-    "ORACLE_ACCESS_KEY_ID": ORACLE_ACCESS_KEY_ID,
-    "ORACLE_SECRET_ACCESS_KEY": ORACLE_SECRET_ACCESS_KEY,
-    "ORACLE_BUCKET_NAME": ORACLE_BUCKET_NAME,
-    "ORACLE_S3_ENDPOINT_URL": ORACLE_S3_ENDPOINT_URL,
-    "ORACLE_REGION": ORACLE_REGION,
+OCI_ACCESS_KEY_ID = os.getenv(
+    "OCI_ACCESS_KEY_ID",
+    os.getenv("ORACLE_ACCESS_KEY_ID", ""),
+).strip()
+OCI_SECRET_ACCESS_KEY = os.getenv(
+    "OCI_SECRET_ACCESS_KEY",
+    os.getenv("ORACLE_SECRET_ACCESS_KEY", ""),
+).strip()
+OCI_BUCKET_NAME = os.getenv(
+    "OCI_BUCKET_NAME",
+    os.getenv("ORACLE_BUCKET_NAME", ""),
+).strip()
+OCI_ENDPOINT_URL = os.getenv(
+    "OCI_ENDPOINT_URL",
+    os.getenv("ORACLE_S3_ENDPOINT_URL", ""),
+).strip().rstrip("/")
+OCI_REGION = os.getenv(
+    "OCI_REGION",
+    os.getenv("ORACLE_REGION", ""),
+).strip()
+OCI_STORAGE_CONFIGURATION = {
+    "OCI_ACCESS_KEY_ID": OCI_ACCESS_KEY_ID,
+    "OCI_SECRET_ACCESS_KEY": OCI_SECRET_ACCESS_KEY,
+    "OCI_BUCKET_NAME": OCI_BUCKET_NAME,
+    "OCI_ENDPOINT_URL": OCI_ENDPOINT_URL,
+    "OCI_REGION": OCI_REGION,
 }
-ORACLE_STORAGE_CONFIGURED = all(ORACLE_STORAGE_CONFIGURATION.values())
-if any(ORACLE_STORAGE_CONFIGURATION.values()) and not ORACLE_STORAGE_CONFIGURED:
-    missing_oracle_settings = [
+OCI_STORAGE_CONFIGURED = all(OCI_STORAGE_CONFIGURATION.values())
+if any(OCI_STORAGE_CONFIGURATION.values()) and not OCI_STORAGE_CONFIGURED:
+    missing_oci_settings = [
         name
-        for name, value in ORACLE_STORAGE_CONFIGURATION.items()
+        for name, value in OCI_STORAGE_CONFIGURATION.items()
         if not value
     ]
     raise ValueError(
         "OCI Object Storage credentials require: "
-        + ", ".join(missing_oracle_settings)
+        + ", ".join(missing_oci_settings)
     )
-if ORACLE_STORAGE_CONFIGURED and "storages" not in INSTALLED_APPS:
+if OCI_STORAGE_CONFIGURED and "storages" not in INSTALLED_APPS:
     INSTALLED_APPS.append("storages")
 
-STORAGES["oracle_media"] = (
+STORAGES["oci_media"] = (
     {
-        "BACKEND": "storages.backends.s3.S3Storage",
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
-            "bucket_name": ORACLE_BUCKET_NAME,
-            "endpoint_url": ORACLE_S3_ENDPOINT_URL,
-            "region_name": ORACLE_REGION,
+            "bucket_name": OCI_BUCKET_NAME,
+            "endpoint_url": OCI_ENDPOINT_URL,
+            "region_name": OCI_REGION,
             "signature_version": "s3v4",
             "addressing_style": "path",
             "custom_domain": None,
             "location": "",
-            "access_key": ORACLE_ACCESS_KEY_ID,
-            "secret_key": ORACLE_SECRET_ACCESS_KEY,
-            "querystring_auth": True,
+            "access_key": OCI_ACCESS_KEY_ID,
+            "secret_key": OCI_SECRET_ACCESS_KEY,
+            "querystring_auth": False,
             "file_overwrite": False,
             "object_parameters": {"CacheControl": "max-age=86400"},
         },
     }
-    if ORACLE_STORAGE_CONFIGURED
+    if OCI_STORAGE_CONFIGURED
     else {"BACKEND": "django.core.files.storage.FileSystemStorage"}
 )
 

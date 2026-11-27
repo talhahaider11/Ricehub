@@ -644,7 +644,7 @@ class MessagingFeatureTests(APITestCase):
             sender=self.user,
             content="Attachment",
         )
-        message.attachment.name = "chat/2026/11/attachment.jpg"
+        message.attachment.name = "chat_media/2026/11/attachment.jpg"
         message.save(update_fields=["attachment"])
         attachment_storage = message.attachment.storage
 
@@ -652,7 +652,9 @@ class MessagingFeatureTests(APITestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 message.delete()
 
-        delete_file.assert_called_once_with("chat/2026/11/attachment.jpg")
+        delete_file.assert_called_once_with(
+            "chat_media/2026/11/attachment.jpg"
+        )
 
     def test_sender_cannot_edit_another_users_message(self):
         message = Message.objects.create(

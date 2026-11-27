@@ -40,7 +40,7 @@ class PostMediaStorage(_AliasedStorage):
     def _storage_for_name(self, name):
         normalized_name = name.replace("\\", "/").lstrip("/")
         if normalized_name.startswith(("posts/oci/", "posts/videos/oci/")):
-            return storages["oracle_media"]
+            return storages["oci_media"]
         return storages["default"]
 
 
@@ -48,9 +48,9 @@ class PostMediaStorage(_AliasedStorage):
 class ChatMediaStorage(_AliasedStorage):
     def _storage_for_name(self, name):
         normalized_name = name.replace("\\", "/").lstrip("/")
-        if not normalized_name.startswith("chat/"):
+        if not normalized_name.startswith(("chat_media/", "chat/")):
             return storages["default"]
-        return storages["oracle_media"]
+        return storages["oci_media"]
 
 
 @deconstructible
@@ -58,5 +58,5 @@ class MediaAssetStorage(_AliasedStorage):
     def _storage_for_name(self, name):
         normalized_name = name.replace("\\", "/").lstrip("/")
         if normalized_name.startswith("posts/"):
-            return storages["oracle_media"]
+            return storages["oci_media"]
         return storages["default"]

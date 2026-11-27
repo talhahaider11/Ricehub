@@ -14,6 +14,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='message',
             name='attachment',
-            field=models.FileField(blank=True, null=True, storage=media_app.storage.ChatMediaStorage(), upload_to='chat/%Y/%m/'),
+            field=models.FileField(blank=True, null=True, storage=media_app.storage.ChatMediaStorage(), upload_to='chat_media/%Y/%m/'),
         ),
     ]

@@ -26,7 +26,7 @@ protected environment values; never commit them to this repository.
 | Both backend services | `DB_USER`, `DB_PASSWORD`, `DB_SERVICE_NAME` | ATP database user (defaults to `admin`), password, and the wallet `tnsnames.ora` service alias such as `ricehub_low` |
 | Both backend services | `WALLET_DIR` | `/etc/secrets` on Render; store the extracted ATP wallet files there as secret files |
 | Both backend services | `WALLET_PASSWORD` | Optional protected variable if the downloaded wallet requires a password |
-| Both backend services | `ORACLE_ACCESS_KEY_ID`, `ORACLE_SECRET_ACCESS_KEY`, `ORACLE_BUCKET_NAME`, `ORACLE_S3_ENDPOINT_URL`, `ORACLE_REGION` | OCI S3-compatibility customer secret key pair, bucket, endpoint, and region; required for production post and chat media |
+| Both backend services | `OCI_ACCESS_KEY_ID`, `OCI_SECRET_ACCESS_KEY`, `OCI_BUCKET_NAME`, `OCI_ENDPOINT_URL`, `OCI_REGION` | OCI S3-compatibility customer secret key pair, bucket, endpoint, and region; required for production post and chat media |
 | Both backend services | `REDIS_URL` | The Render Redis connection string reachable by both services |
 | `ricehub-backend` | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` | Brevo transactional-email API key and a sender address verified in Brevo |
 | `ricehub-celery-worker` | `FIREBASE_CREDENTIALS_JSON` | Firebase service-account JSON, only if push delivery is enabled |
@@ -72,9 +72,11 @@ they become public in the browser bundle.
    wallet requires it. The Python Oracle driver uses thin mode by default, so
    no Oracle Instant Client initialization is required.
 3. Create an OCI Object Storage bucket and an S3 Compatibility customer secret
-   key pair. Set `ORACLE_ACCESS_KEY_ID`, `ORACLE_SECRET_ACCESS_KEY`,
-   `ORACLE_BUCKET_NAME`, `ORACLE_S3_ENDPOINT_URL`, and `ORACLE_REGION` on both
-   the web service and worker. Production startup requires these values.
+   key pair. Set `OCI_ACCESS_KEY_ID`, `OCI_SECRET_ACCESS_KEY`,
+   `OCI_BUCKET_NAME`, `OCI_ENDPOINT_URL`, and `OCI_REGION` on both the web
+   service and worker. The bucket must allow public reads so post and chat
+   media URLs remain accessible to their recipients. Production startup
+   requires these values.
 4. Post and chat attachments use OCI Object Storage; profile, story, event,
    and marketplace media continue using Cloudflare R2. Existing media objects
    are not copied automatically; migrate old post and chat objects to OCI

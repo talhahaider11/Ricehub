@@ -69,7 +69,7 @@ class MediaUploadTests(APITestCase):
         self.assertTrue(response.data["url"].startswith("http://testserver/"))
         self.assertTrue(response.data["thumbnail_url"])
 
-    def test_post_uploads_use_post_paths_and_oracle_storage(self):
+    def test_post_uploads_use_post_paths_and_oci_storage(self):
         response = self.client.post(
             "/api/media/upload/",
             {
@@ -89,31 +89,37 @@ class MediaUploadTests(APITestCase):
         from unittest.mock import Mock, patch
 
         default_storage = Mock()
-        oracle_storage = Mock()
+        oci_storage = Mock()
         post_storage = PostMediaStorage()
         chat_storage = ChatMediaStorage()
         asset_storage = MediaAssetStorage()
         with patch(
             "media_app.storage.storages",
-            {"default": default_storage, "oracle_media": oracle_storage},
+            {"default": default_storage, "oci_media": oci_storage},
         ):
             self.assertIs(
                 post_storage._storage_for_name("posts/oci/2026/11/photo.jpg"),
-                oracle_storage,
+                oci_storage,
             )
             self.assertIs(
                 post_storage._storage_for_name(
                     "posts/videos/oci/2026/11/video.mp4"
                 ),
-                oracle_storage,
+                oci_storage,
             )
             self.assertIs(
                 post_storage._storage_for_name("posts/2025/10/legacy.jpg"),
                 default_storage,
             )
             self.assertIs(
-                chat_storage._storage_for_name("chat/2026/11/voice.m4a"),
-                oracle_storage,
+                chat_storage._storage_for_name(
+                    "chat_media/2026/11/voice.m4a"
+                ),
+                oci_storage,
+            )
+            self.assertIs(
+                chat_storage._storage_for_name("chat/2026/11/legacy-oci.m4a"),
+                oci_storage,
             )
             self.assertIs(
                 chat_storage._storage_for_name("messages/2025/10/legacy.jpg"),
@@ -121,7 +127,7 @@ class MediaUploadTests(APITestCase):
             )
             self.assertIs(
                 asset_storage._storage_for_name("posts/originals/photo.jpg"),
-                oracle_storage,
+                oci_storage,
             )
             self.assertIs(
                 asset_storage._storage_for_name("stories/originals/story.jpg"),

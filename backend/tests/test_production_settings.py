@@ -16,6 +16,11 @@ BASE_ENV = {
     "R2_BUCKET_NAME": "test-bucket",
     "R2_ENDPOINT_URL": "https://test-account.r2.cloudflarestorage.com",
     "R2_PUBLIC_DOMAIN": "cdn.example.com",
+    "OCI_ACCESS_KEY_ID": "oci-test-access-key",
+    "OCI_SECRET_ACCESS_KEY": "oci-test-secret-key",
+    "OCI_BUCKET_NAME": "oci-test-bucket",
+    "OCI_ENDPOINT_URL": "https://objectstorage.example.com",
+    "OCI_REGION": "us-ashburn-1",
 }
 
 
@@ -56,6 +61,21 @@ assert settings.STORAGES["default"]["OPTIONS"]["object_parameters"] == {
     "CacheControl": "max-age=86400"
 }
 assert settings.MEDIA_URL == "https://cdn.example.com/"
+assert settings.STORAGES["oci_media"]["BACKEND"] == (
+    "storages.backends.s3boto3.S3Boto3Storage"
+)
+assert settings.STORAGES["oci_media"]["OPTIONS"]["bucket_name"] == "oci-test-bucket"
+assert settings.STORAGES["oci_media"]["OPTIONS"]["endpoint_url"] == (
+    "https://objectstorage.example.com"
+)
+assert settings.STORAGES["oci_media"]["OPTIONS"]["querystring_auth"] is False
+from storages.backends.s3boto3 import S3Boto3Storage
+oci_storage = S3Boto3Storage(**settings.STORAGES["oci_media"]["OPTIONS"])
+oci_url = oci_storage.url("chat_media/2026/11/test.jpg")
+assert oci_url.startswith(
+    "https://objectstorage.example.com/oci-test-bucket/chat_media/"
+)
+assert "?" not in oci_url
 assert settings.STORAGES["staticfiles"]["BACKEND"] == (
     "whitenoise.storage.CompressedStaticFilesStorage"
 )
@@ -108,6 +128,26 @@ assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["post_create"] == "10/h
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(
             "Cloudflare R2 must be fully configured",
+            result.stderr,
+        )
+
+    def test_missing_oci_configuration_fails_for_post_and_chat_media(self):
+        result = run_production_settings(
+            "from config.settings import production",
+            OCI_ACCESS_KEY_ID="",
+            OCI_SECRET_ACCESS_KEY="",
+            OCI_BUCKET_NAME="",
+            OCI_ENDPOINT_URL="",
+            OCI_REGION="",
+            ORACLE_ACCESS_KEY_ID="",
+            ORACLE_SECRET_ACCESS_KEY="",
+            ORACLE_BUCKET_NAME="",
+            ORACLE_S3_ENDPOINT_URL="",
+            ORACLE_REGION="",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "OCI Object Storage must be fully configured",
             result.stderr,
         )
 

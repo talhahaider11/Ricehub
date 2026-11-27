@@ -43,20 +43,20 @@ if missing_r2_settings:
         "Missing: " + ", ".join(missing_r2_settings)
     )
 
-required_oracle_settings = (
-    "ORACLE_ACCESS_KEY_ID",
-    "ORACLE_SECRET_ACCESS_KEY",
-    "ORACLE_BUCKET_NAME",
-    "ORACLE_S3_ENDPOINT_URL",
-    "ORACLE_REGION",
+required_oci_settings = (
+    "OCI_ACCESS_KEY_ID",
+    "OCI_SECRET_ACCESS_KEY",
+    "OCI_BUCKET_NAME",
+    "OCI_ENDPOINT_URL",
+    "OCI_REGION",
 )
-missing_oracle_settings = [
-    name for name in required_oracle_settings if not globals().get(name)
+missing_oci_settings = [
+    name for name in required_oci_settings if not globals().get(name)
 ]
-if missing_oracle_settings:
+if missing_oci_settings:
     raise RuntimeError(
         "OCI Object Storage must be fully configured for post and chat media. "
-        "Missing: " + ", ".join(missing_oracle_settings)
+        "Missing: " + ", ".join(missing_oci_settings)
     )
 
 STORAGES = {
@@ -76,19 +76,19 @@ STORAGES = {
             "object_parameters": {"CacheControl": "max-age=86400"},
         },
     },
-    "oracle_media": {
-        "BACKEND": "storages.backends.s3.S3Storage",
+    "oci_media": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
-            "bucket_name": ORACLE_BUCKET_NAME,
-            "endpoint_url": ORACLE_S3_ENDPOINT_URL,
-            "region_name": ORACLE_REGION,
+            "bucket_name": OCI_BUCKET_NAME,
+            "endpoint_url": OCI_ENDPOINT_URL,
+            "region_name": OCI_REGION,
             "signature_version": "s3v4",
             "addressing_style": "path",
             "custom_domain": None,
             "location": "",
-            "access_key": ORACLE_ACCESS_KEY_ID,
-            "secret_key": ORACLE_SECRET_ACCESS_KEY,
-            "querystring_auth": True,
+            "access_key": OCI_ACCESS_KEY_ID,
+            "secret_key": OCI_SECRET_ACCESS_KEY,
+            "querystring_auth": False,
             "file_overwrite": False,
             "object_parameters": {"CacheControl": "max-age=86400"},
         },

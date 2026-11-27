@@ -140,7 +140,7 @@ class Message(models.Model):
         related_name="replies",
     )
     attachment = models.FileField(
-        upload_to="chat/%Y/%m/",
+        upload_to="chat_media/%Y/%m/",
         blank=True,
         null=True,
         storage=ChatMediaStorage(),
