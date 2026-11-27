@@ -3620,6 +3620,14 @@ select {
   text-align: left;
 }
 
+.mobile-menu-settings-link {
+  text-decoration: none;
+}
+
+.mobile-menu-settings-link:hover {
+  background: var(--surface-secondary);
+}
+
 .mobile-menu-section-toggle>span {
   display: flex;
   align-items: center;

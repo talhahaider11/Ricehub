@@ -6,14 +6,11 @@ import {
   Compass,
   HelpCircle,
   Home,
-  LockKeyhole,
   LogOut,
   MessageCircle,
-  Moon,
   Settings,
   Shield,
   Store,
-  Sun,
   TrendingUp,
   UserPlus,
   UsersRound,
@@ -21,7 +18,6 @@ import {
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Avatar from "../common/Avatar";
-import { useTheme } from "../../context/ThemeContext";
 import useAuth from "../../hooks/useAuth";
 import { useLanguage } from "../../context/LanguageContext";
 
@@ -48,7 +44,6 @@ function displayName(user, fallback) {
 export default function MobileMenu({ onClose }) {
   const { t } = useLanguage();
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const dialogRef = useRef(null);
@@ -58,7 +53,6 @@ export default function MobileMenu({ onClose }) {
   const [expandedSections, setExpandedSections] = useState({
     more: false,
     support: false,
-    settings: false,
   });
 
   useEffect(() => {
@@ -245,35 +239,9 @@ export default function MobileMenu({ onClose }) {
         </section>
 
         <section className="mobile-menu-section">
-          <button
-            type="button"
-            className="mobile-menu-section-toggle"
-            aria-expanded={expandedSections.settings}
-            onClick={() => toggleSection("settings")}
-          >
-            <span><Settings size={20} /> {t("settingsPrivacy")}</span>
-            <ChevronDown size={18} aria-hidden="true" />
-          </button>
-          {expandedSections.settings && (
-            <div className="mobile-menu-subitems">
-              <Link to="/settings" onClick={onClose}>
-                <Settings size={19} />
-                <span>{t("settings")}</span>
-              </Link>
-              <Link to="/settings#privacy" onClick={onClose}>
-                <Shield size={19} />
-                <span>{t("privacyAudience")}</span>
-              </Link>
-              <Link to="/settings#security" onClick={onClose}>
-                <LockKeyhole size={19} />
-                <span>{t("securityLogin")}</span>
-              </Link>
-              <button type="button" onClick={toggleTheme}>
-                {theme === "light" ? <Moon size={19} /> : <Sun size={19} />}
-                <span>{t("appearance", { mode: t(theme === "light" ? "dark" : "light") })}</span>
-              </button>
-            </div>
-          )}
+          <Link className="mobile-menu-section-toggle mobile-menu-settings-link" to="/settings" onClick={onClose}>
+            <span><Settings size={20} /> {t("settings")}</span>
+          </Link>
         </section>
 
         <button type="button" className="mobile-menu-logout" onClick={handleLogout}>
