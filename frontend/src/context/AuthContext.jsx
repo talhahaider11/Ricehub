@@ -19,6 +19,7 @@ import {
   suppressSystemNotifications,
 } from "../services/systemNotificationService";
 import notificationService from "../services/notificationService";
+import { clearAllChatCaches } from "../services/messageCache";
 
 import { ACCESS_TOKEN_KEY } from "../utils/constants";
 
@@ -164,6 +165,7 @@ export function AuthProvider({ children }) {
       console.warn("Push device could not be unregistered:", error);
     });
     authService.logout();
+    clearAllChatCaches();
     setUser(null);
   };
 

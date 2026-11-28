@@ -90,12 +90,17 @@ class MediaUploadTests(APITestCase):
 
         default_storage = Mock()
         oci_storage = Mock()
+        oci_chat_storage = Mock()
         post_storage = PostMediaStorage()
         chat_storage = ChatMediaStorage()
         asset_storage = MediaAssetStorage()
         with patch(
             "media_app.storage.storages",
-            {"default": default_storage, "oci_media": oci_storage},
+            {
+                "default": default_storage,
+                "oci_media": oci_storage,
+                "oci_chat_media": oci_chat_storage,
+            },
         ):
             self.assertIs(
                 post_storage._storage_for_name("posts/oci/2026/11/photo.jpg"),
@@ -115,11 +120,11 @@ class MediaUploadTests(APITestCase):
                 chat_storage._storage_for_name(
                     "chat_media/2026/11/voice.m4a"
                 ),
-                oci_storage,
+                oci_chat_storage,
             )
             self.assertIs(
                 chat_storage._storage_for_name("chat/2026/11/legacy-oci.m4a"),
-                oci_storage,
+                oci_chat_storage,
             )
             self.assertIs(
                 chat_storage._storage_for_name("messages/2025/10/legacy.jpg"),

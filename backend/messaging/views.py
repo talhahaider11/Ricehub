@@ -835,7 +835,7 @@ class MessageListCreateView(
         if other_user and not can_message_between(self.request.user, other_user):
             raise PermissionDenied("This conversation is no longer available.")
 
-        return (
+        messages = (
             Message.objects
             .filter(
                 conversation_id=conversation_id
@@ -850,6 +850,20 @@ class MessageListCreateView(
             .prefetch_related("conversation__participants")
             .order_by("-created_at", "-pk")
         )
+        after_id = self.request.query_params.get("after_id")
+        if after_id is not None:
+            try:
+                after_id = int(after_id)
+            except (TypeError, ValueError) as error:
+                raise ValidationError(
+                    {"after_id": "A valid message ID is required."}
+                ) from error
+            if after_id <= 0:
+                raise ValidationError(
+                    {"after_id": "A valid message ID is required."}
+                )
+            messages = messages.filter(pk__gt=after_id)
+        return messages
 
     def get_serializer_context(self):
         context = super().get_serializer_context()

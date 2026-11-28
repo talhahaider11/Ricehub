@@ -463,6 +463,19 @@ STORAGES["oci_media"] = (
     if OCI_STORAGE_CONFIGURED
     else {"BACKEND": "django.core.files.storage.FileSystemStorage"}
 )
+STORAGES["oci_chat_media"] = (
+    {
+        **STORAGES["oci_media"],
+        "OPTIONS": {
+            **STORAGES["oci_media"]["OPTIONS"],
+            "object_parameters": {
+                "CacheControl": "public, max-age=31536000, immutable",
+            },
+        },
+    }
+    if OCI_STORAGE_CONFIGURED
+    else STORAGES["oci_media"]
+)
 
 # CORS and CSRF Settings for Mobile App & Render Frontend
 CORS_ALLOWED_ORIGINS = [

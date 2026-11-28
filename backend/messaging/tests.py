@@ -467,6 +467,35 @@ class MessagingFeatureTests(APITestCase):
         )
         self.assertEqual(len(older_response.data["results"]), 5)
 
+    def test_message_history_can_sync_only_messages_after_cached_id(self):
+        messages = [
+            Message.objects.create(
+                conversation=self.conversation,
+                sender=self.user,
+                content=f"Message {index}",
+            )
+            for index in range(35)
+        ]
+
+        response = self.client.get(
+            f"/api/messages/conversations/{self.conversation.pk}/messages/"
+            f"?after_id={messages[31].pk}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [message["content"] for message in response.data["results"]],
+            ["Message 34", "Message 33", "Message 32"],
+        )
+        self.assertIsNone(response.data["next"])
+
+        invalid_response = self.client.get(
+            f"/api/messages/conversations/{self.conversation.pk}/messages/"
+            "?after_id=invalid"
+        )
+        self.assertEqual(invalid_response.status_code, 400)
+        self.assertIn("after_id", invalid_response.data)
+
     def test_voice_note_upload_creates_audio_message(self):
         self.make_friends()
         voice_note = SimpleUploadedFile(

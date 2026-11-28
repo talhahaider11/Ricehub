@@ -43,6 +43,22 @@ describe("messageService", () => {
     );
   });
 
+  it("requests only messages newer than the cached message ID", async () => {
+    apiMocks.get.mockResolvedValue({
+      data: { results: [{ id: 12 }], next: null },
+    });
+
+    await expect(messageService.messagesSince(42, 10))
+      .resolves.toMatchObject({ results: [{ id: 12 }], next: null });
+
+    expect(apiMocks.get).toHaveBeenCalledWith(
+      "/messages/conversations/42/messages/",
+      {
+        params: { page: 1, page_size: 30, after_id: 10 },
+      }
+    );
+  });
+
   it("uses the REST call-signal fallback when a call socket is unavailable", async () => {
     apiMocks.post.mockResolvedValue({ data: { detail: "Call signal delivered." } });
     const frame = {

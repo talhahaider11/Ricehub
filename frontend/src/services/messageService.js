@@ -4,6 +4,7 @@ import { ACCESS_TOKEN_KEY, WS_URL } from "../utils/constants";
 import {
   cacheConversations,
   clearConversationCaches,
+  clearMessageCache,
   getCachedConversations,
   isConversationCacheFresh,
 } from "./messageCache";
@@ -162,6 +163,7 @@ const messageService = {
   async leaveGroup(conversationId) {
     const response = await api.delete(`/messages/conversations/${conversationId}/leave/`);
     clearConversationCaches();
+    clearMessageCache(conversationId);
     return response;
   },
 
@@ -172,15 +174,33 @@ const messageService = {
     return response.data;
   },
 
-  async messages(conversationId, page = 1) {
+  async messages(conversationId, page = 1, afterId = null) {
     const response = await api.get(
       `/messages/conversations/${conversationId}/messages/`,
       {
-        params: { page, page_size: 30 },
+        params: {
+          page,
+          page_size: 30,
+          ...(afterId != null ? { after_id: afterId } : {}),
+        },
       }
     );
 
     return response.data;
+  },
+
+  async messagesSince(conversationId, afterId) {
+    let page = 1;
+    let responseData;
+    const results = [];
+
+    do {
+      responseData = await this.messages(conversationId, page, afterId);
+      results.push(...(responseData.results || []));
+      page += 1;
+    } while (responseData.next);
+
+    return { ...responseData, results, next: null };
   },
 
   async sendText(conversationId, content, replyToId) {
@@ -271,6 +291,7 @@ const messageService = {
       `/messages/conversations/${conversationId}/delete/`
     );
     clearConversationCaches();
+    clearMessageCache(conversationId);
     return response.data;
   },
 

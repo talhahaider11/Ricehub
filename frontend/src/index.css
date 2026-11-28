@@ -8482,8 +8482,16 @@ body {
   line-height: 0;
 }
 
-.message-media-frame a {
+.message-media-preview-trigger {
   display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  line-height: 0;
+  cursor: zoom-in;
 }
 
 .message-image-attachment,

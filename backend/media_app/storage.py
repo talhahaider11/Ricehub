@@ -50,7 +50,7 @@ class ChatMediaStorage(_AliasedStorage):
         normalized_name = name.replace("\\", "/").lstrip("/")
         if not normalized_name.startswith(("chat_media/", "chat/")):
             return storages["default"]
-        return storages["oci_media"]
+        return storages["oci_chat_media"]
 
 
 @deconstructible

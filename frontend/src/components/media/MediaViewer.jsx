@@ -1,7 +1,13 @@
 import { useEffect } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
-export default function MediaViewer({ media, index, onChange, onClose }) {
+export default function MediaViewer({
+  media,
+  index,
+  onChange,
+  onClose,
+  ariaLabel = "View post image",
+}) {
   const item = media[index];
 
   useEffect(() => {
@@ -23,7 +29,7 @@ export default function MediaViewer({ media, index, onChange, onClose }) {
       className="media-viewer"
       role="dialog"
       aria-modal="true"
-      aria-label="View post image"
+      aria-label={ariaLabel}
       onClick={onClose}
     >
       <button

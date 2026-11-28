@@ -589,6 +589,7 @@ export default function Messages() {
             <MessageList
               messages={visibleMessages}
               currentUser={user}
+              conversationId={selectedConversation}
               onReply={setReplyTarget}
               onEdit={handleEdit}
               onDelete={handleDelete}

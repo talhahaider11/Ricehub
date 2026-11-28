@@ -97,6 +97,15 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
+STORAGES["oci_chat_media"] = {
+    **STORAGES["oci_media"],
+    "OPTIONS": {
+        **STORAGES["oci_media"]["OPTIONS"],
+        "object_parameters": {
+            "CacheControl": "public, max-age=31536000, immutable",
+        },
+    },
+}
 MEDIA_URL = f"https://{R2_PUBLIC_DOMAIN}/"
 
 

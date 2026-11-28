@@ -70,12 +70,23 @@ export default function useMessages(conversationId) {
     try {
       if (!messagesRef.current.length) setLoading(true);
       setError("");
-      const data = await messageService.messages(conversationId);
+      const cachedHistory = getCachedMessages(requestConversationId, user?.id);
+      const hasCachedMessages = Boolean(cachedHistory?.messages?.length);
+      const cachedLatestId = hasCachedMessages
+        ? cachedHistory.messages[cachedHistory.messages.length - 1].id
+        : null;
+      const data = cachedLatestId == null
+        ? await messageService.messages(conversationId)
+        : await messageService.messagesSince(conversationId, cachedLatestId);
       if (isCurrentConversation()) {
         const loadedMessages = getArrayResults(data, "Messages").reverse();
-        setMessages((current) => mergeMessages(loadedMessages, current));
-        setHasOlderMessages(Boolean(data.next));
-        olderPageRef.current = data.next ? 2 : 1;
+        if (loadedMessages.length) {
+          setMessages((current) => mergeMessages(loadedMessages, current));
+        }
+        if (cachedLatestId == null) {
+          setHasOlderMessages(Boolean(data.next));
+          olderPageRef.current = data.next ? 2 : 1;
+        }
         if (socketRef.current?.readyState === WebSocket.OPEN) {
           socketRef.current.send(JSON.stringify({ type: "read" }));
         }
@@ -88,7 +99,7 @@ export default function useMessages(conversationId) {
     } finally {
       if (isCurrentConversation()) setLoading(false);
     }
-  }, [conversationId]);
+  }, [conversationId, user?.id]);
 
   const loadOlderMessages = useCallback(async () => {
     if (

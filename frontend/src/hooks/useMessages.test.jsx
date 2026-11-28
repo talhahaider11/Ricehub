@@ -1,9 +1,14 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import useMessages from "./useMessages";
+import {
+  cacheMessages,
+  clearAllChatCaches,
+} from "../services/messageCache";
 
 const mocks = vi.hoisted(() => ({
   messages: vi.fn(),
+  messagesSince: vi.fn(),
   sendText: vi.fn(),
   createSocket: vi.fn(),
 }));
@@ -11,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../services/messageService", () => ({
   default: {
     messages: mocks.messages,
+    messagesSince: mocks.messagesSince,
     sendText: mocks.sendText,
     createSocket: mocks.createSocket,
   },
@@ -22,8 +28,10 @@ vi.mock("./useAuth", () => ({
 
 describe("useMessages", () => {
   beforeEach(() => {
+    clearAllChatCaches();
     vi.clearAllMocks();
     mocks.messages.mockResolvedValue({ results: [] });
+    mocks.messagesSince.mockResolvedValue({ results: [], next: null });
     mocks.sendText.mockResolvedValue({
       id: 12,
       conversation: 42,
@@ -49,6 +57,30 @@ describe("useMessages", () => {
     expect(result.current.messages).toEqual([
       expect.objectContaining({ id: 12, content: "Hello" }),
     ]);
+  });
+
+  it("hydrates a cached conversation immediately and syncs only newer messages", async () => {
+    const cachedMessages = [{
+      id: 21,
+      conversation: 42,
+      content: "Cached attachment",
+      attachment: "https://objectstorage.example.oraclecloud.com/chat/photo.jpg",
+      attachment_type: "image",
+      sender: { id: 2 },
+    }];
+    cacheMessages(42, 1, cachedMessages, {
+      hasOlderMessages: true,
+      nextPage: 2,
+    });
+
+    const { result } = renderHook(() => useMessages(42));
+
+    expect(result.current.messages).toEqual(cachedMessages);
+    expect(result.current.loading).toBe(false);
+    await waitFor(() => {
+      expect(mocks.messagesSince).toHaveBeenCalledWith(42, 21);
+    });
+    expect(mocks.messages).not.toHaveBeenCalled();
   });
 
   it("keeps a sent message if the initial history request finishes afterward", async () => {

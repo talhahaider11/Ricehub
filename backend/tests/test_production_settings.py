@@ -69,6 +69,10 @@ assert settings.STORAGES["oci_media"]["OPTIONS"]["endpoint_url"] == (
     "https://objectstorage.example.com"
 )
 assert settings.STORAGES["oci_media"]["OPTIONS"]["querystring_auth"] is False
+assert settings.STORAGES["oci_chat_media"]["OPTIONS"]["querystring_auth"] is False
+assert settings.STORAGES["oci_chat_media"]["OPTIONS"]["object_parameters"] == {
+    "CacheControl": "public, max-age=31536000, immutable"
+}
 from storages.backends.s3boto3 import S3Boto3Storage
 oci_storage = S3Boto3Storage(**settings.STORAGES["oci_media"]["OPTIONS"])
 oci_url = oci_storage.url("chat_media/2026/11/test.jpg")
@@ -76,6 +80,12 @@ assert oci_url.startswith(
     "https://objectstorage.example.com/oci-test-bucket/chat_media/"
 )
 assert "?" not in oci_url
+chat_storage = S3Boto3Storage(**settings.STORAGES["oci_chat_media"]["OPTIONS"])
+chat_url = chat_storage.url("chat_media/2026/11/test.jpg")
+assert chat_url.startswith(
+    "https://objectstorage.example.com/oci-test-bucket/chat_media/"
+)
+assert "?" not in chat_url
 assert settings.STORAGES["staticfiles"]["BACKEND"] == (
     "whitenoise.storage.CompressedStaticFilesStorage"
 )

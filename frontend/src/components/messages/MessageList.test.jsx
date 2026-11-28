@@ -341,6 +341,68 @@ describe("MessageList", () => {
       .toHaveAttribute("src", "/media/voice.webm");
   });
 
+  it("keeps chat media inline, opens images in-app, and skips external links for OCI media", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const imageUrl = "https://objectstorage.us-ashburn-1.oraclecloud.com/n/ns/b/b/o/chat_media/photo.jpg";
+    const videoUrl = "https://objectstorage.us-ashburn-1.oraclecloud.com/n/ns/b/b/o/chat_media/clip.mp4";
+    const messages = [
+      {
+        id: 11,
+        content: `${imageUrl} https://cdn.example.com/photo.jpg https://example.com/help`,
+        sender: { id: 8 },
+        attachment: imageUrl,
+        attachment_type: "image",
+        created_at: "2026-11-15T10:00:00Z",
+      },
+      {
+        id: 12,
+        sender: { id: 8 },
+        attachment: videoUrl,
+        attachment_type: "video",
+        created_at: "2026-11-15T10:01:00Z",
+      },
+    ];
+    const onEdit = vi.fn();
+    const { container, rerender } = render(
+      <MessageList
+        messages={messages}
+        currentUser={{ id: 7 }}
+        conversationId={42}
+        onEdit={onEdit}
+      />
+    );
+    const image = container.querySelector(".message-image-attachment");
+    const video = container.querySelector(".message-video-attachment");
+
+    expect(image).toHaveAttribute("src", imageUrl);
+    expect(image).toHaveAttribute("loading", "eager");
+    expect(image).toHaveAttribute("decoding", "async");
+    expect(image.closest("a")).toBeNull();
+    expect(video).toHaveAttribute("src", videoUrl);
+    expect(video).toHaveAttribute("preload", "metadata");
+    expect(video).toHaveProperty("playsInline", true);
+    expect(Array.from(container.querySelectorAll("a"))
+      .some((link) => link.href.includes("oraclecloud.com"))).toBe(false);
+    expect(Array.from(container.querySelectorAll("a"))
+      .some((link) => link.href.endsWith("/photo.jpg"))).toBe(false);
+    expect(screen.getByRole("link", { name: "https://example.com/help" }))
+      .toHaveAttribute("target", "_blank");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open image preview" }));
+    expect(screen.getByRole("dialog", { name: "View chat image" }))
+      .toBeInTheDocument();
+
+    rerender(
+      <MessageList
+        messages={messages}
+        currentUser={{ id: 7 }}
+        conversationId={42}
+        onEdit={vi.fn()}
+      />
+    );
+    expect(container.querySelector(".message-image-attachment")).toBe(image);
+  });
+
   it("keeps image timestamps and receipts in the media overlay", () => {
     Element.prototype.scrollIntoView = vi.fn();
 
