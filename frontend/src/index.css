@@ -9558,3 +9558,96 @@ select {
   box-shadow: none !important;
   background: transparent !important;
 }
+
+@media (max-width: 639px) {
+  .create-content-page,
+  #create-post {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  #create-post {
+    overflow-x: hidden;
+  }
+
+  #create-post > *,
+  #create-post .create-post-top,
+  #create-post .post-placeholder,
+  #create-post .create-menu-wrap,
+  #create-post .media-uploader,
+  #create-post .media-uploaded-list,
+  #create-post .media-uploaded-item,
+  #create-post .create-post-actions,
+  #create-post .left-actions {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  #create-post .create-menu-wrap {
+    margin-left: 0;
+  }
+
+  #create-post .media-uploaded-item {
+    grid-template-columns: 52px minmax(0, 1fr) 28px;
+  }
+
+  #create-post .media-uploaded-item span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  body {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: clamp(1.25rem, 5.5vw, 1.65rem);
+    line-height: 1.2;
+  }
+
+  h2 {
+    font-size: clamp(1.125rem, 4.8vw, 1.4rem);
+    line-height: 1.25;
+  }
+
+  h3 {
+    font-size: clamp(1rem, 4.2vw, 1.2rem);
+    line-height: 1.3;
+  }
+
+  :is(strong, b, .font-semibold, .font-bold) {
+    min-width: 0;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  :is(.flex, .inline-flex, .grid, .inline-grid) > * {
+    min-width: 0;
+  }
+
+  :is(.flex, .inline-flex) > :is(svg, img) {
+    flex-shrink: 0;
+  }
+}
+
+.messages-shell .conversation-search,
+.messages-shell .message-composer-field {
+  border: 1px solid var(--input-border);
+}
+
+.messages-shell .conversation-search:focus-within,
+.messages-shell .message-composer-field:focus-within {
+  border-color: var(--input-border);
+}
+
+.messages-shell .conversation-search input,
+.messages-shell .message-composer-field input {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
